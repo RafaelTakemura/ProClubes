@@ -12,6 +12,7 @@ public class ReservasViewModel : BaseViewModel
     private DateTime _dataReserva = DateTime.Today.AddDays(2);
     private string _horaInicio = "10:00";
     private string _horaFim = "12:00";
+    private string _justificativaCancelamento = string.Empty;
 
     public ObservableCollection<EspacoDto> Espacos { get; } = new();
     public ObservableCollection<ReservaEspacoDto> MinhasReservas { get; } = new();
@@ -20,16 +21,29 @@ public class ReservasViewModel : BaseViewModel
     public DateTime DataReserva { get => _dataReserva; set => SetProperty(ref _dataReserva, value); }
     public string HoraInicio { get => _horaInicio; set => SetProperty(ref _horaInicio, value); }
     public string HoraFim { get => _horaFim; set => SetProperty(ref _horaFim, value); }
+    public string JustificativaCancelamento { get => _justificativaCancelamento; set => SetProperty(ref _justificativaCancelamento, value); }
     public bool PermiteOperarReserva => _api.IsTitularPagante;
 
-    public ICommand CriarReservaCommand { get; }
-    public ICommand CancelarReservaCommand { get; }
+    public ICommand AtualizarCommand { get; }
 
     public ReservasViewModel(MobileSessionAndApiService api)
     {
         _api = api;
-        CriarReservaCommand = new Command(async () => await CriarReservaAsync());
-        CancelarReservaCommand = new Command<ReservaEspacoDto>(async r => await CancelarReservaAsync(r));
+        AtualizarCommand = new Command(async () => await CarregarAsync());
+    }
+
+    public void PrepararNovaReserva()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+        EspacoSelecionado ??= Espacos.FirstOrDefault();
+    }
+
+    public void PrepararCancelamento()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+        JustificativaCancelamento = string.Empty;
     }
 
     public async Task CarregarAsync()
@@ -66,20 +80,20 @@ public class ReservasViewModel : BaseViewModel
         ErrorMessage = err;
     }
 
-    public async Task CriarReservaAsync()
+    public async Task<bool> CriarReservaAsync()
     {
         ErrorMessage = null;
         SuccessMessage = null;
         if (EspacoSelecionado is null)
         {
             ErrorMessage = "Selecione um espaço para reservar.";
-            return;
+            return false;
         }
 
         if (!TimeOnly.TryParse(HoraInicio, out var hIni) || !TimeOnly.TryParse(HoraFim, out var hFim))
         {
             ErrorMessage = "Horário inválido. Use o formato HH:mm.";
-            return;
+            return false;
         }
 
         var d = DateOnly.FromDateTime(DataReserva);
@@ -90,27 +104,33 @@ public class ReservasViewModel : BaseViewModel
         if (err is not null)
         {
             ErrorMessage = err;
-            return;
+            return false;
         }
 
-        SuccessMessage = $"Reserva confirmada automaticamente para {res?.EspacoNome}!";
         await CarregarAsync();
+        SuccessMessage = $"Reserva confirmada automaticamente para {res?.EspacoNome}!";
+        return true;
     }
 
-    public async Task CancelarReservaAsync(ReservaEspacoDto? reserva)
+    public async Task<bool> CancelarReservaAsync(ReservaEspacoDto? reserva)
     {
-        if (reserva is null) return;
+        if (reserva is null) return false;
         ErrorMessage = null;
         SuccessMessage = null;
 
-        var (_, err) = await _api.PostAsync<ReservaEspacoDto>($"api/v1/reservas/{reserva.Id}/cancelamento", new { justificativa = "Cancelado pelo associado no aplicativo" });
+        var motivo = string.IsNullOrWhiteSpace(JustificativaCancelamento)
+            ? "Cancelado pelo associado no aplicativo"
+            : JustificativaCancelamento.Trim();
+
+        var (_, err) = await _api.PostAsync<ReservaEspacoDto>($"api/v1/reservas/{reserva.Id}/cancelamento", new { justificativa = motivo });
         if (err is not null)
         {
             ErrorMessage = err;
-            return;
+            return false;
         }
 
-        SuccessMessage = "Reserva cancelada com sucesso.";
         await CarregarAsync();
+        SuccessMessage = "Reserva cancelada com sucesso.";
+        return true;
     }
 }
