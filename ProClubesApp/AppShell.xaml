@@ -14,9 +14,15 @@
     <TabBar>
         <ShellContent
             x:Name="TabLogin"
-            Title="Acesso"
+            Title="Login"
             ContentTemplate="{DataTemplate views:LoginCadastroPage}"
             Route="Login" />
+
+        <ShellContent
+            x:Name="TabCadastro"
+            Title="Cadastro"
+            ContentTemplate="{DataTemplate views:SolicitarCadastroMobilePage}"
+            Route="Cadastro" />
 
         <ShellContent
             x:Name="TabInicio"

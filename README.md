@@ -4,7 +4,7 @@ O **ProClubes** é uma plataforma multiplataforma para gestão administrativa, f
 
 ---
 
-## 🏗️ Arquitetura da Solução
+## Arquitetura da Solução
 
 A solução ([`ProClubes.slnx`](./ProClubes.slnx)) está organizada nos seguintes projetos:
 
@@ -18,7 +18,7 @@ A solução ([`ProClubes.slnx`](./ProClubes.slnx)) está organizada nos seguinte
 
 ---
 
-## 👥 Perfis de Acesso e Governança
+## Perfis de Acesso e Governança
 
 ### 1. Papéis Administrativos (Portal Web)
 * **`SuperAdmin` (Escopo Global):**
@@ -49,7 +49,7 @@ A solução ([`ProClubes.slnx`](./ProClubes.slnx)) está organizada nos seguinte
 
 ---
 
-## ⚙️ Principais Módulos e Regras de Negócio
+## Principais Módulos e Regras de Negócio
 
 1. **Segurança e Sessão (`api/v1/auth`):**
    * Senhas armazenadas com hash seguro (`PasswordHasher`), Access Token JWT de curta duração e Refresh Token opaco com rotação automática e detecção de reuso.
@@ -73,7 +73,7 @@ A solução ([`ProClubes.slnx`](./ProClubes.slnx)) está organizada nos seguinte
 
 ---
 
-## 🚀 Configuração e Execução Local
+## Configuração e Execução Local
 
 ### Pré-requisitos
 * **.NET 10 SDK** (com workloads `maui-windows` / `maui-android` instalados para o projeto mobile)
@@ -109,7 +109,7 @@ O arquivo [`ProClubesApi/appsettings.json`](./ProClubesApi/appsettings.json) ver
 
 ---
 
-## 🧪 Executando os Testes Automatizados
+## Executando os Testes Automatizados
 
 Os testes de integração utilizam bancos SQLite isolados e efêmeros por execução, não exigindo instância do MySQL ativa para rodar:
 

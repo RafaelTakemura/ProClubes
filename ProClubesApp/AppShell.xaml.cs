@@ -18,12 +18,41 @@ public partial class AppShell : Shell
     {
         var autenticadoPleno = _session.IsAuthenticated && !_session.IsRestritaCadastro;
         var titularPagante = _session.IsTitularPagante;
+        var currentContent = CurrentItem?.CurrentItem?.CurrentItem;
 
-        TabInicio.IsVisible = autenticadoPleno;
-        TabEventos.IsVisible = true; // Eventos públicos podem ser consultados por todos
-        TabReservas.IsVisible = autenticadoPleno && titularPagante;
-        TabFinanceiro.IsVisible = autenticadoPleno && titularPagante;
-        TabOuvidoria.IsVisible = autenticadoPleno && titularPagante;
-        TabMais.IsVisible = autenticadoPleno;
+        if (autenticadoPleno)
+        {
+            TabInicio.IsVisible = true;
+            TabEventos.IsVisible = true;
+            TabReservas.IsVisible = titularPagante;
+            TabFinanceiro.IsVisible = titularPagante;
+            TabOuvidoria.IsVisible = titularPagante;
+            TabMais.IsVisible = true;
+
+            if (currentContent == TabLogin || currentContent == TabCadastro)
+            {
+                CurrentItem = TabInicio;
+            }
+
+            TabLogin.IsVisible = false;
+            TabCadastro.IsVisible = false;
+        }
+        else
+        {
+            TabLogin.IsVisible = true;
+            TabCadastro.IsVisible = !_session.IsRestritaCadastro;
+            TabEventos.IsVisible = true;
+
+            if (currentContent != TabLogin && currentContent != TabCadastro && currentContent != TabEventos)
+            {
+                CurrentItem = TabLogin;
+            }
+
+            TabInicio.IsVisible = false;
+            TabReservas.IsVisible = false;
+            TabFinanceiro.IsVisible = false;
+            TabOuvidoria.IsVisible = false;
+            TabMais.IsVisible = false;
+        }
     }
 }

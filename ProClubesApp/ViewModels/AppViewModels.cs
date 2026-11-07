@@ -96,6 +96,8 @@ public class LoginCadastroViewModel : BaseViewModel
 
     public ICommand EntrarCommand { get; }
     public ICommand AlternarModoCommand { get; }
+    public ICommand IrParaEventosCommand { get; }
+    public ICommand IrParaLoginCommand { get; }
     public ICommand SolicitarCadastroCommand { get; }
     public ICommand ReenviarCadastroCommand { get; }
     public ICommand SairCommand { get; }
@@ -104,7 +106,21 @@ public class LoginCadastroViewModel : BaseViewModel
     {
         _api = api;
         EntrarCommand = new Command(async () => await EntrarAsync());
-        AlternarModoCommand = new Command(() => ModoCadastro = !ModoCadastro);
+        AlternarModoCommand = new Command(async () =>
+        {
+            if (Shell.Current is not null)
+                await Shell.Current.GoToAsync("//Cadastro");
+        });
+        IrParaEventosCommand = new Command(async () =>
+        {
+            if (Shell.Current is not null)
+                await Shell.Current.GoToAsync("//Eventos");
+        });
+        IrParaLoginCommand = new Command(async () =>
+        {
+            if (Shell.Current is not null)
+                await Shell.Current.GoToAsync("//Login");
+        });
         SolicitarCadastroCommand = new Command(async () => await SolicitarCadastroAsync());
         ReenviarCadastroCommand = new Command(async () => await ReenviarCadastroAsync());
         SairCommand = new Command(async () => await SairAsync());
@@ -141,6 +157,7 @@ public class LoginCadastroViewModel : BaseViewModel
 
         if (_api.IsRestritaCadastro)
         {
+            Senha = string.Empty;
             var (st, stErr) = await _api.GetAsync<StatusCadastroResponse>("api/v1/me/cadastro/status");
             StatusCadastroAtual = st;
             ExibirStatusRestrito = true;
@@ -149,8 +166,9 @@ public class LoginCadastroViewModel : BaseViewModel
         }
         else
         {
+            Senha = string.Empty;
             ExibirStatusRestrito = false;
-            SuccessMessage = "Autenticação realizada com sucesso.";
+            SuccessMessage = null;
             if (Shell.Current is not null)
                 await Shell.Current.GoToAsync("//Inicio");
         }
@@ -186,7 +204,10 @@ public class LoginCadastroViewModel : BaseViewModel
 
         StatusCadastroAtual = res;
         ModoCadastro = false;
+        SenhaCadastro = string.Empty;
         SuccessMessage = "Solicitação enviada com sucesso! Faça login para acompanhar o status.";
+        if (Shell.Current is not null)
+            await Shell.Current.GoToAsync("//Login");
     }
 
     public async Task ReenviarCadastroAsync()
@@ -319,8 +340,9 @@ public class EventosViewModel : BaseViewModel
     public async Task CarregarAsync()
     {
         ErrorMessage = null;
-        var url = _api.IsAuthenticated ? "api/v1/eventos" : "api/v1/eventos/publicos";
-        var (items, err) = await _api.GetAsync<List<EventoDto>>(url, anonymous: !_api.IsAuthenticated);
+        var autenticadoPleno = _api.IsAuthenticated && !_api.IsRestritaCadastro;
+        var url = autenticadoPleno ? "api/v1/eventos" : "api/v1/eventos/publicos";
+        var (items, err) = await _api.GetAsync<List<EventoDto>>(url, anonymous: !autenticadoPleno);
         if (items is not null)
         {
             Eventos.Clear();
