@@ -36,6 +36,13 @@ public class InicioViewModel : BaseViewModel
         AtualizarCommand = new Command(async () => await CarregarAsync());
     }
 
+    public async Task SairAsync()
+    {
+        await _api.LogoutAsync();
+        if (Shell.Current is not null)
+            await Shell.Current.GoToAsync("//Login");
+    }
+
     public async Task CarregarAsync()
     {
         if (IsBusy) return;

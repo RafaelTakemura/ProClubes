@@ -13,17 +13,12 @@ public class MaisGovernancaViewModel : BaseViewModel
 
     public bool PodeVotar => _api.TemDireitoVoto;
 
-    public ICommand SairCommand { get; }
+    public ICommand AtualizarCommand { get; }
 
     public MaisGovernancaViewModel(MobileSessionAndApiService api)
     {
         _api = api;
-        SairCommand = new Command(async () =>
-        {
-            await _api.LogoutAsync();
-            if (Shell.Current is not null)
-                await Shell.Current.GoToAsync("//Login");
-        });
+        AtualizarCommand = new Command(async () => await CarregarAsync());
     }
 
     public async Task CarregarAsync()

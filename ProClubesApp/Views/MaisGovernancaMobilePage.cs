@@ -15,8 +15,18 @@ public sealed class MaisGovernancaMobilePage : ContentPage
     {
         _vm = vm;
         BindingContext = _vm;
-        Title = "Votações e Conta";
+        Title = "Votações";
         BackgroundColor = ProClubesTheme.SurfaceApp;
+
+        var btnAtualizar = new Button
+        {
+            Text = "Atualizar Assembleias",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.BrandPrimary,
+            CornerRadius = 10,
+            FontSize = 12,
+            Command = _vm.AtualizarCommand
+        };
 
         var abrirCedulaCmd = new Command<VotacaoDto>(votacao => AbrirPopupCedulaVotacao(votacao));
 
@@ -60,39 +70,20 @@ public sealed class MaisGovernancaMobilePage : ContentPage
             })
         };
 
-        var votacoesSection = ProClubesTheme.CreateCard(new VerticalStackLayout
-        {
-            Spacing = 8,
-            Children =
-            {
-                new Label { Text = "Assembleias e Votações Digitais", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandPrimary },
-                new Label { Text = "Toque em uma assembleia abaixo para abrir a cédula de votação secreta.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
-                votacoesList
-            }
-        });
-        votacoesSection.SetBinding(VisualElement.IsVisibleProperty, nameof(MaisGovernancaViewModel.PodeVotar));
-
-        var btnSair = new Button
-        {
-            Text = "Encerrar Sessão e Sair",
-            BackgroundColor = ProClubesTheme.StatusDangerBg,
-            TextColor = ProClubesTheme.StatusDanger,
-            CornerRadius = 10,
-            FontAttributes = FontAttributes.Bold,
-            Command = _vm.SairCommand
-        };
-
         var mainScroll = new ScrollView
         {
             Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
+                Spacing = 8,
                 Children =
                 {
                     ProClubesTheme.CreateOfflineBanner(),
                     ProClubesTheme.CreateStatusBanner(),
-                    votacoesSection,
-                    btnSair
+                    new Label { Text = "Assembleias e Votações Digitais", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                    new Label { Text = "Toque em uma assembleia abaixo para abrir a cédula de votação secreta.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
+                    btnAtualizar,
+                    votacoesList
                 }
             }
         };

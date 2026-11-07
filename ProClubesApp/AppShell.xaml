@@ -56,7 +56,7 @@
 
         <ShellContent
             x:Name="TabMais"
-            Title="Mais"
+            Title="Votações"
             ContentTemplate="{DataTemplate views:MaisGovernancaMobilePage}"
             Route="Mais" />
     </TabBar>

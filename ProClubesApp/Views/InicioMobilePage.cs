@@ -9,6 +9,7 @@ namespace ProClubesApp.Views;
 public sealed class InicioMobilePage : ContentPage
 {
     private readonly InicioViewModel _vm;
+    private readonly PopupOverlayHost _popupHost;
 
     public InicioMobilePage(InicioViewModel vm)
     {
@@ -33,8 +34,37 @@ public sealed class InicioMobilePage : ContentPage
             StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
             Padding = new Thickness(10, 4),
             HorizontalOptions = LayoutOptions.Start,
+            VerticalOptions = LayoutOptions.Center,
             Content = lblCategoria
         };
+
+        var btnSairCard = new Button
+        {
+            Text = "Sair da Conta",
+            BackgroundColor = ProClubesTheme.StatusDangerBg,
+            TextColor = ProClubesTheme.StatusDanger,
+            CornerRadius = 8,
+            FontSize = 12,
+            FontAttributes = FontAttributes.Bold,
+            Padding = new Thickness(12, 6),
+            HeightRequest = 32,
+            HorizontalOptions = LayoutOptions.End,
+            VerticalOptions = LayoutOptions.Center
+        };
+        btnSairCard.Clicked += (_, _) => AbrirPopupConfirmarLogout();
+
+        var bottomRowGrid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
+            },
+            Margin = new Thickness(0, 4, 0, 0),
+            Children = { badgeBorder, btnSairCard }
+        };
+        Grid.SetColumn(badgeBorder, 0);
+        Grid.SetColumn(btnSairCard, 1);
 
         var memberCard = ProClubesTheme.CreateCard(new VerticalStackLayout
         {
@@ -50,7 +80,7 @@ public sealed class InicioMobilePage : ContentPage
                         new VerticalStackLayout { Children = { lblNome, lblUnidade } }
                     }
                 },
-                badgeBorder
+                bottomRowGrid
             }
         }, ProClubesTheme.BrandPrimary, ProClubesTheme.BrandPrimaryHover);
 
@@ -104,7 +134,7 @@ public sealed class InicioMobilePage : ContentPage
             }
         });
 
-        Content = new ScrollView
+        var mainScroll = new ScrollView
         {
             Padding = new Thickness(16),
             Content = new VerticalStackLayout
@@ -120,6 +150,59 @@ public sealed class InicioMobilePage : ContentPage
                 }
             }
         };
+
+        _popupHost = new PopupOverlayHost(mainScroll);
+        Content = _popupHost.RootLayout;
+    }
+
+    private void AbrirPopupConfirmarLogout()
+    {
+        var btnConfirmar = new Button
+        {
+            Text = "Encerrar Sessão e Sair",
+            BackgroundColor = ProClubesTheme.StatusDanger,
+            TextColor = Colors.White,
+            CornerRadius = 10,
+            FontAttributes = FontAttributes.Bold
+        };
+        btnConfirmar.Clicked += async (_, _) =>
+        {
+            _popupHost.Close();
+            await _vm.SairAsync();
+        };
+
+        var btnCancelar = new Button
+        {
+            Text = "Cancelar (Continuar Conectado)",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.TextSecondary,
+            CornerRadius = 10
+        };
+        btnCancelar.Clicked += (_, _) => _popupHost.Close();
+
+        var body = new VerticalStackLayout
+        {
+            Spacing = 12,
+            Children =
+            {
+                new Label
+                {
+                    Text = "Deseja realmente encerrar sua sessão no aplicativo ProClubes?",
+                    FontSize = 14,
+                    TextColor = ProClubesTheme.TextPrimary
+                },
+                new Label
+                {
+                    Text = "Seus dados pessoais sincronizados em cache local serão limpos por segurança.",
+                    FontSize = 12,
+                    TextColor = ProClubesTheme.TextSecondary
+                },
+                btnConfirmar,
+                btnCancelar
+            }
+        };
+
+        _popupHost.Show("Sair da Conta", body);
     }
 
     protected override async void OnAppearing()
