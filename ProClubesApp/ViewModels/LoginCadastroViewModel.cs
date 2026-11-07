@@ -40,7 +40,6 @@ public class LoginCadastroViewModel : BaseViewModel
     public ICommand IrParaEventosCommand { get; }
     public ICommand IrParaLoginCommand { get; }
     public ICommand SolicitarCadastroCommand { get; }
-    public ICommand ReenviarCadastroCommand { get; }
     public ICommand SairCommand { get; }
 
     public LoginCadastroViewModel(MobileSessionAndApiService api)
@@ -63,7 +62,6 @@ public class LoginCadastroViewModel : BaseViewModel
                 await Shell.Current.GoToAsync("//Login");
         });
         SolicitarCadastroCommand = new Command(async () => await SolicitarCadastroAsync());
-        ReenviarCadastroCommand = new Command(async () => await ReenviarCadastroAsync());
         SairCommand = new Command(async () => await SairAsync());
     }
 
@@ -83,6 +81,18 @@ public class LoginCadastroViewModel : BaseViewModel
             EventosPublicos.Clear();
             foreach (var e in pubEv) EventosPublicos.Add(e);
         }
+    }
+
+    public void PrepararReenvioCadastro()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+        if (StatusCadastroAtual is null) return;
+
+        NomeCompleto = StatusCadastroAtual.NomeCompleto;
+        Email = StatusCadastroAtual.Email;
+        UnidadeSelecionada = UnidadesPublicas.FirstOrDefault(u => u.Id == StatusCadastroAtual.UnidadePretendidaId)
+                             ?? UnidadesPublicas.FirstOrDefault();
     }
 
     public async Task EntrarAsync()
@@ -151,9 +161,9 @@ public class LoginCadastroViewModel : BaseViewModel
             await Shell.Current.GoToAsync("//Login");
     }
 
-    public async Task ReenviarCadastroAsync()
+    public async Task<bool> ReenviarCadastroAsync()
     {
-        if (StatusCadastroAtual is null) return;
+        if (StatusCadastroAtual is null) return false;
         ErrorMessage = null;
         SuccessMessage = null;
 
@@ -169,17 +179,18 @@ public class LoginCadastroViewModel : BaseViewModel
             "MG",
             string.IsNullOrWhiteSpace(Telefone) ? "31999990000" : Telefone,
             string.IsNullOrWhiteSpace(Email) ? StatusCadastroAtual.Email : Email,
-            StatusCadastroAtual.UnidadePretendidaId);
+            UnidadeSelecionada?.Id ?? StatusCadastroAtual.UnidadePretendidaId);
 
         var (res, err) = await _api.PutAsync<StatusCadastroResponse>("api/v1/me/cadastro/reenvio", req);
         if (err is not null)
         {
             ErrorMessage = err;
-            return;
+            return false;
         }
 
         StatusCadastroAtual = res;
-        SuccessMessage = "Solicitação reenviada com sucesso sem duplicar CPF!";
+        SuccessMessage = "Solicitação corrigida e reenviada com sucesso!";
+        return true;
     }
 
     public async Task SairAsync()

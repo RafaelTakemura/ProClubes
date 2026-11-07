@@ -1,6 +1,7 @@
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
+using ProClubesApp.Models;
 using ProClubesApp.ViewModels;
 
 namespace ProClubesApp.Views;
@@ -8,6 +9,7 @@ namespace ProClubesApp.Views;
 public sealed class LoginCadastroPage : ContentPage
 {
     private readonly LoginCadastroViewModel _vm;
+    private readonly PopupOverlayHost _popupHost;
 
     public LoginCadastroPage(LoginCadastroViewModel vm)
     {
@@ -106,14 +108,16 @@ public sealed class LoginCadastroPage : ContentPage
         var lblMotivoRej = new Label { FontSize = 13, TextColor = ProClubesTheme.StatusDanger };
         lblMotivoRej.SetBinding(Label.TextProperty, "StatusCadastroAtual.JustificativaRejeicao", stringFormat: "Justificativa: {0}");
 
-        var btnReenviar = new Button
+        var btnAbrirPopupReenvio = new Button
         {
-            Text = "Reenviar Solicitação Corrigida (mesmo CPF)",
+            Text = "Corrigir e Reenviar Solicitação (mesmo CPF)",
             BackgroundColor = ProClubesTheme.BrandPrimary,
             TextColor = Colors.White,
             CornerRadius = 10,
-            Command = _vm.ReenviarCadastroCommand
+            FontAttributes = FontAttributes.Bold
         };
+        btnAbrirPopupReenvio.Clicked += (_, _) => AbrirPopupReenvioCadastro();
+
         var btnSairRestrito = new Button
         {
             Text = "Sair da Conta",
@@ -126,11 +130,11 @@ public sealed class LoginCadastroPage : ContentPage
         statusCard.Content = new VerticalStackLayout
         {
             Spacing = 8,
-            Children = { lblStatusTit, lblStatusVal, lblMotivoRej, btnReenviar, btnSairRestrito }
+            Children = { lblStatusTit, lblStatusVal, lblMotivoRej, btnAbrirPopupReenvio, btnSairRestrito }
         };
         statusCard.SetBinding(VisualElement.IsVisibleProperty, nameof(LoginCadastroViewModel.ExibirStatusRestrito));
 
-        Content = new ScrollView
+        var mainScroll = new ScrollView
         {
             Padding = new Thickness(16),
             Content = new VerticalStackLayout
@@ -144,6 +148,85 @@ public sealed class LoginCadastroPage : ContentPage
                 }
             }
         };
+
+        _popupHost = new PopupOverlayHost(mainScroll);
+        Content = _popupHost.RootLayout;
+    }
+
+    private void AbrirPopupReenvioCadastro()
+    {
+        _vm.PrepararReenvioCadastro();
+
+        var lblMotivo = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusDanger };
+        lblMotivo.SetBinding(Label.TextProperty, "StatusCadastroAtual.JustificativaRejeicao", stringFormat: "Orientação da Secretaria: {0}");
+
+        var unidadePicker = new Picker
+        {
+            Title = "Unidade do Clube pretendida",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.UnidadesPublicas,
+            ItemDisplayBinding = new Binding(nameof(UnidadePublicaDto.Nome))
+        };
+        unidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.UnidadeSelecionada));
+
+        var nomeEntry = new Entry { Placeholder = "Nome completo corrigido", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
+
+        var emailEntry = new Entry { Placeholder = "E-mail corrigido", Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        emailEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Email));
+
+        var telEntry = new Entry { Placeholder = "Telefone celular atualizado", Keyboard = Keyboard.Telephone, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        telEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Telefone));
+
+        var btnConfirmarReenvio = new Button
+        {
+            Text = "Salvar e Reenviar para Análise",
+            BackgroundColor = ProClubesTheme.BrandSecondary,
+            TextColor = Colors.White,
+            CornerRadius = 10,
+            FontAttributes = FontAttributes.Bold
+        };
+        btnConfirmarReenvio.Clicked += async (_, _) =>
+        {
+            var ok = await _vm.ReenviarCadastroAsync();
+            if (ok)
+            {
+                _popupHost.Close();
+            }
+        };
+
+        var btnCancelar = new Button
+        {
+            Text = "Cancelar",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.TextSecondary,
+            CornerRadius = 10
+        };
+        btnCancelar.Clicked += (_, _) =>
+        {
+            _vm.ErrorMessage = null;
+            _popupHost.Close();
+        };
+
+        var body = new VerticalStackLayout
+        {
+            Spacing = 10,
+            Children =
+            {
+                ProClubesTheme.CreateStatusBanner(),
+                lblMotivo,
+                new Label { Text = "Atualize os dados solicitados abaixo para reenviar seu cadastro mantendo o mesmo CPF.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
+                unidadePicker,
+                nomeEntry,
+                emailEntry,
+                telEntry,
+                btnConfirmarReenvio,
+                btnCancelar
+            }
+        };
+
+        _popupHost.Show("Corrigir Solicitação de Cadastro", body, () => _vm.ErrorMessage = null);
     }
 
     protected override async void OnAppearing()

@@ -42,7 +42,7 @@ public class MaisGovernancaViewModel : BaseViewModel
         }
     }
 
-    public async Task RegistrarVotoDiretoAsync(int votacaoId, int opcaoId)
+    public async Task<bool> RegistrarVotoDiretoAsync(int votacaoId, int opcaoId)
     {
         ErrorMessage = null;
         SuccessMessage = null;
@@ -50,9 +50,10 @@ public class MaisGovernancaViewModel : BaseViewModel
         if (err is not null)
         {
             ErrorMessage = err;
-            return;
+            return false;
         }
-        SuccessMessage = "Voto registrado com sucesso!";
         await CarregarAsync();
+        SuccessMessage = "Voto secreto registrado com sucesso!";
+        return true;
     }
 }
