@@ -9,6 +9,7 @@ namespace ProClubesApp.Views;
 public sealed class OuvidoriaMobilePage : ContentPage
 {
     private readonly OuvidoriaViewModel _vm;
+    private readonly PopupOverlayHost _popupHost;
 
     public OuvidoriaMobilePage(OuvidoriaViewModel vm)
     {
@@ -23,9 +24,9 @@ public sealed class OuvidoriaMobilePage : ContentPage
             BackgroundColor = ProClubesTheme.BrandPrimary,
             TextColor = Colors.White,
             CornerRadius = 10,
-            FontAttributes = FontAttributes.Bold,
-            Command = _vm.AlternarFormularioNovaCommand
+            FontAttributes = FontAttributes.Bold
         };
+        btnNova.Clicked += (_, _) => AbrirPopupNovaManifestacao();
 
         var btnAtualizar = new Button
         {
@@ -37,6 +38,76 @@ public sealed class OuvidoriaMobilePage : ContentPage
             Command = _vm.AtualizarCommand
         };
 
+        var abrirDetalhesCmd = new Command<ManifestacaoDto>(async item => await AbrirPopupDetalhesManifestacaoAsync(item));
+
+        var list = new CollectionView
+        {
+            ItemsSource = _vm.MinhasManifestacoes,
+            ItemTemplate = new DataTemplate(() =>
+            {
+                var tit = new Label { FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary };
+                tit.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.Titulo));
+
+                var meta = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
+                meta.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.ResumoMeta));
+
+                var statusBadge = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
+                statusBadge.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.StatusBadge));
+
+                var btnVerRespostas = new Button
+                {
+                    Text = "Ver Respostas da Diretoria",
+                    BackgroundColor = ProClubesTheme.SurfaceSubtle,
+                    TextColor = ProClubesTheme.BrandPrimary,
+                    CornerRadius = 8,
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    Command = abrirDetalhesCmd
+                };
+                btnVerRespostas.SetBinding(Button.CommandParameterProperty, ".");
+
+                var card = ProClubesTheme.CreateCard(new VerticalStackLayout
+                {
+                    Spacing = 6,
+                    Children = { tit, meta, statusBadge, btnVerRespostas }
+                });
+
+                var tap = new TapGestureRecognizer { Command = abrirDetalhesCmd };
+                tap.SetBinding(TapGestureRecognizer.CommandParameterProperty, ".");
+                card.GestureRecognizers.Add(tap);
+
+                return card;
+            })
+        };
+
+        var mainScroll = new ScrollView
+        {
+            Padding = new Thickness(16),
+            Content = new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children =
+                {
+                    ProClubesTheme.CreateOfflineBanner(),
+                    ProClubesTheme.CreateStatusBanner(),
+                    new Label { Text = "Canal de Ouvidoria", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                    new Label { Text = "Envie solicitações, sugestões ou reclamações e toque em qualquer card abaixo para abrir as respostas da diretoria em um pop-up.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
+                    btnNova,
+                    btnAtualizar,
+                    new Label { Text = "Minhas Manifestações", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary, Margin = new Thickness(0, 6, 0, 2) },
+                    list
+                }
+            }
+        };
+
+        _popupHost = new PopupOverlayHost(mainScroll);
+        Content = _popupHost.RootLayout;
+    }
+
+    private void AbrirPopupNovaManifestacao()
+    {
+        _vm.PrepararNovaManifestacao();
+
         var catPicker = new Picker
         {
             Title = "Categoria da Manifestação",
@@ -47,39 +118,81 @@ public sealed class OuvidoriaMobilePage : ContentPage
         };
         catPicker.SetBinding(Picker.SelectedItemProperty, nameof(OuvidoriaViewModel.CategoriaSelecionada));
 
-        var assuntoEntry = new Entry { Placeholder = "Assunto da manifestação", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var assuntoEntry = new Entry
+        {
+            Placeholder = "Assunto da manifestação",
+            TextColor = ProClubesTheme.TextPrimary,
+            PlaceholderColor = ProClubesTheme.TextMuted
+        };
         assuntoEntry.SetBinding(Entry.TextProperty, nameof(OuvidoriaViewModel.AssuntoManifestacao));
 
-        var descManifEditor = new Editor { Placeholder = "Descreva sua dúvida, sugestão ou reclamação...", HeightRequest = 90, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var descManifEditor = new Editor
+        {
+            Placeholder = "Descreva sua dúvida, sugestão ou reclamação...",
+            HeightRequest = 110,
+            TextColor = ProClubesTheme.TextPrimary,
+            PlaceholderColor = ProClubesTheme.TextMuted
+        };
         descManifEditor.SetBinding(Editor.TextProperty, nameof(OuvidoriaViewModel.DescricaoManifestacao));
 
-        var btnEnviarManif = new Button
+        var btnEnviar = new Button
         {
             Text = "Enviar Manifestação",
             BackgroundColor = ProClubesTheme.BrandSecondary,
             TextColor = Colors.White,
             CornerRadius = 10,
-            FontAttributes = FontAttributes.Bold,
-            Command = _vm.EnviarManifestacaoCommand
+            FontAttributes = FontAttributes.Bold
+        };
+        btnEnviar.Clicked += async (_, _) =>
+        {
+            var sucesso = await _vm.EnviarManifestacaoAsync();
+            if (sucesso)
+            {
+                _popupHost.Close();
+            }
         };
 
-        var formCard = ProClubesTheme.CreateCard(new VerticalStackLayout
+        var btnCancelar = new Button
         {
-            Spacing = 8,
+            Text = "Cancelar",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.TextSecondary,
+            CornerRadius = 10
+        };
+        btnCancelar.Clicked += (_, _) =>
+        {
+            _vm.ErrorMessage = null;
+            _popupHost.Close();
+        };
+
+        var body = new VerticalStackLayout
+        {
+            Spacing = 10,
             Children =
             {
-                new Label { Text = "Registrar Nova Manifestação", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                ProClubesTheme.CreateStatusBanner(),
+                new Label { Text = "Preencha os campos abaixo para encaminhar sua manifestação à diretoria da unidade.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
                 catPicker,
                 assuntoEntry,
                 descManifEditor,
-                btnEnviarManif
+                btnEnviar,
+                btnCancelar
             }
-        });
-        formCard.SetBinding(VisualElement.IsVisibleProperty, nameof(OuvidoriaViewModel.ExibirFormularioNova));
+        };
 
-        // Card de Detalhes + Respostas da Diretoria quando o usuário clica em uma manifestação
+        _popupHost.Show("Nova Manifestação", body, () => _vm.ErrorMessage = null);
+    }
+
+    private async Task AbrirPopupDetalhesManifestacaoAsync(ManifestacaoDto? item)
+    {
+        if (item is null) return;
+        await _vm.SelecionarManifestacaoAsync(item);
+
         var lblDetTitulo = new Label { FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandPrimary };
         lblDetTitulo.SetBinding(Label.TextProperty, "ManifestacaoSelecionada.Titulo");
+
+        var lblDetMeta = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
+        lblDetMeta.SetBinding(Label.TextProperty, "ManifestacaoSelecionada.ResumoMeta");
 
         var lblDetStatus = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
         lblDetStatus.SetBinding(Label.TextProperty, "ManifestacaoSelecionada.StatusBadge");
@@ -108,8 +221,8 @@ public sealed class OuvidoriaMobilePage : ContentPage
 
             return new Border
             {
-                BackgroundColor = ProClubesTheme.SurfaceCard,
-                Stroke = ProClubesTheme.BorderDefault,
+                BackgroundColor = ProClubesTheme.StatusInfoBg,
+                Stroke = Color.FromArgb("#BFDBFE"),
                 StrokeThickness = 1,
                 StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
                 Padding = new Thickness(12, 8),
@@ -117,95 +230,49 @@ public sealed class OuvidoriaMobilePage : ContentPage
             };
         }));
 
-        var btnFecharDet = new Button
+        var btnFechar = new Button
         {
-            Text = "Fechar Respostas",
-            BackgroundColor = ProClubesTheme.SurfaceCard,
-            TextColor = ProClubesTheme.TextSecondary,
-            CornerRadius = 8,
-            FontSize = 12,
-            Command = _vm.FecharDetalhesCommand
+            Text = "Fechar",
+            BackgroundColor = ProClubesTheme.BrandPrimary,
+            TextColor = Colors.White,
+            CornerRadius = 10,
+            FontAttributes = FontAttributes.Bold
         };
+        btnFechar.Clicked += (_, _) => _popupHost.Close();
 
-        var detalhesCard = ProClubesTheme.CreateCard(new VerticalStackLayout
+        var body = new VerticalStackLayout
         {
-            Spacing = 8,
+            Spacing = 10,
             Children =
             {
-                new Label { Text = "Respostas da Diretoria (Portal Web)", FontSize = 13, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusInfo },
                 lblDetTitulo,
+                lblDetMeta,
                 lblDetStatus,
-                lblDetDesc,
-                new BoxView { HeightRequest = 1, Color = ProClubesTheme.BorderDefault },
+                new Border
+                {
+                    BackgroundColor = ProClubesTheme.SurfaceSubtle,
+                    Stroke = ProClubesTheme.BorderDefault,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+                    Padding = new Thickness(12, 8),
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 4,
+                        Children =
+                        {
+                            new Label { Text = "Sua mensagem:", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextSecondary },
+                            lblDetDesc
+                        }
+                    }
+                },
+                new Label { Text = "Respostas da Diretoria:", FontSize = 13, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusInfo, Margin = new Thickness(0, 4, 0, 0) },
                 lblSemResp,
                 respostasContainer,
-                btnFecharDet
-            }
-        }, ProClubesTheme.StatusInfoBg, Color.FromArgb("#BFDBFE"));
-        detalhesCard.SetBinding(VisualElement.IsVisibleProperty, nameof(OuvidoriaViewModel.TemManifestacaoSelecionada));
-
-        // Lista de cards clicáveis com as manifestações do associado
-        var list = new CollectionView
-        {
-            ItemsSource = _vm.MinhasManifestacoes,
-            ItemTemplate = new DataTemplate(() =>
-            {
-                var tit = new Label { FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary };
-                tit.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.Titulo));
-
-                var meta = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
-                meta.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.ResumoMeta));
-
-                var statusBadge = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
-                statusBadge.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.StatusBadge));
-
-                var btnVerRespostas = new Button
-                {
-                    Text = "Ver Respostas da Diretoria",
-                    BackgroundColor = ProClubesTheme.SurfaceSubtle,
-                    TextColor = ProClubesTheme.BrandPrimary,
-                    CornerRadius = 8,
-                    FontSize = 12,
-                    FontAttributes = FontAttributes.Bold,
-                    Command = _vm.SelecionarManifestacaoCommand
-                };
-                btnVerRespostas.SetBinding(Button.CommandParameterProperty, ".");
-
-                var card = ProClubesTheme.CreateCard(new VerticalStackLayout
-                {
-                    Spacing = 6,
-                    Children = { tit, meta, statusBadge, btnVerRespostas }
-                });
-
-                var tap = new TapGestureRecognizer { Command = _vm.SelecionarManifestacaoCommand };
-                tap.SetBinding(TapGestureRecognizer.CommandParameterProperty, ".");
-                card.GestureRecognizers.Add(tap);
-
-                return card;
-            })
-        };
-
-        Content = new ScrollView
-        {
-            Padding = new Thickness(16),
-            Content = new VerticalStackLayout
-            {
-                Spacing = 8,
-                Children =
-                {
-                    ProClubesTheme.CreateOfflineBanner(),
-                    ProClubesTheme.CreateStatusBanner(),
-                    new Label { Text = "Canal de Ouvidoria", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                    new Label { Text = "Envie solicitações, sugestões ou reclamações e toque em qualquer card abaixo para consultar as respostas da diretoria.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
-                    btnNova,
-                    btnAtualizar,
-                    formCard,
-                    detalhesCard,
-                    new Label { Text = "Minhas Manifestações", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary, Margin = new Thickness(0, 6, 0, 2) },
-                    list
-                }
+                btnFechar
             }
         };
+
+        _popupHost.Show("Respostas da Ouvidoria", body);
     }
 
     protected override async void OnAppearing()

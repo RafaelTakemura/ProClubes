@@ -12,7 +12,6 @@ public class OuvidoriaViewModel : BaseViewModel
     private string _assuntoManifestacao = string.Empty;
     private string _descricaoManifestacao = string.Empty;
     private ManifestacaoDto? _manifestacaoSelecionada;
-    private bool _exibirFormularioNova;
 
     public ObservableCollection<CategoriaManifestacaoDto> CategoriasManifestacao { get; } = new();
     public ObservableCollection<ManifestacaoDto> MinhasManifestacoes { get; } = new();
@@ -21,7 +20,6 @@ public class OuvidoriaViewModel : BaseViewModel
     public CategoriaManifestacaoDto? CategoriaSelecionada { get => _categoriaSelecionada; set => SetProperty(ref _categoriaSelecionada, value); }
     public string AssuntoManifestacao { get => _assuntoManifestacao; set => SetProperty(ref _assuntoManifestacao, value); }
     public string DescricaoManifestacao { get => _descricaoManifestacao; set => SetProperty(ref _descricaoManifestacao, value); }
-    public bool ExibirFormularioNova { get => _exibirFormularioNova; set => SetProperty(ref _exibirFormularioNova, value); }
 
     public ManifestacaoDto? ManifestacaoSelecionada
     {
@@ -38,24 +36,21 @@ public class OuvidoriaViewModel : BaseViewModel
     public bool SemRespostasNaSelecionada => ManifestacaoSelecionada is not null && RespostasDaSelecionada.Count == 0;
     public bool PodeManifestar => _api.IsTitularPagante;
 
-    public ICommand AlternarFormularioNovaCommand { get; }
-    public ICommand EnviarManifestacaoCommand { get; }
-    public ICommand SelecionarManifestacaoCommand { get; }
-    public ICommand FecharDetalhesCommand { get; }
     public ICommand AtualizarCommand { get; }
 
     public OuvidoriaViewModel(MobileSessionAndApiService api)
     {
         _api = api;
-        AlternarFormularioNovaCommand = new Command(() => ExibirFormularioNova = !ExibirFormularioNova);
-        EnviarManifestacaoCommand = new Command(async () => await EnviarManifestacaoAsync());
-        SelecionarManifestacaoCommand = new Command<ManifestacaoDto>(async m => await SelecionarManifestacaoAsync(m));
-        FecharDetalhesCommand = new Command(() =>
-        {
-            ManifestacaoSelecionada = null;
-            RespostasDaSelecionada.Clear();
-        });
         AtualizarCommand = new Command(async () => await CarregarAsync());
+    }
+
+    public void PrepararNovaManifestacao()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+        AssuntoManifestacao = string.Empty;
+        DescricaoManifestacao = string.Empty;
+        CategoriaSelecionada ??= CategoriasManifestacao.FirstOrDefault();
     }
 
     public async Task CarregarAsync()
@@ -78,13 +73,6 @@ public class OuvidoriaViewModel : BaseViewModel
         {
             MinhasManifestacoes.Clear();
             foreach (var m in paged.Items) MinhasManifestacoes.Add(m);
-
-            if (ManifestacaoSelecionada is not null)
-            {
-                var atualizada = paged.Items.FirstOrDefault(x => x.Id == ManifestacaoSelecionada.Id);
-                if (atualizada is not null)
-                    await SelecionarManifestacaoAsync(atualizada);
-            }
         }
         else if (err is not null)
         {
@@ -111,14 +99,20 @@ public class OuvidoriaViewModel : BaseViewModel
             ErrorMessage = err;
     }
 
-    public async Task EnviarManifestacaoAsync()
+    public async Task<bool> EnviarManifestacaoAsync()
     {
         ErrorMessage = null;
         SuccessMessage = null;
         if (CategoriaSelecionada is null)
         {
             ErrorMessage = "Selecione uma categoria ativa.";
-            return;
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(AssuntoManifestacao) || string.IsNullOrWhiteSpace(DescricaoManifestacao))
+        {
+            ErrorMessage = "Preencha o assunto e a descrição da manifestação.";
+            return false;
         }
 
         var req = new CriarManifestacaoRequest(
@@ -131,15 +125,13 @@ public class OuvidoriaViewModel : BaseViewModel
         if (err is not null)
         {
             ErrorMessage = err;
-            return;
+            return false;
         }
 
         AssuntoManifestacao = string.Empty;
         DescricaoManifestacao = string.Empty;
-        ExibirFormularioNova = false;
-        SuccessMessage = "Manifestação registrada com sucesso!";
         await CarregarAsync();
-        if (criada is not null)
-            await SelecionarManifestacaoAsync(criada);
+        SuccessMessage = $"Manifestação \"{criada?.Titulo}\" registrada com sucesso!";
+        return true;
     }
 }
