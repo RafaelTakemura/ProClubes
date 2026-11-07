@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProClubes.IntegrationTests/ProClubes.IntegrationTests.csproj" />
+    <Project Path="tests/ProClubes.UnitTests/ProClubes.UnitTests.csproj" />
+  </Folder>
+  <Project Path="ProClubesApi/ProClubesApi.csproj" />
+  <Project Path="ProClubesApp/ProClubesApp.csproj" />
+  <Project Path="ProClubesWeb/ProClubesWeb.csproj" />
+</Solution>

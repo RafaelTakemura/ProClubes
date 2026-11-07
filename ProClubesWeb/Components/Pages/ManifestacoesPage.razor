@@ -1,0 +1,238 @@
+@page "/manifestacoes"
+@page "/categorias-manifestacoes"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Manifestações e Categorias — ProClubesWeb</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <h1 class="pc-page-title">Manifestações e Categorias Globais</h1>
+        <p class="pc-page-subtitle">Atendimento de solicitações, reclamações e sugestões da unidade e gestão de categorias globais (exclusiva Super Admin)</p>
+    </div>
+    <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Atualizar</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_mensagem))
+{
+    <div class="pc-alert pc-alert-success">@_mensagem</div>
+}
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="pc-alert pc-alert-danger">@_erro</div>
+}
+
+@if (Session.IsSuperAdmin)
+{
+    <div class="pc-card">
+        <h3 style="margin-top: 0; font-size: 18px;">Categorias Globais de Manifestações (Exclusivo Super Admin)</h3>
+        <p class="pc-page-subtitle">Categorias desativadas deixam de aparecer em novas manifestações, preservando o histórico existente.</p>
+        <div class="pc-form-grid" style="margin-top: 12px;">
+            <div class="pc-field"><label class="pc-label">Nome da Categoria *</label><input class="pc-input" @bind="_nomeCat" /></div>
+            <div class="pc-field">
+                <label class="pc-label">Tipo *</label>
+                <select class="pc-select" @bind="_tipoCat">
+                    <option value="@TipoManifestacao.Solicitacao">Solicitação</option>
+                    <option value="@TipoManifestacao.Reclamacao">Reclamação</option>
+                    <option value="@TipoManifestacao.Sugestao">Sugestão</option>
+                </select>
+            </div>
+            <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descCat" /></div>
+        </div>
+        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" style="margin-bottom: 14px;" @onclick="CriarCategoriaGlobalAsync">+ Criar Categoria Global</button>
+
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Categoria</th>
+                        <th>Tipo</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _categorias)
+                    {
+                        <tr>
+                            <td>#@c.Id</td>
+                            <td><strong>@c.Nome</strong> — <small>@c.Descricao</small></td>
+                            <td>@c.TipoManifestacao</td>
+                            <td><PcStatusBadge Text="@(c.Ativa ? "Ativa" : "Inativa")" Variant="@(c.Ativa ? "ativo" : "inativo")" /></td>
+                            <td>
+                                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AlternarAtivaCategoriaAsync(c)">
+                                    @(c.Ativa ? "Desativar" : "Reativar")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<div class="pc-card">
+    <h3 style="margin-top: 0; font-size: 18px;">Caixa de Atendimento de Manifestações</h3>
+    <div class="pc-table-wrap">
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Protocolo</th>
+                    <th>Tipo / Categoria</th>
+                    <th>Título / Autor</th>
+                    <th>Unidade</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>Atendimento</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_manifestacoes.Count == 0)
+                {
+                    <tr><td colspan="7">Nenhuma manifestação registrada no escopo atual.</td></tr>
+                }
+                @foreach (var m in _manifestacoes)
+                {
+                    <tr>
+                        <td>#@m.Id</td>
+                        <td><strong>@m.TipoManifestacao</strong><br /><small>@m.CategoriaNome</small></td>
+                        <td><strong>@m.Titulo</strong><br /><small>@m.AutorNome</small></td>
+                        <td>@m.UnidadeNome</td>
+                        <td>
+                            <PcStatusBadge Text="@m.Status.ToString()"
+                                           Variant="@(m.Status == StatusManifestacao.Concluida ? "concluida" : (m.Status == StatusManifestacao.EmAtendimento ? "ematendimento" : "info"))" />
+                        </td>
+                        <td>@m.CriadaEm.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => _manifestacaoAtiva = m">Atender / Responder</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_manifestacaoAtiva is not null)
+{
+    <div class="pc-card">
+        <h3 style="margin-top: 0;">Manifestação #@_manifestacaoAtiva.Id — @_manifestacaoAtiva.Titulo</h3>
+        <p style="background: var(--pc-bg); padding: 12px; border-radius: 8px;">@_manifestacaoAtiva.Descricao</p>
+
+        <h4>Histórico de Respostas</h4>
+        @if (_manifestacaoAtiva.Respostas.Count == 0)
+        {
+            <p class="pc-page-subtitle">Ainda sem respostas.</p>
+        }
+        else
+        {
+            @foreach (var r in _manifestacaoAtiva.Respostas)
+            {
+                <div style="border-left: 3px solid var(--pc-primary); padding: 8px 12px; margin-bottom: 10px; background: var(--pc-bg);">
+                    <div><strong>@r.AutorNome</strong> <small style="color: var(--pc-text-secondary);">em @r.CriadaEm.ToString("dd/MM/yyyy HH:mm")</small></div>
+                    <div>@r.Mensagem</div>
+                </div>
+            }
+        }
+
+        <div class="pc-field" style="margin-top: 14px;">
+            <label class="pc-label">Nova Resposta da Diretoria *</label>
+            <textarea class="pc-textarea" rows="3" @bind="_textoResposta"></textarea>
+        </div>
+        <div class="pc-field">
+            <label class="pc-label">Atualizar Status</label>
+            <select class="pc-select" @bind="_novoStatusManifestacao">
+                <option value="@StatusManifestacao.EmAtendimento">Em Atendimento</option>
+                <option value="@StatusManifestacao.Concluida">Concluída</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="EnviarRespostaAsync">Enviar Resposta e Notificar Autor</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _manifestacaoAtiva = null">Fechar</button>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<CategoriaManifestacaoDto> _categorias = Array.Empty<CategoriaManifestacaoDto>();
+    private IReadOnlyList<ManifestacaoDto> _manifestacoes = Array.Empty<ManifestacaoDto>();
+    private ManifestacaoDto? _manifestacaoAtiva;
+
+    private string _nomeCat = string.Empty;
+    private TipoManifestacao _tipoCat = TipoManifestacao.Solicitacao;
+    private string _descCat = string.Empty;
+
+    private string _textoResposta = string.Empty;
+    private StatusManifestacao _novoStatusManifestacao = StatusManifestacao.EmAtendimento;
+
+    private string? _erro;
+    private string? _mensagem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var (cats, _) = await Api.GetAsync<IReadOnlyList<CategoriaManifestacaoDto>>("api/v1/manifestacoes/categorias?incluirInativas=true");
+        if (cats is not null) _categorias = cats;
+
+        var q = new List<string> { "page=1", "pageSize=50" };
+        if (Session.UnidadeContextoId.HasValue) q.Add($"unidadeId={Session.UnidadeContextoId.Value}");
+        var (page, err) = await Api.GetAsync<PagedResponse<ManifestacaoDto>>($"api/v1/manifestacoes?{string.Join("&", q)}");
+        if (page is not null) _manifestacoes = page.Items;
+        _erro = err;
+    }
+
+    private async Task CriarCategoriaGlobalAsync()
+    {
+        _erro = _mensagem = null;
+        var req = new CriarOuAtualizarCategoriaManifestacaoRequest(_nomeCat, _tipoCat, _descCat, true);
+        var (_, err) = await Api.PostAsync<CategoriaManifestacaoDto>("api/v1/admin/manifestacoes/categorias", req);
+        if (err is not null) { _erro = err; return; }
+        _nomeCat = _descCat = string.Empty;
+        _mensagem = "Categoria global criada.";
+        await CarregarAsync();
+    }
+
+    private async Task AlternarAtivaCategoriaAsync(CategoriaManifestacaoDto c)
+    {
+        _erro = _mensagem = null;
+        var req = new CriarOuAtualizarCategoriaManifestacaoRequest(c.Nome, c.TipoManifestacao, c.Descricao, !c.Ativa);
+        var (_, err) = await Api.PutAsync<CategoriaManifestacaoDto>($"api/v1/admin/manifestacoes/categorias/{c.Id}", req);
+        if (err is not null) { _erro = err; return; }
+        _mensagem = $"Categoria '{c.Nome}' {(c.Ativa ? "desativada" : "reativada")}.";
+        await CarregarAsync();
+    }
+
+    private async Task EnviarRespostaAsync()
+    {
+        if (_manifestacaoAtiva is null) return;
+        _erro = _mensagem = null;
+        var (atualizada, err) = await Api.PostAsync<ManifestacaoDto>(
+            $"api/v1/manifestacoes/{_manifestacaoAtiva.Id}/respostas",
+            new ResponderManifestacaoRequest(_textoResposta, _novoStatusManifestacao));
+        if (err is not null) { _erro = err; return; }
+        _manifestacaoAtiva = atualizada;
+        _textoResposta = string.Empty;
+        _mensagem = "Resposta registrada e autor notificado.";
+        await CarregarAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

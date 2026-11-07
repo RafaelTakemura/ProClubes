@@ -1,0 +1,362 @@
+@page "/associados"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Associados e Dependentes — ProClubesWeb</PageTitle>
+
+@if (!Session.IsSuperAdmin && !Session.IsAdmin)
+{
+    <div class="pc-alert pc-alert-danger">Acesso restrito a Admin da unidade ou Super Admin.</div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div>
+            <h1 class="pc-page-title">Associados e Dependentes</h1>
+            <p class="pc-page-subtitle">Gestão de vínculos associativos, categorias, dependentes e transferências entre unidades</p>
+        </div>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovoAssociado = !_exibirNovoAssociado">+ Cadastrar Associado</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="pc-alert pc-alert-success">@_mensagem</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger">@_erro</div>
+    }
+
+    @if (_exibirNovoAssociado)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Novo Associado Titular</h3>
+            <div class="pc-form-grid">
+                <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_nome" /></div>
+                <div class="pc-field"><label class="pc-label">CPF (11 dígitos) *</label><input class="pc-input" maxlength="14" @bind="_cpf" /></div>
+                <div class="pc-field"><label class="pc-label">Sexo *</label><input class="pc-input" @bind="_sexo" /></div>
+                <div class="pc-field"><label class="pc-label">Estado Civil *</label><input class="pc-input" @bind="_estadoCivil" /></div>
+                <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_nascimento" /></div>
+                <div class="pc-field"><label class="pc-label">Telefone *</label><input class="pc-input" @bind="_fone" /></div>
+                <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_email" /></div>
+                <div class="pc-field"><label class="pc-label">UnidadeId *</label><input type="number" class="pc-input" @bind="_unidadeIdNovo" /></div>
+                <div class="pc-field">
+                    <label class="pc-label">Categoria Associativa *</label>
+                    <select class="pc-select" @bind="_categoriaNovo">
+                        <option value="ASSOCIADO">Sócio Associado</option>
+                        <option value="FUNDADOR">Sócio Fundador</option>
+                        <option value="CONVIDADO">Sócio Convidado</option>
+                        <option value="SIMPATIZANTE">Simpatizante</option>
+                    </select>
+                </div>
+                <div class="pc-field"><label class="pc-label">Cidade / UF *</label><input class="pc-input" @bind="_cidade" /></div>
+                <div class="pc-field"><label class="pc-label">Senha Inicial *</label><input type="password" class="pc-input" @bind="_senhaNovo" /></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 12px;">
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarAssociadoAsync">Salvar Associado</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovoAssociado = false">Cancelar</button>
+            </div>
+        </div>
+    }
+
+    <div class="pc-card">
+        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+            <input class="pc-input" style="min-width: 240px;" placeholder="Buscar por nome, e-mail ou CPF..." @bind="_busca" />
+            <select class="pc-select" @bind="_filtroCategoria">
+                <option value="">Todas as categorias</option>
+                <option value="ASSOCIADO">Sócio Associado</option>
+                <option value="FUNDADOR">Sócio Fundador</option>
+                <option value="CONVIDADO">Sócio Convidado</option>
+                <option value="SIMPATIZANTE">Simpatizante</option>
+            </select>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Buscar</button>
+        </div>
+
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>ID / Usuário</th>
+                        <th>Associado</th>
+                        <th>Unidade</th>
+                        <th>Categoria</th>
+                        <th>Status / Cobrança</th>
+                        <th>Dependentes Ativos</th>
+                        <th>Ações Administrativas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_associados.Count == 0)
+                    {
+                        <tr><td colspan="7">Nenhum associado encontrado.</td></tr>
+                    }
+                    @foreach (var a in _associados)
+                    {
+                        <tr>
+                            <td>Assoc #@a.Id<br /><small style="color: var(--pc-text-secondary);">Usr #@(a.UsuarioId?.ToString() ?? "-")</small></td>
+                            <td><strong>@a.NomeCompleto</strong><br /><small>@a.CpfMascarado — @a.Email</small></td>
+                            <td>@a.UnidadeNome</td>
+                            <td>
+                                <PcStatusBadge Text="@a.CategoriaNome" Variant="@(a.CategoriaCodigo == "FUNDADOR" ? "fundador" : (a.CategoriaCodigo == "SIMPATIZANTE" ? "simpatizante" : "info"))" />
+                            </td>
+                            <td>
+                                <PcStatusBadge Text="@a.Status.ToString()" Variant="@(a.Status == StatusAssociado.Ativo ? "ativo" : "inativo")" />
+                                @if (a.DataInicioCobranca.HasValue)
+                                {
+                                    <div><small>Cobrança: @a.DataInicioCobranca.Value.ToString("MM/yyyy")</small></div>
+                                }
+                            </td>
+                            <td>@a.Dependentes.Count(d => d.Ativo)</td>
+                            <td>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => SelecionarAssociado(a)">Gerenciar / Dependentes</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (_selecionado is not null)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Detalhes de @_selecionado.NomeCompleto (#@_selecionado.Id)</h3>
+            <p class="pc-page-subtitle">Unidade: <strong>@_selecionado.UnidadeNome</strong> | Categoria atual: <strong>@_selecionado.CategoriaNome</strong></p>
+
+            <div class="pc-form-grid" style="margin-top: 16px;">
+                <div class="pc-field">
+                    <label class="pc-label">Alterar Categoria (efeito na próxima competência)</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select class="pc-select" @bind="_novaCategoriaSel">
+                            <option value="ASSOCIADO">Sócio Associado</option>
+                            <option value="FUNDADOR">Sócio Fundador</option>
+                            <option value="CONVIDADO">Sócio Convidado</option>
+                            <option value="SIMPATIZANTE">Simpatizante</option>
+                        </select>
+                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarCategoriaAsync">Aplicar</button>
+                    </div>
+                </div>
+
+                @if (Session.IsSuperAdmin)
+                {
+                    <div class="pc-field">
+                        <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" class="pc-input" placeholder="UnidadeDestinoId" @bind="_unidadeDestinoTransf" />
+                            <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="TransferirUnidadeAsync">Transferir</button>
+                        </div>
+                    </div>
+                }
+
+                <div class="pc-field">
+                    <label class="pc-label">Situação do Vínculo</label>
+                    <div>
+                        @if (_selecionado.Status == StatusAssociado.Ativo)
+                        {
+                            <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AlterarStatusAsync(false)">Desativar Associado</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AlterarStatusAsync(true)">Reativar Associado</button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--pc-border); margin: 20px 0;" />
+            <h4>Dependentes Vinculados (Cônjuge ou Filho(a) até 21 anos, inclusive)</h4>
+            <table class="pc-table" style="margin-bottom: 16px;">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>CPF</th>
+                        <th>Vínculo</th>
+                        <th>Nascimento</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_selecionado.Dependentes.Count == 0)
+                    {
+                        <tr><td colspan="5">Nenhum dependente registrado.</td></tr>
+                    }
+                    @foreach (var d in _selecionado.Dependentes)
+                    {
+                        <tr>
+                            <td>@d.NomeCompleto</td>
+                            <td>@d.CpfMascarado</td>
+                            <td>@d.TipoVinculo</td>
+                            <td>@d.DataNascimento.ToString("dd/MM/yyyy")</td>
+                            <td><PcStatusBadge Text="@(d.Ativo ? "Ativo" : $"Encerrado ({d.MotivoFim})")" Variant="@(d.Ativo ? "ativo" : "neutral")" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <h5>Vincular Novo Dependente</h5>
+            <div class="pc-form-grid">
+                <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_depNome" /></div>
+                <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" @bind="_depCpf" /></div>
+                <div class="pc-field"><label class="pc-label">Sexo *</label><input class="pc-input" @bind="_depSexo" /></div>
+                <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_depNascimento" /></div>
+                <div class="pc-field">
+                    <label class="pc-label">Tipo de Vínculo *</label>
+                    <select class="pc-select" @bind="_depVinculo">
+                        <option value="@TipoVinculoDependente.Conjuge">Cônjuge</option>
+                        <option value="@TipoVinculoDependente.Filho">Filho(a) (até 21 anos)</option>
+                    </select>
+                </div>
+                <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_depEmail" /></div>
+                <div class="pc-field"><label class="pc-label">Senha (para login próprio opcional)</label><input type="password" class="pc-input" @bind="_depSenha" /></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="CadastrarDependenteAsync">Vincular Dependente</button>
+                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _selecionado = null">Fechar Painel</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<AssociadoDto> _associados = Array.Empty<AssociadoDto>();
+    private AssociadoDto? _selecionado;
+    private string _busca = string.Empty;
+    private string _filtroCategoria = string.Empty;
+    private string? _erro;
+    private string? _mensagem;
+
+    private bool _exibirNovoAssociado;
+    private string _nome = string.Empty;
+    private string _cpf = string.Empty;
+    private string _sexo = "Masculino";
+    private string _estadoCivil = "Solteiro(a)";
+    private DateOnly _nascimento = new(1990, 5, 10);
+    private string _fone = "(45) 99999-1111";
+    private string _email = string.Empty;
+    private string _cidade = "Foz do Iguaçu";
+    private int _unidadeIdNovo = 1;
+    private string _categoriaNovo = "ASSOCIADO";
+    private string _senhaNovo = "ProClubes@123";
+
+    private string _novaCategoriaSel = "ASSOCIADO";
+    private int _unidadeDestinoTransf = 2;
+
+    private string _depNome = string.Empty;
+    private string _depCpf = string.Empty;
+    private string _depSexo = "Feminino";
+    private DateOnly _depNascimento = new(2010, 6, 15);
+    private TipoVinculoDependente _depVinculo = TipoVinculoDependente.Filho;
+    private string _depEmail = string.Empty;
+    private string _depSenha = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        _unidadeIdNovo = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? 1;
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var q = new List<string> { "page=1", "pageSize=50" };
+        if (Session.UnidadeContextoId.HasValue) q.Add($"unidadeId={Session.UnidadeContextoId.Value}");
+        if (!string.IsNullOrWhiteSpace(_filtroCategoria)) q.Add($"codigoCategoria={_filtroCategoria}");
+        if (!string.IsNullOrWhiteSpace(_busca)) q.Add($"busca={Uri.EscapeDataString(_busca)}");
+
+        var (data, err) = await Api.GetAsync<PagedResponse<AssociadoDto>>($"api/v1/admin/associados?{string.Join("&", q)}");
+        if (data is not null) _associados = data.Items;
+        _erro = err;
+    }
+
+    private void SelecionarAssociado(AssociadoDto a)
+    {
+        _selecionado = a;
+        _novaCategoriaSel = a.CategoriaCodigo;
+    }
+
+    private async Task CriarAssociadoAsync()
+    {
+        _erro = _mensagem = null;
+        var req = new CriarAssociadoAdminRequest(
+            _nome, _cpf, _sexo, _estadoCivil, _nascimento,
+            "Rua Principal", "Centro", "100", _cidade, "PR",
+            _fone, _email, _unidadeIdNovo, _categoriaNovo, _senhaNovo);
+
+        var (criado, err) = await Api.PostAsync<AssociadoDto>("api/v1/admin/associados", req);
+        if (err is not null) { _erro = err; return; }
+        _mensagem = $"Associado {criado?.NomeCompleto} cadastrado com sucesso.";
+        _exibirNovoAssociado = false;
+        await CarregarAsync();
+    }
+
+    private async Task AlterarCategoriaAsync()
+    {
+        if (_selecionado is null) return;
+        _erro = _mensagem = null;
+        var (atualizado, err) = await Api.PutAsync<AssociadoDto>(
+            $"api/v1/admin/associados/{_selecionado.Id}/categoria",
+            new AlterarCategoriaAssociadoRequest(_novaCategoriaSel, "Alteração administrativa via ProClubesWeb"));
+        if (err is not null) { _erro = err; return; }
+        _selecionado = atualizado;
+        _mensagem = "Categoria associativa atualizada (efeito financeiro a partir da competência seguinte).";
+        await CarregarAsync();
+    }
+
+    private async Task TransferirUnidadeAsync()
+    {
+        if (_selecionado is null) return;
+        _erro = _mensagem = null;
+        var (transf, err) = await Api.PostAsync<object>(
+            $"api/v1/admin/associados/{_selecionado.Id}/transferencias",
+            new TransferirAssociadoUnidadeRequest(_unidadeDestinoTransf));
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Associado transferido de unidade com preservação do histórico financeiro na unidade de origem.";
+        await CarregarAsync();
+    }
+
+    private async Task AlterarStatusAsync(bool ativo)
+    {
+        if (_selecionado is null) return;
+        _erro = _mensagem = null;
+        var (atualizado, err) = await Api.PatchAsync<AssociadoDto>(
+            $"api/v1/admin/associados/{_selecionado.Id}/status",
+            new AlterarStatusAssociadoRequest(ativo));
+        if (err is not null) { _erro = err; return; }
+        _selecionado = atualizado;
+        _mensagem = "Situação do associado atualizada.";
+        await CarregarAsync();
+    }
+
+    private async Task CadastrarDependenteAsync()
+    {
+        if (_selecionado is null) return;
+        _erro = _mensagem = null;
+        var req = new CadastrarDependenteRequest(
+            _depNome, _depCpf, _depSexo, "Solteiro(a)", _depNascimento,
+            "Mesmo endereço do titular", "Centro", "100", _selecionado.Cidade, _selecionado.UF,
+            _selecionado.Fone, _depEmail, _depVinculo,
+            string.IsNullOrWhiteSpace(_depSenha) ? null : _depSenha);
+
+        var (_, err) = await Api.PostAsync<DependenteDto>($"api/v1/admin/associados/{_selecionado.Id}/dependentes", req);
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Dependente vinculado com sucesso.";
+        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_selecionado.Id}");
+        if (recarregado is not null) _selecionado = recarregado;
+        await CarregarAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

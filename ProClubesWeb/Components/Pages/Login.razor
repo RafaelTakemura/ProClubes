@@ -1,0 +1,65 @@
+@page "/login"
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+@inject NavigationManager Nav
+
+<PageTitle>Acesso à Diretoria — ProClubesWeb</PageTitle>
+
+<div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px;">
+    <div class="pc-card" style="max-width: 440px; width: 100%; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <img src="/images/proclubes-logo.svg" alt="Logotipo Hexagonal ProClubes" style="width: 96px; height: 96px; margin-bottom: 12px;" />
+            <h1 style="font-size: 24px; font-weight: 700; margin: 0;">Acesso à Diretoria</h1>
+            <p class="pc-page-subtitle">Painel administrativo e financeiro ProClubesWeb</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_erro))
+        {
+            <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
+        }
+
+        <div class="pc-field">
+            <label for="identificador" class="pc-label">E-mail ou CPF</label>
+            <input id="identificador" class="pc-input" @bind="_identificador" placeholder="superadmin@proclubes.com.br" />
+        </div>
+
+        <div class="pc-field">
+            <label for="senha" class="pc-label">Senha</label>
+            <input id="senha" type="password" class="pc-input" @bind="_senha" />
+        </div>
+
+        <button type="button" class="pc-btn pc-btn-primary" style="width: 100%; margin-top: 12px;"
+                disabled="@_carregando" @onclick="EntrarAsync">
+            @(_carregando ? "Autenticando..." : "Entrar")
+        </button>
+    </div>
+</div>
+
+@code {
+    private string _identificador = string.Empty;
+    private string _senha = string.Empty;
+    private string? _erro;
+    private bool _carregando;
+
+    protected override void OnInitialized()
+    {
+        if (Session.IsAuthenticated)
+            Nav.NavigateTo("/");
+    }
+
+    private async Task EntrarAsync()
+    {
+        _erro = null;
+        _carregando = true;
+        var (ok, error) = await Api.LoginAsync(_identificador, _senha);
+        _carregando = false;
+
+        if (!ok)
+        {
+            _erro = error;
+            return;
+        }
+
+        Nav.NavigateTo("/");
+    }
+}

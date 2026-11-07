@@ -1,0 +1,263 @@
+@page "/espacos"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Espaços e Reservas — ProClubesWeb</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <h1 class="pc-page-title">Espaços, Agenda e Reservas</h1>
+        <p class="pc-page-subtitle">Gestão de espaços, bloqueios de manutenção, agenda de ocupação e cancelamento administrativo com justificativa</p>
+    </div>
+    <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovoEspaco = !_exibirNovoEspaco">+ Novo Espaço</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_mensagem))
+{
+    <div class="pc-alert pc-alert-success">@_mensagem</div>
+}
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="pc-alert pc-alert-danger">@_erro</div>
+}
+
+@if (_exibirNovoEspaco)
+{
+    <div class="pc-card">
+        <h3 style="margin-top: 0;">Cadastrar Espaço Físico</h3>
+        <div class="pc-form-grid">
+            <div class="pc-field"><label class="pc-label">UnidadeId *</label><input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidIdEspaco" /></div>
+            <div class="pc-field"><label class="pc-label">Nome do Espaço *</label><input class="pc-input" @bind="_nomeEspaco" /></div>
+            <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descEspaco" /></div>
+            <div class="pc-field"><label class="pc-label">Duração Máxima (minutos)</label><input type="number" class="pc-input" @bind="_duracaoMaxMin" /></div>
+            <div class="pc-field"><label class="pc-label">Antecedência Máxima (dias)</label><input type="number" class="pc-input" @bind="_antecedenciaMaxDias" /></div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarEspacoAsync">Salvar Espaço</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovoEspaco = false">Cancelar</button>
+        </div>
+    </div>
+}
+
+<div class="pc-card">
+    <h3 style="margin-top: 0; font-size: 18px;">Espaços da Unidade</h3>
+    <div class="pc-table-wrap">
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>ID / Nome</th>
+                    <th>Unidade</th>
+                    <th>Funcionamento</th>
+                    <th>Duração Máx. / Antecedência</th>
+                    <th>Status</th>
+                    <th>Agenda / Bloqueio</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in _espacos)
+                {
+                    <tr>
+                        <td><strong>#@e.Id — @e.Nome</strong><br /><small>@e.Descricao</small></td>
+                        <td>@e.UnidadeNome</td>
+                        <td>@e.HoraAbertura.ToString("HH:mm") às @e.HoraFechamento.ToString("HH:mm")</td>
+                        <td>@e.DuracaoMaximaMinutos min (mín. 60 min) / até @e.AntecedenciaMaximaDias dias</td>
+                        <td><PcStatusBadge Text="@(e.Ativo ? "Ativo" : "Inativo")" Variant="@(e.Ativo ? "ativo" : "inativo")" /></td>
+                        <td>
+                            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => VerAgendaAsync(e)">Ver Agenda / Manutenção</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_espacoAgenda is not null)
+{
+    <div class="pc-card">
+        <h3 style="margin-top: 0;">Agenda de Ocupações — @_espacoAgenda.Nome</h3>
+        <div class="pc-form-grid" style="margin-bottom: 14px;">
+            <div class="pc-field"><label class="pc-label">Descrição de Bloqueio de Manutenção</label><input class="pc-input" @bind="_descManutencao" placeholder="Ex.: Pintura e limpeza" /></div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="CriarBloqueioManutencaoAsync">Registrar Manutenção (Amanhã 14h–16h)</button>
+            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _espacoAgenda = null">Fechar Agenda</button>
+        </div>
+
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Natureza da Ocupação</th>
+                    <th>Detalhe</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_ocupacoes.Count == 0)
+                {
+                    <tr><td colspan="4">Espaço livre (sem ocupações ativas).</td></tr>
+                }
+                @foreach (var o in _ocupacoes)
+                {
+                    <tr>
+                        <td>@o.Inicio.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>@o.Fim.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            <PcStatusBadge Text="@o.Origem.ToString()"
+                                           Variant="@(o.Origem == OrigemOcupacaoEspaco.Reserva ? "success" : (o.Origem == OrigemOcupacaoEspaco.Evento ? "info" : "warning"))" />
+                        </td>
+                        <td>@o.DescricaoPublica</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<div class="pc-card">
+    <h3 style="margin-top: 0; font-size: 18px;">Reservas de Associados</h3>
+    <div class="pc-table-wrap">
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Reserva</th>
+                    <th>Espaço / Unidade</th>
+                    <th>Associado Titular</th>
+                    <th>Período Reservado</th>
+                    <th>Status</th>
+                    <th>Ação Administrativa</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_reservas.Count == 0)
+                {
+                    <tr><td colspan="6">Nenhuma reserva encontrada.</td></tr>
+                }
+                @foreach (var r in _reservas)
+                {
+                    <tr>
+                        <td>#@r.Id</td>
+                        <td><strong>@r.EspacoNome</strong><br /><small>@r.UnidadeNome</small></td>
+                        <td>@r.AssociadoNome</td>
+                        <td>@r.Inicio.ToString("dd/MM/yyyy HH:mm") — @r.Fim.ToString("HH:mm")</td>
+                        <td>
+                            <PcStatusBadge Text="@r.Status.ToString()" Variant="@r.Status.ToString()" />
+                            @if (!string.IsNullOrWhiteSpace(r.JustificativaCancelamento))
+                            {
+                                <div><small style="color: var(--pc-danger);">Justificativa: @r.JustificativaCancelamento</small></div>
+                            }
+                        </td>
+                        <td>
+                            @if (r.Status == StatusReserva.Confirmada)
+                            {
+                                <div style="display: flex; gap: 6px;">
+                                    <input class="pc-input" style="min-height: 32px; padding: 4px 8px;" placeholder="Justificativa do cancelamento..." @bind="_justificativaCancelamento" />
+                                    <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => CancelarReservaAdminAsync(r.Id)">Cancelar</button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<EspacoDto> _espacos = Array.Empty<EspacoDto>();
+    private IReadOnlyList<ReservaEspacoDto> _reservas = Array.Empty<ReservaEspacoDto>();
+    private EspacoDto? _espacoAgenda;
+    private IReadOnlyList<OcupacaoEspacoDto> _ocupacoes = Array.Empty<OcupacaoEspacoDto>();
+
+    private bool _exibirNovoEspaco;
+    private int _unidIdEspaco = 1;
+    private string _nomeEspaco = string.Empty;
+    private string _descEspaco = string.Empty;
+    private int _duracaoMaxMin = 240;
+    private int _antecedenciaMaxDias = 90;
+
+    private string _descManutencao = "Manutenção preventiva";
+    private string _justificativaCancelamento = string.Empty;
+    private string? _erro;
+    private string? _mensagem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        _unidIdEspaco = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? 1;
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        if (Session.UnidadeContextoId.HasValue) _unidIdEspaco = Session.UnidadeContextoId.Value;
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var q = Session.UnidadeContextoId.HasValue ? $"?unidadeId={Session.UnidadeContextoId.Value}" : "";
+        var (esp, err1) = await Api.GetAsync<IReadOnlyList<EspacoDto>>($"api/v1/espacos{q}");
+        if (esp is not null) _espacos = esp;
+
+        var (res, err2) = await Api.GetAsync<IReadOnlyList<ReservaEspacoDto>>($"api/v1/reservas{q}");
+        if (res is not null) _reservas = res;
+
+        _erro = err1 ?? err2;
+    }
+
+    private async Task CriarEspacoAsync()
+    {
+        _erro = _mensagem = null;
+        var req = new CriarOuAtualizarEspacoRequest(_unidIdEspaco, _nomeEspaco, _descEspaco, true, new TimeOnly(8, 0), new TimeOnly(22, 0), _duracaoMaxMin, _antecedenciaMaxDias);
+        var (_, err) = await Api.PostAsync<EspacoDto>("api/v1/admin/espacos", req);
+        if (err is not null) { _erro = err; return; }
+        _exibirNovoEspaco = false;
+        _mensagem = "Espaço cadastrado com sucesso.";
+        await CarregarAsync();
+    }
+
+    private async Task VerAgendaAsync(EspacoDto e)
+    {
+        _espacoAgenda = e;
+        var (ocup, err) = await Api.GetAsync<IReadOnlyList<OcupacaoEspacoDto>>($"api/v1/espacos/disponibilidade?espacoId={e.Id}");
+        if (ocup is not null) _ocupacoes = ocup;
+        _erro = err;
+    }
+
+    private async Task CriarBloqueioManutencaoAsync()
+    {
+        if (_espacoAgenda is null) return;
+        _erro = _mensagem = null;
+        var amanha = DateTimeOffset.Now.Date.AddDays(1);
+        var ini = new DateTimeOffset(amanha.AddHours(14), TimeSpan.FromHours(-3));
+        var fim = ini.AddHours(2);
+        var (_, err) = await Api.PostAsync<OcupacaoEspacoDto>(
+            "api/v1/admin/espacos/bloqueios",
+            new CriarBloqueioManutencaoRequest(_espacoAgenda.Id, ini, fim, _descManutencao));
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Bloqueio de manutenção registrado na agenda do espaço.";
+        await VerAgendaAsync(_espacoAgenda);
+    }
+
+    private async Task CancelarReservaAdminAsync(int reservaId)
+    {
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<ReservaEspacoDto>(
+            $"api/v1/reservas/{reservaId}/cancelamento",
+            new CancelarReservaRequest(_justificativaCancelamento));
+        if (err is not null) { _erro = err; return; }
+        _mensagem = $"Reserva #{reservaId} cancelada e notificação interna enviada ao associado.";
+        _justificativaCancelamento = string.Empty;
+        await CarregarAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

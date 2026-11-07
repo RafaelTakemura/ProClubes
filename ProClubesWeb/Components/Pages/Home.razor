@@ -1,0 +1,137 @@
+@page "/"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard — ProClubesWeb</PageTitle>
+
+@if (!Session.IsAuthenticated)
+{
+    <div class="pc-card">
+        <p>Autenticação necessária para acessar o painel administrativo.</p>
+        <a href="/login" class="pc-btn pc-btn-primary">Ir para Login</a>
+    </div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div>
+            <h1 class="pc-page-title">Dashboard Administrativo</h1>
+            <p class="pc-page-subtitle">Contexto ativo: <strong>@(_dashboard?.EscopoNome ?? "Carregando...")</strong></p>
+        </div>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Atualizar Indicadores</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
+    }
+
+    @if (_carregando)
+    {
+        <div class="pc-card">Carregando indicadores da API...</div>
+    }
+    else if (_dashboard is not null)
+    {
+        <div class="pc-kpi-grid">
+            @if (Session.IsSuperAdmin || Session.IsAdmin)
+            {
+                @if (Session.IsSuperAdmin)
+                {
+                    <div class="pc-kpi-card">
+                        <div class="pc-kpi-label">Unidades Ativas</div>
+                        <div class="pc-kpi-value">@_dashboard.TotalUnidadesAtivas</div>
+                    </div>
+                }
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-label">Associados Ativos</div>
+                    <div class="pc-kpi-value">@_dashboard.TotalAssociadosAtivos</div>
+                </div>
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-label">Solicitações Pendentes</div>
+                    <div class="pc-kpi-value">@_dashboard.CadastrosPendentes</div>
+                </div>
+            }
+
+            <div class="pc-kpi-card">
+                <div class="pc-kpi-label">Mensalidades em Aberto (Mês)</div>
+                <div class="pc-kpi-value">@_dashboard.MensalidadesEmAbertoMesAtual</div>
+            </div>
+
+            <div class="pc-kpi-card">
+                <div class="pc-kpi-label">Mensalidades em Atraso</div>
+                <div class="pc-kpi-value" style="color: var(--pc-danger);">@_dashboard.MensalidadesVencidas</div>
+            </div>
+
+            <div class="pc-kpi-card">
+                <div class="pc-kpi-label">Recebido no Mês Atual</div>
+                <div class="pc-kpi-value" style="color: var(--pc-secondary);">R$ @_dashboard.TotalRecebidoMesAtual.ToString("N2")</div>
+            </div>
+
+            @if (Session.IsSuperAdmin || Session.IsAdmin)
+            {
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-label">Eventos Programados</div>
+                    <div class="pc-kpi-value">@_dashboard.EventosFuturos</div>
+                </div>
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-label">Reservas Futuras</div>
+                    <div class="pc-kpi-value">@_dashboard.ReservasFuturasConfirmadas</div>
+                </div>
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-label">Manifestações em Aberto/Atend.</div>
+                    <div class="pc-kpi-value">@_dashboard.ManifestacoesPendentes</div>
+                </div>
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-label">Votações Abertas</div>
+                    <div class="pc-kpi-value">@_dashboard.VotacoesAbertas</div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private DashboardAdminDto? _dashboard;
+    private string? _erro;
+    private bool _carregando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        if (Session.IsAuthenticated)
+        {
+            await CarregarAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CarregarAsync()
+    {
+        _carregando = true;
+        _erro = null;
+        var url = Session.UnidadeContextoId.HasValue
+            ? $"api/v1/admin/dashboard?unidadeId={Session.UnidadeContextoId.Value}"
+            : "api/v1/admin/dashboard";
+        var (data, err) = await Api.GetAsync<DashboardAdminDto>(url);
+        _dashboard = data;
+        _erro = err;
+        _carregando = false;
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

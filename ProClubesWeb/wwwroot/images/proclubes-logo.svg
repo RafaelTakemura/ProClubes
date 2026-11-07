@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 420" width="100%" height="100%">
+  <!-- Definições de Estilo -->
+  <style>
+    .navy { fill: #0F2C59; }
+    .navy-stroke { stroke: #0F2C59; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+    .emerald { fill: #1E7E5A; }
+    .emerald-stroke { stroke: #1E7E5A; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+    .amber { fill: #D97706; }
+    .font-title { font-family: 'Segoe UI', Roboto, Helvetica, sans-serif; font-weight: 800; font-size: 52px; }
+  </style>
+
+  <!-- Elementos Internos: Lazer, Natureza e Sede -->
+  <!-- Prédios / Sede (Topo) -->
+  <path class="navy-stroke" d="M175 155 V95 H200 V155 M200 75 H228 V155" />
+  <rect class="amber" x="210" y="90" width="8" height="12" rx="2" />
+  <rect class="amber" x="210" y="112" width="8" height="12" rx="2" />
+  <circle class="amber" cx="155" cy="95" r="7" />
+  <circle class="amber" cx="245" cy="95" r="7" />
+
+  <!-- Natureza / Árvore (Esquerda) -->
+  <path class="emerald-stroke" d="M145 180 C130 165, 130 135, 145 120 C160 135, 160 165, 145 180 Z" />
+  <path class="emerald-stroke" d="M145 125 V185" />
+  <path class="emerald-stroke" d="M155 245 C165 215, 190 215, 195 255 C170 255, 155 245, 155 245 Z" />
+
+  <!-- Água / Ondas (Direita Inferior) -->
+  <path class="navy-stroke" d="M208 215 Q225 205, 240 215 T272 215" />
+  <path class="navy-stroke" d="M208 238 Q225 228, 240 238 T262 238" />
+
+  <!-- Estrutura do Escudo / Rede de Unidades -->
+  <polygon class="navy-stroke" points="200,45 290,95 290,195 200,265 110,195 110,95" />
+  <line class="navy-stroke" x1="200" y1="45" x2="200" y2="155" />
+  <line class="navy-stroke" x1="200" y1="155" x2="290" y2="195" />
+  <line class="navy-stroke" x1="200" y1="155" x2="110" y2="195" />
+  <line class="navy-stroke" x1="200" y1="155" x2="200" y2="265" />
+
+  <!-- Nós das Unidades -->
+  <circle class="navy" cx="200" cy="45" r="14" />
+  <circle class="amber" cx="200" cy="45" r="7" />
+
+  <circle class="navy" cx="290" cy="95" r="14" />
+  <circle class="emerald" cx="290" cy="95" r="7" />
+
+  <circle class="navy" cx="290" cy="195" r="14" />
+  <circle class="amber" cx="290" cy="195" r="7" />
+
+  <circle class="navy" cx="200" cy="265" r="14" />
+  <circle class="amber" cx="200" cy="265" r="7" />
+
+  <circle class="navy" cx="110" cy="195" r="14" />
+  <circle class="emerald" cx="110" cy="195" r="7" />
+
+  <circle class="navy" cx="110" cy="95" r="14" />
+  <circle class="emerald" cx="110" cy="95" r="7" />
+
+  <!-- Nó Central (Núcleo do Clube) -->
+  <circle class="navy" cx="200" cy="155" r="15" />
+  <circle class="emerald" cx="200" cy="155" r="8" />
+
+  <!-- Logotipo Tipográfico -->
+  <text x="200" y="355" text-anchor="middle" class="font-title">
+    <tspan class="navy">Pro</tspan><tspan class="emerald">Clubes</tspan>
+  </text>
+</svg>

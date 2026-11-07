@@ -1,0 +1,232 @@
+@page "/eventos"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Eventos e Taxas — ProClubesWeb</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <h1 class="pc-page-title">Eventos e Taxas de Participação</h1>
+        <p class="pc-page-subtitle">Eventos públicos ou restritos a associados, compartilhamento entre unidades (Super Admin) e registro manual de taxas (sem inscrições/RSVP)</p>
+    </div>
+    <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirForm = !_exibirForm">+ Novo Evento</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_mensagem))
+{
+    <div class="pc-alert pc-alert-success">@_mensagem</div>
+}
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="pc-alert pc-alert-danger">@_erro</div>
+}
+
+@if (_exibirForm)
+{
+    <div class="pc-card">
+        <h3 style="margin-top: 0;">Cadastrar Evento</h3>
+        <div class="pc-form-grid">
+            <div class="pc-field"><label class="pc-label">Nome do Evento *</label><input class="pc-input" @bind="_nome" /></div>
+            <div class="pc-field"><label class="pc-label">Unidade Organizadora ID *</label><input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidadeOrgId" /></div>
+            <div class="pc-field">
+                <label class="pc-label">Público-Alvo *</label>
+                <select class="pc-select" @bind="_publicoAlvo">
+                    <option value="@PublicoAlvoEvento.Publico">Aberto ao Público (visível sem login)</option>
+                    <option value="@PublicoAlvoEvento.Associados">Somente Associados e Dependentes</option>
+                </select>
+            </div>
+            <div class="pc-field"><label class="pc-label">Taxa de Participação (R$)</label><input type="number" step="0.01" class="pc-input" @bind="_taxa" /></div>
+            <div class="pc-field"><label class="pc-label">Limite Informativo de Participantes</label><input type="number" class="pc-input" @bind="_limiteInformativo" /></div>
+            <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descricao" /></div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 12px;">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarEventoAsync">Salvar Evento</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirForm = false">Cancelar</button>
+        </div>
+    </div>
+}
+
+<div class="pc-card">
+    <div class="pc-table-wrap">
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Evento</th>
+                    <th>Unidade Organizadora / Compartilhadas</th>
+                    <th>Período</th>
+                    <th>Público-Alvo</th>
+                    <th>Taxa / Limite Informativo</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_eventos.Count == 0)
+                {
+                    <tr><td colspan="6">Nenhum evento programado.</td></tr>
+                }
+                @foreach (var ev in _eventos)
+                {
+                    <tr>
+                        <td><strong>@ev.Nome</strong><br /><small>@ev.Descricao</small></td>
+                        <td>
+                            @ev.UnidadeOrganizadoraNome
+                            @if (ev.UnidadesParticipantesNomes.Count > 1)
+                            {
+                                <div><small>Compartilhado: @string.Join(", ", ev.UnidadesParticipantesNomes)</small></div>
+                            }
+                        </td>
+                        <td>@ev.Inicio.ToString("dd/MM/yyyy HH:mm") até @ev.Fim.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            <PcStatusBadge Text="@(ev.PublicoAlvo == PublicoAlvoEvento.Publico ? "Aberto ao Público" : "Somente Associados")"
+                                           Variant="@(ev.PublicoAlvo == PublicoAlvoEvento.Publico ? "info" : "success")" />
+                        </td>
+                        <td>
+                            R$ @ev.TaxaParticipacao.ToString("N2")
+                            @if (ev.LimiteParticipantes.HasValue)
+                            {
+                                <div><small>Capacidade ref.: @ev.LimiteParticipantes pessoas (informativo)</small></div>
+                            }
+                        </td>
+                        <td>
+                            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => SelecionarEventoPagamentosAsync(ev)">Taxas / Pagamentos</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (_eventoSelecionado is not null)
+{
+    <div class="pc-card">
+        <h3 style="margin-top: 0;">Pagamentos Manuais de Taxa — @_eventoSelecionado.Nome</h3>
+        <p class="pc-page-subtitle">Lançamento financeiro avulso de participação (não representa inscrição nem reserva vaga).</p>
+        <div class="pc-form-grid" style="margin-top: 12px;">
+            <div class="pc-field"><label class="pc-label">Nome do Pagador (Visitante ou Associado) *</label><input class="pc-input" @bind="_nomePagador" /></div>
+            <div class="pc-field"><label class="pc-label">Valor Pago (R$) *</label><input type="number" step="0.01" class="pc-input" @bind="_valorPagoEvento" /></div>
+            <div class="pc-field">
+                <label class="pc-label">Forma de Pagamento *</label>
+                <select class="pc-select" @bind="_formaPgtoEvento">
+                    @foreach (var fp in Enum.GetValues<FormaPagamento>())
+                    {
+                        <option value="@fp">@fp</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="RegistrarTaxaEventoAsync">Registrar Recebimento</button>
+            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _eventoSelecionado = null">Fechar</button>
+        </div>
+
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Pagador</th>
+                    <th>Valor</th>
+                    <th>Forma</th>
+                    <th>Data</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _pagamentosEvento)
+                {
+                    <tr>
+                        <td>#@p.Id</td>
+                        <td>@p.NomePagadorExibicao</td>
+                        <td>R$ @p.ValorPago.ToString("N2")</td>
+                        <td>@p.FormaPagamento</td>
+                        <td>@p.DataPagamento.ToString("dd/MM/yyyy")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<EventoDto> _eventos = Array.Empty<EventoDto>();
+    private EventoDto? _eventoSelecionado;
+    private IReadOnlyList<PagamentoEventoDto> _pagamentosEvento = Array.Empty<PagamentoEventoDto>();
+
+    private bool _exibirForm;
+    private string _nome = string.Empty;
+    private string _descricao = string.Empty;
+    private int _unidadeOrgId = 1;
+    private PublicoAlvoEvento _publicoAlvo = PublicoAlvoEvento.Publico;
+    private decimal _taxa = 50m;
+    private int? _limiteInformativo = 150;
+
+    private string _nomePagador = string.Empty;
+    private decimal _valorPagoEvento = 50m;
+    private FormaPagamento _formaPgtoEvento = FormaPagamento.Pix;
+
+    private string? _erro;
+    private string? _mensagem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        _unidadeOrgId = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? 1;
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        if (Session.UnidadeContextoId.HasValue) _unidadeOrgId = Session.UnidadeContextoId.Value;
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var url = Session.UnidadeContextoId.HasValue ? $"api/v1/eventos?unidadeId={Session.UnidadeContextoId.Value}" : "api/v1/eventos";
+        var (data, err) = await Api.GetAsync<IReadOnlyList<EventoDto>>(url);
+        if (data is not null) _eventos = data;
+        _erro = err;
+    }
+
+    private async Task CriarEventoAsync()
+    {
+        _erro = _mensagem = null;
+        var ini = DateTimeOffset.Now.AddDays(14);
+        var fim = ini.AddHours(4);
+        var req = new CriarEventoRequest(_unidadeOrgId, _nome, _descricao, _publicoAlvo, ini, fim, _limiteInformativo, _taxa);
+        var (_, err) = await Api.PostAsync<EventoDto>("api/v1/admin/eventos", req);
+        if (err is not null) { _erro = err; return; }
+        _exibirForm = false;
+        _mensagem = "Evento criado com sucesso.";
+        await CarregarAsync();
+    }
+
+    private async Task SelecionarEventoPagamentosAsync(EventoDto ev)
+    {
+        _eventoSelecionado = ev;
+        _valorPagoEvento = ev.TaxaParticipacao;
+        var (list, err) = await Api.GetAsync<IReadOnlyList<PagamentoEventoDto>>($"api/v1/admin/eventos/{ev.Id}/pagamentos");
+        if (list is not null) _pagamentosEvento = list;
+        _erro = err;
+    }
+
+    private async Task RegistrarTaxaEventoAsync()
+    {
+        if (_eventoSelecionado is null) return;
+        _erro = _mensagem = null;
+        var hoje = DateOnly.FromDateTime(DateTime.Now);
+        var req = new RegistrarPagamentoEventoRequest(null, _nomePagador, _valorPagoEvento, _formaPgtoEvento, hoje);
+        var (_, err) = await Api.PostAsync<PagamentoEventoDto>($"api/v1/admin/eventos/{_eventoSelecionado.Id}/pagamentos", req);
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Pagamento manual de taxa de evento registrado.";
+        _nomePagador = string.Empty;
+        await SelecionarEventoPagamentosAsync(_eventoSelecionado);
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

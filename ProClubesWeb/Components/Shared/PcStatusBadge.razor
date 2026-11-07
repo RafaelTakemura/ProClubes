@@ -1,0 +1,33 @@
+@namespace ProClubesWeb.Components.Shared
+
+<span class="pc-badge @CssClass" role="status">
+    <span aria-hidden="true">@Icon</span>
+    <span>@Text</span>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+    [Parameter] public string Variant { get; set; } = "info";
+
+    private string CssClass => Variant.ToLowerInvariant() switch
+    {
+        "success" or "aprovada" or "paga" or "confirmada" or "aberta_votacao" or "concluida" or "ativo" => "pc-badge-success",
+        "warning" or "pendente" or "ematendimento" => "pc-badge-warning",
+        "danger" or "rejeitada" or "vencida" or "cancelada" or "inativo" => "pc-badge-danger",
+        "superadmin" => "pc-badge-superadmin",
+        "admin" => "pc-badge-admin",
+        "tesoureiro" => "pc-badge-tesoureiro",
+        "fundador" => "pc-badge-fundador",
+        "neutral" or "simpatizante" => "pc-badge-neutral",
+        _ => "pc-badge-info"
+    };
+
+    private string Icon => Variant.ToLowerInvariant() switch
+    {
+        "success" or "aprovada" or "paga" or "confirmada" or "aberta_votacao" or "concluida" or "ativo" => "✔",
+        "warning" or "pendente" or "ematendimento" => "⚠",
+        "danger" or "rejeitada" or "vencida" or "cancelada" or "inativo" => "✖",
+        "superadmin" or "admin" or "tesoureiro" or "fundador" => "★",
+        _ => "ℹ"
+    };
+}

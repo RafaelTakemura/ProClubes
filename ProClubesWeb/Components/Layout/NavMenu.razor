@@ -1,0 +1,76 @@
+@inject WebSessionState Session
+
+<nav class="pc-nav">
+    <NavLink class="pc-nav-link" href="" Match="NavLinkMatch.All">
+        <span aria-hidden="true">📊</span>
+        <span>Dashboard</span>
+    </NavLink>
+
+    @if (Session.IsSuperAdmin)
+    {
+        <NavLink class="pc-nav-link" href="unidades">
+            <span aria-hidden="true">🏛️</span>
+            <span>Unidades e Equipe</span>
+        </NavLink>
+    }
+
+    @if (Session.IsSuperAdmin || Session.IsAdmin)
+    {
+        <NavLink class="pc-nav-link" href="cadastros">
+            <span aria-hidden="true">📋</span>
+            <span>Solicitações de Cadastro</span>
+        </NavLink>
+
+        <NavLink class="pc-nav-link" href="associados">
+            <span aria-hidden="true">👥</span>
+            <span>Associados e Dependentes</span>
+        </NavLink>
+    }
+
+    @if (Session.IsSuperAdmin || Session.IsAdmin || Session.IsTesoureiro)
+    {
+        <NavLink class="pc-nav-link" href="financeiro">
+            <span aria-hidden="true">💰</span>
+            <span>Financeiro e Mensalidades</span>
+        </NavLink>
+    }
+
+    @if (Session.IsSuperAdmin || Session.IsAdmin)
+    {
+        <NavLink class="pc-nav-link" href="eventos">
+            <span aria-hidden="true">🎉</span>
+            <span>Eventos e Taxas</span>
+        </NavLink>
+
+        <NavLink class="pc-nav-link" href="espacos">
+            <span aria-hidden="true">📅</span>
+            <span>Espaços e Reservas</span>
+        </NavLink>
+
+        <NavLink class="pc-nav-link" href="manifestacoes">
+            <span aria-hidden="true">💬</span>
+            <span>Manifestações</span>
+        </NavLink>
+    }
+
+    @if (Session.IsSuperAdmin)
+    {
+        <NavLink class="pc-nav-link" href="categorias-manifestacoes">
+            <span aria-hidden="true">🏷️</span>
+            <span>Categorias Globais</span>
+        </NavLink>
+    }
+
+    @if (Session.IsSuperAdmin || Session.IsAdmin)
+    {
+        <NavLink class="pc-nav-link" href="votacoes">
+            <span aria-hidden="true">🗳️</span>
+            <span>Votações Digitais</span>
+        </NavLink>
+    }
+
+    <NavLink class="pc-nav-link" href="notificacoes">
+        <span aria-hidden="true">🔔</span>
+        <span>Notificações</span>
+    </NavLink>
+</nav>

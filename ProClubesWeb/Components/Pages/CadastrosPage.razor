@@ -1,0 +1,176 @@
+@page "/cadastros"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Solicitações de Cadastro — ProClubesWeb</PageTitle>
+
+@if (!Session.IsSuperAdmin && !Session.IsAdmin)
+{
+    <div class="pc-alert pc-alert-danger">Acesso permitido apenas a Admin da unidade ou Super Admin.</div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div>
+            <h1 class="pc-page-title">Solicitações de Cadastro</h1>
+            <p class="pc-page-subtitle">Aprovação com atribuição de categoria associativa ou rejeição com justificativa</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <select class="pc-select" @bind="_filtroStatus" @bind:after="CarregarAsync">
+                <option value="">Todos os status</option>
+                <option value="Pendente">Pendentes</option>
+                <option value="Aprovada">Aprovadas</option>
+                <option value="Rejeitada">Rejeitadas</option>
+            </select>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Filtrar</button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="pc-alert pc-alert-success">@_mensagem</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger">@_erro</div>
+    }
+
+    <div class="pc-card">
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Solicitante</th>
+                        <th>Contato</th>
+                        <th>Unidade Pretendida</th>
+                        <th>Data Solicitação</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_solicitacoes.Count == 0)
+                    {
+                        <tr><td colspan="7">Nenhuma solicitação encontrada para os filtros atuais.</td></tr>
+                    }
+                    @foreach (var s in _solicitacoes)
+                    {
+                        <tr>
+                            <td>#@s.Id</td>
+                            <td><strong>@s.NomeCompleto</strong><br /><small>@s.CpfMascarado</small></td>
+                            <td>@s.Email<br /><small>@s.Fone</small></td>
+                            <td>@s.UnidadePretendidaNome</td>
+                            <td>@s.SolicitadaEm.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                <PcStatusBadge Text="@s.Status.ToString()" Variant="@s.Status.ToString()" />
+                                @if (!string.IsNullOrWhiteSpace(s.CategoriaAprovadaNome))
+                                {
+                                    <div><small>Categoria: <strong>@s.CategoriaAprovadaNome</strong></small></div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(s.JustificativaRejeicao))
+                                {
+                                    <div><small style="color: var(--pc-danger);">Motivo: @s.JustificativaRejeicao</small></div>
+                                }
+                            </td>
+                            <td>
+                                @if (s.Status == StatusSolicitacaoCadastro.Pendente)
+                                {
+                                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                        <select class="pc-select" style="min-height: 32px; padding: 4px 8px;" @bind="_categoriaAprovacao">
+                                            <option value="ASSOCIADO">Sócio Associado</option>
+                                            <option value="FUNDADOR">Sócio Fundador</option>
+                                            <option value="CONVIDADO">Sócio Convidado</option>
+                                            <option value="SIMPATIZANTE">Simpatizante</option>
+                                        </select>
+                                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AprovarAsync(s.Id)">Aprovar</button>
+                                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => _solicitacaoParaRejeitar = s">Rejeitar</button>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (_solicitacaoParaRejeitar is not null)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Rejeitar Solicitação #@_solicitacaoParaRejeitar.Id (@_solicitacaoParaRejeitar.NomeCompleto)</h3>
+            <div class="pc-field">
+                <label class="pc-label">Justificativa da Rejeição (obrigatória) *</label>
+                <textarea class="pc-textarea" rows="3" @bind="_justificativaRejeicao"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarRejeicaoAsync">Confirmar Rejeição</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _solicitacaoParaRejeitar = null">Cancelar</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<SolicitacaoCadastroListItemDto> _solicitacoes = Array.Empty<SolicitacaoCadastroListItemDto>();
+    private string _filtroStatus = "Pendente";
+    private string _categoriaAprovacao = "ASSOCIADO";
+    private SolicitacaoCadastroListItemDto? _solicitacaoParaRejeitar;
+    private string _justificativaRejeicao = string.Empty;
+    private string? _erro;
+    private string? _mensagem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var q = new List<string> { "page=1", "pageSize=50" };
+        if (Session.UnidadeContextoId.HasValue) q.Add($"unidadeId={Session.UnidadeContextoId.Value}");
+        if (!string.IsNullOrWhiteSpace(_filtroStatus)) q.Add($"status={_filtroStatus}");
+
+        var (data, err) = await Api.GetAsync<PagedResponse<SolicitacaoCadastroListItemDto>>($"api/v1/admin/cadastros/solicitacoes?{string.Join("&", q)}");
+        if (data is not null) _solicitacoes = data.Items;
+        _erro = err;
+    }
+
+    private async Task AprovarAsync(int id)
+    {
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<SolicitacaoCadastroListItemDto>($"api/v1/admin/cadastros/solicitacoes/{id}/aprovar", new AprovarSolicitacaoRequest(_categoriaAprovacao));
+        if (err is not null) { _erro = err; return; }
+        _mensagem = $"Solicitação #{id} aprovada na categoria {_categoriaAprovacao}.";
+        await CarregarAsync();
+    }
+
+    private async Task ConfirmarRejeicaoAsync()
+    {
+        if (_solicitacaoParaRejeitar is null) return;
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<SolicitacaoCadastroListItemDto>(
+            $"api/v1/admin/cadastros/solicitacoes/{_solicitacaoParaRejeitar.Id}/rejeitar",
+            new RejeitarSolicitacaoRequest(_justificativaRejeicao));
+
+        if (err is not null) { _erro = err; return; }
+        _mensagem = $"Solicitação #{_solicitacaoParaRejeitar.Id} rejeitada com justificativa.";
+        _solicitacaoParaRejeitar = null;
+        _justificativaRejeicao = string.Empty;
+        await CarregarAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

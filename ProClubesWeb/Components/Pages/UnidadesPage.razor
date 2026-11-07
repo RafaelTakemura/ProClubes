@@ -1,0 +1,287 @@
+@page "/unidades"
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Unidades e Equipe — ProClubesWeb</PageTitle>
+
+@if (!Session.IsSuperAdmin)
+{
+    <div class="pc-alert pc-alert-danger">Acesso restrito ao Super Admin.</div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div>
+            <h1 class="pc-page-title">Unidades do Clube</h1>
+            <p class="pc-page-subtitle">Gerenciamento global de unidades e designação de Admin (máx. 1 ativo por unidade) e Tesoureiro</p>
+        </div>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="NovaUnidade">+ Nova Unidade</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="pc-alert pc-alert-success" role="status">@_mensagem</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
+    }
+
+    @if (_exibirFormUnidade)
+    {
+        <div class="pc-card">
+            <h2 style="margin-top: 0; font-size: 18px;">@(_editandoId.HasValue ? "Editar Unidade" : "Cadastrar Nova Unidade")</h2>
+            <div class="pc-form-grid">
+                <div class="pc-field">
+                    <label class="pc-label">Nome da Unidade *</label>
+                    <input class="pc-input" @bind="_nome" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Sigla *</label>
+                    <input class="pc-input" @bind="_sigla" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Cidade *</label>
+                    <input class="pc-input" @bind="_cidade" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">UF (2 letras) *</label>
+                    <input class="pc-input" maxlength="2" @bind="_uf" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Logradouro *</label>
+                    <input class="pc-input" @bind="_logradouro" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Bairro *</label>
+                    <input class="pc-input" @bind="_bairro" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Número *</label>
+                    <input class="pc-input" @bind="_numero" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Telefone *</label>
+                    <input class="pc-input" @bind="_fone" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">E-mail *</label>
+                    <input class="pc-input" @bind="_email" />
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 12px;">
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarUnidadeAsync">Salvar Unidade</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirFormUnidade = false">Cancelar</button>
+            </div>
+        </div>
+    }
+
+    <div class="pc-card">
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>Sigla / Nome</th>
+                        <th>Cidade / UF</th>
+                        <th>Contato</th>
+                        <th>Status</th>
+                        <th>Admin Ativo</th>
+                        <th>Tesoureiros</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in _unidades)
+                    {
+                        <tr>
+                            <td><strong>@u.Sigla</strong> — @u.Nome</td>
+                            <td>@u.Cidade / @u.UF</td>
+                            <td>@u.Fone<br /><small style="color: var(--pc-text-secondary);">@u.Email</small></td>
+                            <td><PcStatusBadge Text="@(u.Ativa ? "Ativa" : "Inativa")" Variant="@(u.Ativa ? "ativo" : "inativo")" /></td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(u.AdminAtivoNome))
+                                {
+                                    <PcStatusBadge Text="@u.AdminAtivoNome" Variant="admin" />
+                                }
+                                else
+                                {
+                                    <PcStatusBadge Text="Sem administrador designado (Sob Super Admin)" Variant="info" />
+                                }
+                            </td>
+                            <td>
+                                @if (u.Tesoureiros.Count == 0)
+                                {
+                                    <span style="color: var(--pc-text-secondary);">Nenhum</span>
+                                }
+                                else
+                                {
+                                    @foreach (var t in u.Tesoureiros)
+                                    {
+                                        <div><PcStatusBadge Text="@t.NomeCompleto" Variant="tesoureiro" /></div>
+                                    }
+                                }
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => EditarUnidade(u)">Editar</button>
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirDesignacao(u)">Designar Equipe</button>
+                                    @if (u.AdminAtivoUsuarioId.HasValue)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => RemoverAdminAsync(u.Id)">Remover Admin</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (_unidadeDesignacao is not null)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Designar Admin ou Tesoureiro — @_unidadeDesignacao.Nome</h3>
+            <p class="pc-page-subtitle" style="margin-bottom: 12px;">Informe o ID de Usuário (visível na listagem de associados) e a role desejada.</p>
+            <div class="pc-form-grid">
+                <div class="pc-field">
+                    <label class="pc-label">UsuarioId</label>
+                    <input type="number" class="pc-input" @bind="_usuarioIdDesignacao" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Role Administrativa</label>
+                    <select class="pc-select" @bind="_roleDesignacao">
+                        <option value="@RoleAdministrativa.Admin">Admin da Unidade (exclusivo)</option>
+                        <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                        <option value="@RoleAdministrativa.Nenhuma">Remover Role Administrativa</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="ConfirmarDesignacaoAsync">Confirmar Designação</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _unidadeDesignacao = null">Fechar</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
+    private string? _erro;
+    private string? _mensagem;
+
+    private bool _exibirFormUnidade;
+    private int? _editandoId;
+    private string _nome = string.Empty;
+    private string _sigla = string.Empty;
+    private string _logradouro = string.Empty;
+    private string _bairro = string.Empty;
+    private string _numero = string.Empty;
+    private string _cidade = string.Empty;
+    private string _uf = "PR";
+    private string _fone = string.Empty;
+    private string _email = string.Empty;
+
+    private UnidadeDto? _unidadeDesignacao;
+    private int _usuarioIdDesignacao;
+    private RoleAdministrativa _roleDesignacao = RoleAdministrativa.Admin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsSuperAdmin)
+            await CarregarAsync();
+    }
+
+    private async Task CarregarAsync()
+    {
+        var (data, err) = await Api.GetAsync<IReadOnlyList<UnidadeDto>>("api/v1/unidades");
+        if (data is not null) _unidades = data;
+        _erro = err;
+    }
+
+    private void NovaUnidade()
+    {
+        _editandoId = null;
+        _nome = _sigla = _logradouro = _bairro = _numero = _cidade = _fone = _email = string.Empty;
+        _uf = "PR";
+        _exibirFormUnidade = true;
+    }
+
+    private void EditarUnidade(UnidadeDto u)
+    {
+        _editandoId = u.Id;
+        _nome = u.Nome;
+        _sigla = u.Sigla;
+        _logradouro = u.Logradouro;
+        _bairro = u.Bairro;
+        _numero = u.Numero;
+        _cidade = u.Cidade;
+        _uf = u.UF;
+        _fone = u.Fone;
+        _email = u.Email;
+        _exibirFormUnidade = true;
+    }
+
+    private async Task SalvarUnidadeAsync()
+    {
+        _erro = _mensagem = null;
+        var req = new CriarOuAtualizarUnidadeRequest(_nome, _sigla, _logradouro, _bairro, _numero, _cidade, _uf, _fone, _email, true);
+        var res = _editandoId.HasValue
+            ? await Api.PutAsync<UnidadeDto>($"api/v1/unidades/{_editandoId.Value}", req)
+            : await Api.PostAsync<UnidadeDto>("api/v1/unidades", req);
+
+        if (res.Error is not null)
+        {
+            _erro = res.Error;
+            return;
+        }
+
+        _exibirFormUnidade = false;
+        _mensagem = "Unidade salva com sucesso.";
+        await CarregarAsync();
+    }
+
+    private void AbrirDesignacao(UnidadeDto u)
+    {
+        _unidadeDesignacao = u;
+        _usuarioIdDesignacao = u.AdminAtivoUsuarioId ?? 0;
+        _roleDesignacao = RoleAdministrativa.Admin;
+    }
+
+    private async Task ConfirmarDesignacaoAsync()
+    {
+        if (_unidadeDesignacao is null) return;
+        _erro = _mensagem = null;
+
+        var res = await Api.PutAsync<UnidadeDto>(
+            $"api/v1/unidades/{_unidadeDesignacao.Id}/administrador",
+            new DesignarRoleUnidadeRequest(_usuarioIdDesignacao, _roleDesignacao));
+
+        if (res.Error is not null)
+        {
+            _erro = res.Error;
+            return;
+        }
+
+        _mensagem = "Designação administrativa atualizada com sucesso.";
+        _unidadeDesignacao = null;
+        await CarregarAsync();
+    }
+
+    private async Task RemoverAdminAsync(int unidadeId)
+    {
+        _erro = _mensagem = null;
+        var res = await Api.PutAsync<UnidadeDto>(
+            $"api/v1/unidades/{unidadeId}/administrador",
+            new DesignarRoleUnidadeRequest(null, RoleAdministrativa.Admin));
+
+        if (res.Error is not null)
+        {
+            _erro = res.Error;
+            return;
+        }
+
+        _mensagem = "Administrador removido. A unidade permanece sob gestão direta do Super Admin.";
+        await CarregarAsync();
+    }
+}

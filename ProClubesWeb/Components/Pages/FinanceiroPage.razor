@@ -1,0 +1,287 @@
+@page "/financeiro"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Financeiro e Mensalidades — ProClubesWeb</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <h1 class="pc-page-title">Módulo Financeiro e Mensalidades</h1>
+        <p class="pc-page-subtitle">Parâmetros globais, tabela de valores por unidade/categoria, mensalidades por competência e quitação manual integral</p>
+    </div>
+    <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarTudoAsync">Atualizar Dados</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_mensagem))
+{
+    <div class="pc-alert pc-alert-success">@_mensagem</div>
+}
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="pc-alert pc-alert-danger">@_erro</div>
+}
+
+<div class="pc-form-grid">
+    @if (_config is not null)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0; font-size: 18px;">Parâmetros Globais de Cobrança</h3>
+            <p class="pc-page-subtitle" style="margin-bottom: 12px;">Vencimento ajustado ao último dia válido do mês (ex.: 31 em fev -> 28/29), sem prorrogação por feriado/fim de semana.</p>
+            <div class="pc-form-grid">
+                <div class="pc-field">
+                    <label class="pc-label">Dia de Geração (1..31)</label>
+                    <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_diaGeracao" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Dia de Vencimento (1..31)</label>
+                    <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_diaVencimento" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Multa por Atraso (%)</label>
+                    <input type="number" step="0.01" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_multa" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Juros Simples Mensal (%)</label>
+                    <input type="number" step="0.01" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_juros" />
+                </div>
+            </div>
+            @if (Session.IsSuperAdmin)
+            {
+                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="SalvarConfigGlobalAsync">Salvar Parâmetros Globais</button>
+            }
+        </div>
+    }
+
+    <div class="pc-card">
+        <h3 style="margin-top: 0; font-size: 18px;">Definir Valor por Unidade e Categoria</h3>
+        <p class="pc-page-subtitle" style="margin-bottom: 12px;">Novos valores incidem somente a partir da competência seguinte, preservando cobranças já emitidas.</p>
+        <div class="pc-form-grid">
+            <div class="pc-field">
+                <label class="pc-label">UnidadeId</label>
+                <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidIdValor" />
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Categoria</label>
+                <select class="pc-select" @bind="_catValor">
+                    <option value="ASSOCIADO">Sócio Associado</option>
+                    <option value="FUNDADOR">Sócio Fundador</option>
+                    <option value="CONVIDADO">Sócio Convidado</option>
+                </select>
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Valor Mensal (R$)</label>
+                <input type="number" step="0.01" class="pc-input" @bind="_novoValorMensal" />
+            </div>
+        </div>
+        <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="DefinirNovoValorAsync">Registrar Nova Vigência</button>
+    </div>
+</div>
+
+<div class="pc-card">
+    <h3 style="margin-top: 0; font-size: 18px;">Tabela de Valores Vigentes e Históricos</h3>
+    <div class="pc-table-wrap">
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Unidade</th>
+                    <th>Categoria</th>
+                    <th>Valor</th>
+                    <th>Início de Vigência</th>
+                    <th>Fim de Vigência</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var v in _valores)
+                {
+                    <tr>
+                        <td>@v.UnidadeNome</td>
+                        <td>@v.CategoriaNome</td>
+                        <td><strong>R$ @v.Valor.ToString("N2")</strong></td>
+                        <td>@v.CompetenciaInicio.ToString("MM/yyyy")</td>
+                        <td>@(v.CompetenciaFim?.ToString("MM/yyyy") ?? "Vigente")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="pc-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0; font-size: 18px;">Mensalidades dos Associados</h3>
+        <div style="display: flex; gap: 10px;">
+            <select class="pc-select" @bind="_filtroSituacao" @bind:after="CarregarMensalidadesAsync">
+                <option value="">Todas as situações</option>
+                <option value="ABERTA">Em aberto</option>
+                <option value="VENCIDA">Vencidas (Em atraso)</option>
+                <option value="PAGA">Pagas</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="pc-table-wrap">
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Competência</th>
+                    <th>Associado</th>
+                    <th>Unidade Emissora / Categoria</th>
+                    <th>Vencimento</th>
+                    <th>Valor Principal</th>
+                    <th>Multa + Juros</th>
+                    <th>Total Atualizado</th>
+                    <th>Status</th>
+                    <th>Ação Manual</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_mensalidades.Count == 0)
+                {
+                    <tr><td colspan="9">Nenhuma mensalidade encontrada para os filtros selecionados.</td></tr>
+                }
+                @foreach (var m in _mensalidades)
+                {
+                    <tr>
+                        <td><strong>@m.Competencia.ToString("MM/yyyy")</strong></td>
+                        <td>@m.AssociadoNome<br /><small>@m.CpfMascarado</small></td>
+                        <td>@m.UnidadeEmissoraNome<br /><small>@m.CategoriaNaEmissaoNome</small></td>
+                        <td>@m.DataVencimento.ToString("dd/MM/yyyy")</td>
+                        <td>R$ @m.ValorPrincipal.ToString("N2")</td>
+                        <td>R$ @((m.ValorMultaCalculado + m.ValorJurosCalculado).ToString("N2")) @(m.DiasAtraso > 0 ? $"({m.DiasAtraso}d)" : "")</td>
+                        <td><strong>R$ @m.ValorTotalAtualizado.ToString("N2")</strong></td>
+                        <td>
+                            <PcStatusBadge Text="@m.SituacaoExibicao"
+                                           Variant="@(m.SituacaoExibicao == "Paga" ? "paga" : (m.SituacaoExibicao == "Vencida" ? "vencida" : "info"))" />
+                            @if (m.Pagamento is not null)
+                            {
+                                <div><small>@m.Pagamento.FormaPagamento em @m.Pagamento.DataPagamento.ToString("dd/MM/yyyy")</small></div>
+                            }
+                        </td>
+                        <td>
+                            @if (m.Status == StatusMensalidade.Aberta)
+                            {
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    <select class="pc-select" style="min-height: 32px; padding: 4px;" @bind="_formaPagamentoSelecionada">
+                                        @foreach (var fp in Enum.GetValues<FormaPagamento>())
+                                        {
+                                            <option value="@fp">@fp</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => RegistrarPagamentoAsync(m.Id)">Quitar Integral</button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private ConfiguracaoFinanceiraDto? _config;
+    private IReadOnlyList<ValorMensalidadeDto> _valores = Array.Empty<ValorMensalidadeDto>();
+    private IReadOnlyList<MensalidadeDto> _mensalidades = Array.Empty<MensalidadeDto>();
+    private string _filtroSituacao = string.Empty;
+    private FormaPagamento _formaPagamentoSelecionada = FormaPagamento.Pix;
+
+    private byte _diaGeracao = 1;
+    private byte _diaVencimento = 10;
+    private decimal _multa = 2m;
+    private decimal _juros = 1m;
+
+    private int _unidIdValor = 1;
+    private string _catValor = "ASSOCIADO";
+    private decimal _novoValorMensal = 110m;
+
+    private string? _erro;
+    private string? _mensagem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        _unidIdValor = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? 1;
+        await CarregarTudoAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        if (Session.UnidadeContextoId.HasValue) _unidIdValor = Session.UnidadeContextoId.Value;
+        await CarregarTudoAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarTudoAsync()
+    {
+        _erro = null;
+        var (cfg, errCfg) = await Api.GetAsync<ConfiguracaoFinanceiraDto>("api/v1/admin/financeiro/configuracao");
+        if (cfg is not null)
+        {
+            _config = cfg;
+            _diaGeracao = cfg.DiaGeracao;
+            _diaVencimento = cfg.DiaVencimento;
+            _multa = cfg.PercentualMulta;
+            _juros = cfg.PercentualJuroMensal;
+        }
+        else if (errCfg is not null) _erro = errCfg;
+
+        var urlVal = Session.UnidadeContextoId.HasValue
+            ? $"api/v1/admin/financeiro/valores?unidadeId={Session.UnidadeContextoId.Value}"
+            : "api/v1/admin/financeiro/valores";
+        var (vals, _) = await Api.GetAsync<IReadOnlyList<ValorMensalidadeDto>>(urlVal);
+        if (vals is not null) _valores = vals;
+
+        await CarregarMensalidadesAsync();
+    }
+
+    private async Task CarregarMensalidadesAsync()
+    {
+        var q = new List<string> { "page=1", "pageSize=50" };
+        if (Session.UnidadeContextoId.HasValue) q.Add($"unidadeId={Session.UnidadeContextoId.Value}");
+        if (!string.IsNullOrWhiteSpace(_filtroSituacao)) q.Add($"situacao={_filtroSituacao}");
+
+        var (page, err) = await Api.GetAsync<PagedResponse<MensalidadeDto>>($"api/v1/admin/mensalidades?{string.Join("&", q)}");
+        if (page is not null) _mensalidades = page.Items;
+        if (err is not null) _erro = err;
+    }
+
+    private async Task SalvarConfigGlobalAsync()
+    {
+        _erro = _mensagem = null;
+        var (cfg, err) = await Api.PutAsync<ConfiguracaoFinanceiraDto>(
+            "api/v1/admin/financeiro/configuracao",
+            new AtualizarConfiguracaoFinanceiraRequest(_diaGeracao, _diaVencimento, 7, _multa, _juros));
+        if (err is not null) { _erro = err; return; }
+        _config = cfg;
+        _mensagem = "Configuração financeira global salva.";
+    }
+
+    private async Task DefinirNovoValorAsync()
+    {
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<ValorMensalidadeDto>(
+            "api/v1/admin/financeiro/valores",
+            new DefinirValorMensalidadeRequest(_unidIdValor, _catValor, _novoValorMensal));
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Novo valor de mensalidade registrado para a competência seguinte.";
+        await CarregarTudoAsync();
+    }
+
+    private async Task RegistrarPagamentoAsync(int mensalidadeId)
+    {
+        _erro = _mensagem = null;
+        var hoje = DateOnly.FromDateTime(DateTime.Now);
+        var (_, err) = await Api.PostAsync<MensalidadeDto>(
+            $"api/v1/admin/mensalidades/{mensalidadeId}/pagamentos",
+            new RegistrarPagamentoMensalidadeRequest(hoje, _formaPagamentoSelecionada));
+        if (err is not null) { _erro = err; return; }
+        _mensagem = $"Pagamento integral da mensalidade #{mensalidadeId} registrado com sucesso.";
+        await CarregarMensalidadesAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

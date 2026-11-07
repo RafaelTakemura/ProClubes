@@ -1,0 +1,140 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject WebSessionState Session
+@inject ProClubesApiClient Api
+@inject NavigationManager Nav
+
+@if (!Session.IsAuthenticated)
+{
+    <div style="min-height: 100vh; background: var(--pc-bg);">
+        <ProClubesWeb.Components.Pages.Login />
+    </div>
+}
+else
+{
+    <div class="pc-shell">
+        <aside class="pc-sidebar" aria-label="Navegação administrativa ProClubes">
+            <div class="pc-sidebar-brand">
+                <img src="/images/proclubes-logo.svg" alt="Logotipo ProClubes" />
+                <div>
+                    <div class="pc-sidebar-brand-title">ProClubes</div>
+                    <div style="font-size: 11px; opacity: 0.8;">Painel da Diretoria</div>
+                </div>
+            </div>
+            <NavMenu />
+        </aside>
+
+        <div class="pc-main">
+            <header class="pc-topbar">
+                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                    @if (Session.IsSuperAdmin)
+                    {
+                        <label for="seletor-unidade" class="pc-label" style="margin: 0;">Escopo de Unidade:</label>
+                        <select id="seletor-unidade" class="pc-select" style="min-width: 220px;"
+                                value="@(Session.UnidadeContextoId?.ToString() ?? "")"
+                                @onchange="OnUnidadeContextoChanged">
+                            <option value="">Todas as Unidades (Global)</option>
+                            @foreach (var u in _unidades)
+                            {
+                                <option value="@u.Id">@u.Nome (@u.Sigla)</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <span class="pc-badge pc-badge-info">
+                            <span>🏢</span>
+                            <span>Unidade: @(Session.Usuario?.UnidadeAdministrativaNome ?? "Vinculada")</span>
+                        </span>
+                    }
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    @if (Session.Usuario is not null)
+                    {
+                        <PcStatusBadge Text="@ObterRotuloRole(Session.Usuario.RoleAdministrativa)"
+                                       Variant="@ObterVarianteRole(Session.Usuario.RoleAdministrativa)" />
+                        <span style="font-weight: 600; font-size: 14px;">@Session.Usuario.NomeCompleto</span>
+                    }
+
+                    <a href="/notificacoes" class="pc-btn pc-btn-outline pc-btn-sm" aria-label="Central de notificações">
+                        <span aria-hidden="true">🔔</span>
+                        <span>Notificações</span>
+                        @if (Session.NotificacoesNaoLidas > 0)
+                        {
+                            <span class="pc-bell-counter" title="@Session.NotificacoesNaoLidas não lidas">@Session.NotificacoesNaoLidas</span>
+                        }
+                    </a>
+
+                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="SairAsync">Sair</button>
+                </div>
+            </header>
+
+            <main class="pc-page">
+                @Body
+            </main>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleSessionChanged;
+        if (Session.IsAuthenticated && Session.IsSuperAdmin)
+        {
+            var res = await Api.GetAsync<IReadOnlyList<UnidadeDto>>("api/v1/unidades");
+            if (res.Data is not null)
+                _unidades = res.Data;
+        }
+    }
+
+    private async void HandleSessionChanged()
+    {
+        if (Session.IsAuthenticated && Session.IsSuperAdmin && _unidades.Count == 0)
+        {
+            var res = await Api.GetAsync<IReadOnlyList<UnidadeDto>>("api/v1/unidades");
+            if (res.Data is not null)
+                _unidades = res.Data;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnUnidadeContextoChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (int.TryParse(val, out var id))
+            Session.SetUnidadeContexto(id);
+        else
+            Session.SetUnidadeContexto(null);
+    }
+
+    private async Task SairAsync()
+    {
+        await Api.LogoutAsync();
+        Nav.NavigateTo("/login");
+    }
+
+    private static string ObterRotuloRole(RoleAdministrativa r) => r switch
+    {
+        RoleAdministrativa.SuperAdmin => "Super Admin",
+        RoleAdministrativa.Admin => "Admin da Unidade",
+        RoleAdministrativa.Tesoureiro => "Tesoureiro",
+        _ => "Usuário"
+    };
+
+    private static string ObterVarianteRole(RoleAdministrativa r) => r switch
+    {
+        RoleAdministrativa.SuperAdmin => "superadmin",
+        RoleAdministrativa.Admin => "admin",
+        RoleAdministrativa.Tesoureiro => "tesoureiro",
+        _ => "info"
+    };
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleSessionChanged;
+    }
+}

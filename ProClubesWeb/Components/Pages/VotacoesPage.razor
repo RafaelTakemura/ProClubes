@@ -1,0 +1,331 @@
+@page "/votacoes"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Votações Digitais — ProClubesWeb</PageTitle>
+
+@if (!Session.IsSuperAdmin && !Session.IsAdmin)
+{
+    <div class="pc-alert pc-alert-danger">Acesso negado: o módulo de votações é restrito a Super Admin e Admin da unidade.</div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div>
+            <h1 class="pc-page-title">Votações Digitais e Governança</h1>
+            <p class="pc-page-subtitle">Congelamento de snapshot de eleitores na abertura, voto único, resultados consolidados e auditoria protegida de votos</p>
+        </div>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNova = !_exibirNova">+ Nova Votação</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="pc-alert pc-alert-success">@_mensagem</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger">@_erro</div>
+    }
+
+    @if (_exibirNova)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Criar Nova Votação</h3>
+            <div class="pc-form-grid">
+                <div class="pc-field"><label class="pc-label">Título da Votação *</label><input class="pc-input" @bind="_titulo" /></div>
+                <div class="pc-field">
+                    <label class="pc-label">Escopo *</label>
+                    <select class="pc-select" disabled="@(!Session.IsSuperAdmin)" @bind="_escopo">
+                        <option value="@EscopoVotacao.Unidade">Unidade Específica</option>
+                        @if (Session.IsSuperAdmin)
+                        {
+                            <option value="@EscopoVotacao.Global">Global (Todas as Unidades)</option>
+                        }
+                    </select>
+                </div>
+                @if (_escopo == EscopoVotacao.Unidade)
+                {
+                    <div class="pc-field"><label class="pc-label">UnidadeId *</label><input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidIdVotacao" /></div>
+                }
+                <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descricao" /></div>
+                <div class="pc-field"><label class="pc-label">Opção 1 *</label><input class="pc-input" @bind="_opcao1" /></div>
+                <div class="pc-field"><label class="pc-label">Opção 2 *</label><input class="pc-input" @bind="_opcao2" /></div>
+                <div class="pc-field"><label class="pc-label">Opção 3 (Opcional)</label><input class="pc-input" @bind="_opcao3" /></div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 12px;">
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="() => CriarVotacaoAsync(true)">Criar e Abrir Imediatamente (Congelar Snapshot)</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CriarVotacaoAsync(false)">Criar como Programada</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNova = false">Cancelar</button>
+            </div>
+        </div>
+    }
+
+    <div class="pc-card">
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>Votação</th>
+                        <th>Escopo / Unidade</th>
+                        <th>Período</th>
+                        <th>Snapshot / Votos</th>
+                        <th>Estado</th>
+                        <th>Ações de Governança</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_votacoes.Count == 0)
+                    {
+                        <tr><td colspan="6">Nenhuma votação cadastrada.</td></tr>
+                    }
+                    @foreach (var v in _votacoes)
+                    {
+                        <tr>
+                            <td><strong>@v.Titulo</strong><br /><small>@v.Descricao</small></td>
+                            <td>@(v.Escopo == EscopoVotacao.Global ? "Global (Clube Inteiro)" : v.UnidadeNome)</td>
+                            <td>@v.Inicio.ToString("dd/MM/yyyy HH:mm") até @v.FimPrevisto.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                Aptos no snapshot: <strong>@v.TotalEleitoresAptos</strong><br />
+                                Votos computados: <strong>@v.TotalVotosRegistrados</strong>
+                            </td>
+                            <td>
+                                <PcStatusBadge Text="@v.Estado.ToString()"
+                                               Variant="@(v.Estado == EstadoVotacao.Aberta ? "aberta_votacao" : (v.Estado == EstadoVotacao.Cancelada ? "cancelada" : "info"))" />
+                                @if (!string.IsNullOrWhiteSpace(v.JustificativaCancelamento))
+                                {
+                                    <div><small style="color: var(--pc-danger);">Cancelada: @v.JustificativaCancelamento</small></div>
+                                }
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    @if (v.Estado == EstadoVotacao.Programada)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirVotacaoAsync(v.Id)">Abrir / Snapshot</button>
+                                    }
+                                    @if (v.Estado == EstadoVotacao.Aberta)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="() => EncerrarVotacaoAsync(v.Id)">Encerrar e Publicar</button>
+                                    }
+                                    @if (v.Estado is EstadoVotacao.Programada or EstadoVotacao.Aberta)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => _votacaoParaCancelar = v">Cancelar</button>
+                                    }
+                                    @if (v.Estado == EstadoVotacao.Encerrada)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => VerResultadosAsync(v.Id)">Resultados Agregados</button>
+                                    }
+                                    @if (Session.IsSuperAdmin || (Session.IsAdmin && v.Escopo == EscopoVotacao.Unidade && v.UnidadeId == Session.Usuario?.UnidadeAdministrativaId))
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => ConsultarVotosIndividuaisAsync(v.Id)">Auditoria Votos Individuais</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (_votacaoParaCancelar is not null)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Cancelar Votação — @_votacaoParaCancelar.Titulo</h3>
+            <p class="pc-page-subtitle">O cancelamento exige justificativa obrigatória e não divulga resultados oficiais.</p>
+            <div class="pc-field">
+                <label class="pc-label">Justificativa *</label>
+                <input class="pc-input" @bind="_justificativaCancelamento" />
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarCancelamentoAsync">Confirmar Cancelamento</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _votacaoParaCancelar = null">Voltar</button>
+            </div>
+        </div>
+    }
+
+    @if (_resultadoAtivo is not null)
+    {
+        <div class="pc-card">
+            <h3 style="margin-top: 0;">Resultados Consolidados — @_resultadoAtivo.Titulo</h3>
+            <p class="pc-page-subtitle">Eleitores no snapshot: @_resultadoAtivo.TotalEleitoresSnapshot | Votos registrados: @_resultadoAtivo.TotalVotosComputados</p>
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>Opção</th>
+                        <th>Votos</th>
+                        <th>Percentual</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var op in _resultadoAtivo.Opcoes)
+                    {
+                        <tr>
+                            <td><strong>@op.Texto</strong></td>
+                            <td>@op.QuantidadeVotos</td>
+                            <td>@op.Percentual.ToString("N2")%</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_votosIndividuais is not null)
+    {
+        <div class="pc-card">
+            <div class="pc-alert pc-alert-warning">
+                ⚠ <strong>Auditoria Restrita:</strong> Esta consulta de relação eleitor → opção escolhida é exclusiva do Super Admin e do Admin da unidade da votação, e foi registrada na trilha de auditoria.
+            </div>
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>Eleitor</th>
+                        <th>Unidade / Categoria na Abertura</th>
+                        <th>Opção Escolhida</th>
+                        <th>Data/Hora do Voto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_votosIndividuais.Count == 0)
+                    {
+                        <tr><td colspan="4">Nenhum voto individual registrado nesta votação.</td></tr>
+                    }
+                    @foreach (var vi in _votosIndividuais)
+                    {
+                        <tr>
+                            <td><strong>@vi.EleitorNome</strong><br /><small>@vi.CpfMascarado</small></td>
+                            <td>@vi.UnidadeNaAberturaNome — @vi.CategoriaNaAberturaNome</td>
+                            <td><strong>@vi.OpcaoEscolhidaTexto</strong></td>
+                            <td>@vi.RegistradoEm.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+    private IReadOnlyList<VotacaoDto> _votacoes = Array.Empty<VotacaoDto>();
+    private ResultadoVotacaoDto? _resultadoAtivo;
+    private IReadOnlyList<VotoIndividualAuditoriaDto>? _votosIndividuais;
+    private VotacaoDto? _votacaoParaCancelar;
+    private string _justificativaCancelamento = string.Empty;
+
+    private bool _exibirNova;
+    private string _titulo = string.Empty;
+    private string _descricao = string.Empty;
+    private EscopoVotacao _escopo = EscopoVotacao.Unidade;
+    private int _unidIdVotacao = 1;
+    private string _opcao1 = "Aprovar proposta";
+    private string _opcao2 = "Rejeitar proposta";
+    private string _opcao3 = string.Empty;
+
+    private string? _erro;
+    private string? _mensagem;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        _unidIdVotacao = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? 1;
+        await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        if (Session.UnidadeContextoId.HasValue) _unidIdVotacao = Session.UnidadeContextoId.Value;
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var q = Session.UnidadeContextoId.HasValue ? $"?unidadeId={Session.UnidadeContextoId.Value}" : "";
+        var (data, err) = await Api.GetAsync<IReadOnlyList<VotacaoDto>>($"api/v1/votacoes{q}");
+        if (data is not null) _votacoes = data;
+        _erro = err;
+    }
+
+    private async Task CriarVotacaoAsync(bool abrirImediatamente)
+    {
+        _erro = _mensagem = null;
+        var opcoes = new List<string> { _opcao1, _opcao2 };
+        if (!string.IsNullOrWhiteSpace(_opcao3)) opcoes.Add(_opcao3);
+
+        var ini = abrirImediatamente ? DateTimeOffset.Now.AddMinutes(-1) : DateTimeOffset.Now.AddDays(1);
+        var fim = DateTimeOffset.Now.AddDays(7);
+
+        var req = new CriarVotacaoRequest(
+            _titulo,
+            _descricao,
+            _escopo,
+            _escopo == EscopoVotacao.Unidade ? _unidIdVotacao : null,
+            ini,
+            fim,
+            opcoes,
+            abrirImediatamente);
+
+        var (_, err) = await Api.PostAsync<VotacaoDto>("api/v1/admin/votacoes", req);
+        if (err is not null) { _erro = err; return; }
+        _exibirNova = false;
+        _mensagem = abrirImediatamente ? "Votação criada, aberta e snapshot de eleitores congelado." : "Votação programada com sucesso.";
+        await CarregarAsync();
+    }
+
+    private async Task AbrirVotacaoAsync(int id)
+    {
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<VotacaoDto>($"api/v1/admin/votacoes/{id}/abertura");
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Votação aberta e snapshot de eleitores congelado.";
+        await CarregarAsync();
+    }
+
+    private async Task EncerrarVotacaoAsync(int id)
+    {
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<VotacaoDto>($"api/v1/admin/votacoes/{id}/encerramento");
+        if (err is not null) { _erro = err; return; }
+        _mensagem = "Votação encerrada e resultados agregados divulgados.";
+        await CarregarAsync();
+    }
+
+    private async Task ConfirmarCancelamentoAsync()
+    {
+        if (_votacaoParaCancelar is null) return;
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PostAsync<VotacaoDto>(
+            $"api/v1/admin/votacoes/{_votacaoParaCancelar.Id}/cancelamento",
+            new CancelarVotacaoRequest(_justificativaCancelamento));
+        if (err is not null) { _erro = err; return; }
+        _votacaoParaCancelar = null;
+        _justificativaCancelamento = string.Empty;
+        _mensagem = "Votação cancelada com justificativa.";
+        await CarregarAsync();
+    }
+
+    private async Task VerResultadosAsync(int id)
+    {
+        _erro = null;
+        _votosIndividuais = null;
+        var (res, err) = await Api.GetAsync<ResultadoVotacaoDto>($"api/v1/votacoes/{id}/resultados");
+        _resultadoAtivo = res;
+        _erro = err;
+    }
+
+    private async Task ConsultarVotosIndividuaisAsync(int id)
+    {
+        _erro = null;
+        _resultadoAtivo = null;
+        var (res, err) = await Api.GetAsync<IReadOnlyList<VotoIndividualAuditoriaDto>>($"api/v1/admin/votacoes/{id}/votos");
+        _votosIndividuais = res;
+        _erro = err;
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

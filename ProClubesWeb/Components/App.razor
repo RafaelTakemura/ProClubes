@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["ProClubesWeb.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/svg+xml" href="/images/proclubes-logo.svg" />
+    <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+</head>
+
+<body>
+    <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>

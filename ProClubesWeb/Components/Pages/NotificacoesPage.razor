@@ -1,0 +1,90 @@
+@page "/notificacoes"
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Central de Notificações — ProClubesWeb</PageTitle>
+
+<div class="pc-page-header">
+    <div>
+        <h1 class="pc-page-title">Central de Notificações Internas</h1>
+        <p class="pc-page-subtitle">Notificações exclusivas da conta autenticada</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CarregarAsync(true)">Apenas Não Lidas</button>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CarregarAsync(null)">Todas</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="pc-alert pc-alert-danger">@_erro</div>
+}
+
+<div class="pc-card">
+    @if (_notificacoes.Count == 0)
+    {
+        <p>Nenhuma notificação encontrada.</p>
+    }
+    else
+    {
+        <table class="pc-table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Título / Mensagem</th>
+                    <th>Data/Hora</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var n in _notificacoes)
+                {
+                    <tr>
+                        <td>
+                            <PcStatusBadge Text="@(n.Lida ? "Lida" : "Não lida")"
+                                           Variant="@(n.Lida ? "neutral" : "warning")" />
+                        </td>
+                        <td>
+                            <strong>@n.Titulo</strong><br />
+                            <span>@n.Mensagem</span>
+                        </td>
+                        <td>@n.CriadaEm.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td>
+                            @if (!n.Lida)
+                            {
+                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => MarcarLidaAsync(n.Id)">Marcar como lida</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<NotificacaoDto> _notificacoes = Array.Empty<NotificacaoDto>();
+    private string? _erro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarAsync(null);
+    }
+
+    private async Task CarregarAsync(bool? apenasNaoLidas)
+    {
+        _erro = null;
+        var filtro = apenasNaoLidas.HasValue ? $"&apenasNaoLidas={apenasNaoLidas.Value.ToString().ToLower()}" : "";
+        var (page, err) = await Api.GetAsync<PagedResponse<NotificacaoDto>>($"api/v1/notificacoes?page=1&pageSize=50{filtro}");
+        if (page is not null) _notificacoes = page.Items;
+        _erro = err;
+        await Api.AtualizarContadorNotificacoesAsync();
+    }
+
+    private async Task MarcarLidaAsync(int id)
+    {
+        var (_, err) = await Api.PatchAsync<NotificacaoDto>($"api/v1/notificacoes/{id}/leitura");
+        if (err is not null) { _erro = err; return; }
+        await CarregarAsync(null);
+    }
+}
