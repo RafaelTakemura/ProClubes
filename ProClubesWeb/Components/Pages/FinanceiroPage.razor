@@ -10,7 +10,11 @@
         <h1 class="pc-page-title">Módulo Financeiro e Mensalidades</h1>
         <p class="pc-page-subtitle">Parâmetros globais, tabela de valores por unidade/categoria, mensalidades por competência e quitação manual integral</p>
     </div>
-    <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarTudoAsync">Atualizar Dados</button>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalConfig = true">⚙ Parâmetros Globais</button>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirModalNovoValor = true">+ Definir Novo Valor</button>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarTudoAsync">Atualizar Dados</button>
+    </div>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -22,40 +26,46 @@
     <div class="pc-alert pc-alert-danger">@_erro</div>
 }
 
-<div class="pc-form-grid">
-    @if (_config is not null)
-    {
-        <div class="pc-card">
-            <h3 style="margin-top: 0; font-size: 18px;">Parâmetros Globais de Cobrança</h3>
-            <p class="pc-page-subtitle" style="margin-bottom: 12px;">Vencimento ajustado ao último dia válido do mês (ex.: 31 em fev -> 28/29), sem prorrogação por feriado/fim de semana.</p>
-            <div class="pc-form-grid">
-                <div class="pc-field">
-                    <label class="pc-label">Dia de Geração (1..31)</label>
-                    <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_diaGeracao" />
-                </div>
-                <div class="pc-field">
-                    <label class="pc-label">Dia de Vencimento (1..31)</label>
-                    <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_diaVencimento" />
-                </div>
-                <div class="pc-field">
-                    <label class="pc-label">Multa por Atraso (%)</label>
-                    <input type="number" step="0.01" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_multa" />
-                </div>
-                <div class="pc-field">
-                    <label class="pc-label">Juros Simples Mensal (%)</label>
-                    <input type="number" step="0.01" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_juros" />
-                </div>
+<PcModal IsOpen="_exibirModalConfig"
+         Title="Parâmetros Globais de Cobrança"
+         Subtitle="Vencimento ajustado ao último dia válido do mês (ex.: 31 em fev -> 28/29), sem prorrogação por feriado/fim de semana."
+         MaxWidth="620px"
+         OnClose="() => _exibirModalConfig = false">
+    <ChildContent>
+        <div class="pc-form-grid">
+            <div class="pc-field">
+                <label class="pc-label">Dia de Geração (1..31)</label>
+                <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_diaGeracao" />
             </div>
-            @if (Session.IsSuperAdmin)
-            {
-                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="SalvarConfigGlobalAsync">Salvar Parâmetros Globais</button>
-            }
+            <div class="pc-field">
+                <label class="pc-label">Dia de Vencimento (1..31)</label>
+                <input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_diaVencimento" />
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Multa por Atraso (%)</label>
+                <input type="number" step="0.01" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_multa" />
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Juros Simples Mensal (%)</label>
+                <input type="number" step="0.01" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_juros" />
+            </div>
         </div>
-    }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalConfig = false">Fechar</button>
+        @if (Session.IsSuperAdmin)
+        {
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarConfigGlobalAsync">Salvar Parâmetros Globais</button>
+        }
+    </FooterContent>
+</PcModal>
 
-    <div class="pc-card">
-        <h3 style="margin-top: 0; font-size: 18px;">Definir Valor por Unidade e Categoria</h3>
-        <p class="pc-page-subtitle" style="margin-bottom: 12px;">Novos valores incidem somente a partir da competência seguinte, preservando cobranças já emitidas.</p>
+<PcModal IsOpen="_exibirModalNovoValor"
+         Title="Definir Valor por Unidade e Categoria"
+         Subtitle="Novos valores incidem somente a partir da competência seguinte, preservando cobranças já emitidas."
+         MaxWidth="620px"
+         OnClose="() => _exibirModalNovoValor = false">
+    <ChildContent>
         <div class="pc-form-grid">
             <div class="pc-field">
                 <label class="pc-label">UnidadeId</label>
@@ -74,9 +84,12 @@
                 <input type="number" step="0.01" class="pc-input" @bind="_novoValorMensal" />
             </div>
         </div>
-        <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="DefinirNovoValorAsync">Registrar Nova Vigência</button>
-    </div>
-</div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalNovoValor = false">Cancelar</button>
+        <button type="button" class="pc-btn pc-btn-secondary" @onclick="DefinirNovoValorAsync">Registrar Nova Vigência</button>
+    </FooterContent>
+</PcModal>
 
 <div class="pc-card">
     <h3 style="margin-top: 0; font-size: 18px;">Tabela de Valores Vigentes e Históricos</h3>
@@ -161,15 +174,7 @@
                         <td>
                             @if (m.Status == StatusMensalidade.Aberta)
                             {
-                                <div style="display: flex; gap: 6px; align-items: center;">
-                                    <select class="pc-select" style="min-height: 32px; padding: 4px;" @bind="_formaPagamentoSelecionada">
-                                        @foreach (var fp in Enum.GetValues<FormaPagamento>())
-                                        {
-                                            <option value="@fp">@fp</option>
-                                        }
-                                    </select>
-                                    <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => RegistrarPagamentoAsync(m.Id)">Quitar Integral</button>
-                                </div>
+                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirModalQuitacao(m)">Quitar Integral</button>
                             }
                         </td>
                     </tr>
@@ -179,10 +184,43 @@
     </div>
 </div>
 
+<PcModal IsOpen="@(_mensalidadeParaQuitar is not null)"
+         Title="@($"Quitar Mensalidade — Competência {_mensalidadeParaQuitar?.Competencia:MM/yyyy}")"
+         Subtitle="@($"{_mensalidadeParaQuitar?.AssociadoNome} ({_mensalidadeParaQuitar?.CpfMascarado}) — {_mensalidadeParaQuitar?.UnidadeEmissoraNome}")"
+         MaxWidth="520px"
+         OnClose="() => _mensalidadeParaQuitar = null">
+    <ChildContent>
+        @if (_mensalidadeParaQuitar is not null)
+        {
+            <div style="background: var(--pc-bg); padding: 14px; border-radius: 8px; margin-bottom: 14px;">
+                <div>Valor Principal: <strong>R$ @_mensalidadeParaQuitar.ValorPrincipal.ToString("N2")</strong></div>
+                <div>Multa + Juros: <strong>R$ @((_mensalidadeParaQuitar.ValorMultaCalculado + _mensalidadeParaQuitar.ValorJurosCalculado).ToString("N2"))</strong></div>
+                <div style="margin-top: 6px; font-size: 16px;">Total a Quitar: <strong style="color: var(--pc-primary);">R$ @_mensalidadeParaQuitar.ValorTotalAtualizado.ToString("N2")</strong></div>
+            </div>
+        }
+        <div class="pc-field">
+            <label class="pc-label">Forma de Pagamento *</label>
+            <select class="pc-select" @bind="_formaPagamentoSelecionada">
+                @foreach (var fp in Enum.GetValues<FormaPagamento>())
+                {
+                    <option value="@fp">@fp</option>
+                }
+            </select>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _mensalidadeParaQuitar = null">Cancelar</button>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="ConfirmarQuitacaoAsync">Confirmar Quitação Integral</button>
+    </FooterContent>
+</PcModal>
+
 @code {
     private ConfiguracaoFinanceiraDto? _config;
     private IReadOnlyList<ValorMensalidadeDto> _valores = Array.Empty<ValorMensalidadeDto>();
     private IReadOnlyList<MensalidadeDto> _mensalidades = Array.Empty<MensalidadeDto>();
+    private MensalidadeDto? _mensalidadeParaQuitar;
+    private bool _exibirModalConfig;
+    private bool _exibirModalNovoValor;
     private string _filtroSituacao = string.Empty;
     private FormaPagamento _formaPagamentoSelecionada = FormaPagamento.Pix;
 
@@ -254,6 +292,7 @@
             new AtualizarConfiguracaoFinanceiraRequest(_diaGeracao, _diaVencimento, 7, _multa, _juros));
         if (err is not null) { _erro = err; return; }
         _config = cfg;
+        _exibirModalConfig = false;
         _mensagem = "Configuração financeira global salva.";
     }
 
@@ -264,18 +303,28 @@
             "api/v1/admin/financeiro/valores",
             new DefinirValorMensalidadeRequest(_unidIdValor, _catValor, _novoValorMensal));
         if (err is not null) { _erro = err; return; }
+        _exibirModalNovoValor = false;
         _mensagem = "Novo valor de mensalidade registrado para a competência seguinte.";
         await CarregarTudoAsync();
     }
 
-    private async Task RegistrarPagamentoAsync(int mensalidadeId)
+    private void AbrirModalQuitacao(MensalidadeDto m)
     {
+        _mensalidadeParaQuitar = m;
+        _formaPagamentoSelecionada = FormaPagamento.Pix;
+    }
+
+    private async Task ConfirmarQuitacaoAsync()
+    {
+        if (_mensalidadeParaQuitar is null) return;
         _erro = _mensagem = null;
+        var mensalidadeId = _mensalidadeParaQuitar.Id;
         var hoje = DateOnly.FromDateTime(DateTime.Now);
         var (_, err) = await Api.PostAsync<MensalidadeDto>(
             $"api/v1/admin/mensalidades/{mensalidadeId}/pagamentos",
             new RegistrarPagamentoMensalidadeRequest(hoje, _formaPagamentoSelecionada));
         if (err is not null) { _erro = err; return; }
+        _mensalidadeParaQuitar = null;
         _mensagem = $"Pagamento integral da mensalidade #{mensalidadeId} registrado com sucesso.";
         await CarregarMensalidadesAsync();
     }
