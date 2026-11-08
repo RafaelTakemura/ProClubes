@@ -115,10 +115,20 @@ else
                                 }
                                 else
                                 {
-                                    @foreach (var t in u.Tesoureiros)
-                                    {
-                                        <div><PcStatusBadge Text="@t.NomeCompleto" Variant="tesoureiro" /></div>
-                                    }
+                                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                                        @foreach (var t in u.Tesoureiros)
+                                        {
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <PcStatusBadge Text="@t.NomeCompleto" Variant="tesoureiro" />
+                                                <button type="button" class="pc-btn pc-btn-danger pc-btn-sm"
+                                                        style="padding: 2px 8px; font-size: 11px;"
+                                                        title="Remover cargo de Tesoureiro"
+                                                        @onclick="() => RemoverTesoureiroAsync(u.Id, t.UsuarioId, t.NomeCompleto)">
+                                                    Remover
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
                                 }
                             </td>
                             <td>
@@ -142,11 +152,19 @@ else
     {
         <div class="pc-card">
             <h3 style="margin-top: 0;">Designar Admin ou Tesoureiro — @_unidadeDesignacao.Nome</h3>
-            <p class="pc-page-subtitle" style="margin-bottom: 12px;">Informe o ID de Usuário (visível na listagem de associados) e a role desejada.</p>
+            <p class="pc-page-subtitle" style="margin-bottom: 12px;">Selecione o associado pelo nome e escolha o cargo administrativo desejado para esta unidade.</p>
             <div class="pc-form-grid">
                 <div class="pc-field">
-                    <label class="pc-label">UsuarioId</label>
-                    <input type="number" class="pc-input" @bind="_usuarioIdDesignacao" />
+                    <label class="pc-label">Associado / Usuário *</label>
+                    <select class="pc-select" @bind="_usuarioIdDesignacao">
+                        <option value="0">-- Selecione um associado --</option>
+                        @foreach (var a in ObterAssociadosParaDesignacao())
+                        {
+                            <option value="@a.UsuarioId">
+                                @a.NomeCompleto (@a.CpfMascarado — @a.Email) — @a.UnidadeNome [Atual: @ObterRotuloRole(a.RoleAdministrativa)]
+                            </option>
+                        }
+                    </select>
                 </div>
                 <div class="pc-field">
                     <label class="pc-label">Role Administrativa</label>
@@ -157,7 +175,7 @@ else
                     </select>
                 </div>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; margin-top: 12px;">
                 <button type="button" class="pc-btn pc-btn-primary" @onclick="ConfirmarDesignacaoAsync">Confirmar Designação</button>
                 <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _unidadeDesignacao = null">Fechar</button>
             </div>
@@ -167,6 +185,7 @@ else
 
 @code {
     private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
+    private IReadOnlyList<AssociadoDto> _associados = Array.Empty<AssociadoDto>();
     private string? _erro;
     private string? _mensagem;
 
@@ -197,6 +216,10 @@ else
         var (data, err) = await Api.GetAsync<IReadOnlyList<UnidadeDto>>("api/v1/unidades");
         if (data is not null) _unidades = data;
         _erro = err;
+
+        var (assocPage, _) = await Api.GetAsync<PagedResponse<AssociadoDto>>("api/v1/admin/associados?page=1&pageSize=100");
+        if (assocPage is not null)
+            _associados = assocPage.Items.Where(a => a.UsuarioId.HasValue).ToList();
     }
 
     private void NovaUnidade()
@@ -244,14 +267,32 @@ else
     private void AbrirDesignacao(UnidadeDto u)
     {
         _unidadeDesignacao = u;
-        _usuarioIdDesignacao = u.AdminAtivoUsuarioId ?? 0;
+        var candidatos = ObterAssociadosParaDesignacao();
+        _usuarioIdDesignacao = u.AdminAtivoUsuarioId
+            ?? candidatos.FirstOrDefault()?.UsuarioId
+            ?? 0;
         _roleDesignacao = RoleAdministrativa.Admin;
+    }
+
+    private IReadOnlyList<AssociadoDto> ObterAssociadosParaDesignacao()
+    {
+        if (_unidadeDesignacao is null) return _associados;
+        return _associados
+            .OrderByDescending(a => a.UnidadeId == _unidadeDesignacao.Id)
+            .ThenBy(a => a.NomeCompleto)
+            .ToList();
     }
 
     private async Task ConfirmarDesignacaoAsync()
     {
         if (_unidadeDesignacao is null) return;
         _erro = _mensagem = null;
+
+        if (_usuarioIdDesignacao <= 0)
+        {
+            _erro = "Selecione um associado válido para confirmar a designação.";
+            return;
+        }
 
         var res = await Api.PutAsync<UnidadeDto>(
             $"api/v1/unidades/{_unidadeDesignacao.Id}/administrador",
@@ -284,4 +325,29 @@ else
         _mensagem = "Administrador removido. A unidade permanece sob gestão direta do Super Admin.";
         await CarregarAsync();
     }
+
+    private async Task RemoverTesoureiroAsync(int unidadeId, int usuarioId, string nomeTesoureiro)
+    {
+        _erro = _mensagem = null;
+        var res = await Api.PutAsync<UnidadeDto>(
+            $"api/v1/unidades/{unidadeId}/administrador",
+            new DesignarRoleUnidadeRequest(usuarioId, RoleAdministrativa.Nenhuma));
+
+        if (res.Error is not null)
+        {
+            _erro = res.Error;
+            return;
+        }
+
+        _mensagem = $"Cargo de Tesoureiro removido de {nomeTesoureiro}.";
+        await CarregarAsync();
+    }
+
+    private static string ObterRotuloRole(RoleAdministrativa role) => role switch
+    {
+        RoleAdministrativa.SuperAdmin => "Super Admin",
+        RoleAdministrativa.Admin => "Admin",
+        RoleAdministrativa.Tesoureiro => "Tesoureiro",
+        _ => "Associado Comum"
+    };
 }
