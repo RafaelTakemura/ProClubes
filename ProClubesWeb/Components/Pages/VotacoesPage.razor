@@ -28,10 +28,12 @@ else
         <div class="pc-alert pc-alert-danger">@_erro</div>
     }
 
-    @if (_exibirNova)
-    {
-        <div class="pc-card">
-            <h3 style="margin-top: 0;">Criar Nova Votação</h3>
+    <PcModal IsOpen="_exibirNova"
+             Title="Criar Nova Votação"
+             Subtitle="Configure o escopo, opções de voto e modo de abertura"
+             MaxWidth="720px"
+             OnClose="() => _exibirNova = false">
+        <ChildContent>
             <div class="pc-form-grid">
                 <div class="pc-field"><label class="pc-label">Título da Votação *</label><input class="pc-input" @bind="_titulo" /></div>
                 <div class="pc-field">
@@ -53,13 +55,13 @@ else
                 <div class="pc-field"><label class="pc-label">Opção 2 *</label><input class="pc-input" @bind="_opcao2" /></div>
                 <div class="pc-field"><label class="pc-label">Opção 3 (Opcional)</label><input class="pc-input" @bind="_opcao3" /></div>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 12px;">
-                <button type="button" class="pc-btn pc-btn-primary" @onclick="() => CriarVotacaoAsync(true)">Criar e Abrir Imediatamente (Congelar Snapshot)</button>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CriarVotacaoAsync(false)">Criar como Programada</button>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNova = false">Cancelar</button>
-            </div>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNova = false">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CriarVotacaoAsync(false)">Criar como Programada</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="() => CriarVotacaoAsync(true)">Criar e Abrir Imediatamente (Congelar Snapshot)</button>
+        </FooterContent>
+    </PcModal>
 
     <div class="pc-card">
         <div class="pc-table-wrap">
@@ -117,7 +119,7 @@ else
                                     }
                                     @if (Session.IsSuperAdmin || (Session.IsAdmin && v.Escopo == EscopoVotacao.Unidade && v.UnidadeId == Session.Usuario?.UnidadeAdministrativaId))
                                     {
-                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => ConsultarVotosIndividuaisAsync(v.Id)">Auditoria Votos Individuais</button>
+                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => ConsultarVotosIndividuaisAsync(v)">Auditoria Votos Individuais</button>
                                     }
                                 </div>
                             </td>
@@ -128,27 +130,29 @@ else
         </div>
     </div>
 
-    @if (_votacaoParaCancelar is not null)
-    {
-        <div class="pc-card">
-            <h3 style="margin-top: 0;">Cancelar Votação — @_votacaoParaCancelar.Titulo</h3>
-            <p class="pc-page-subtitle">O cancelamento exige justificativa obrigatória e não divulga resultados oficiais.</p>
+    <PcModal IsOpen="@(_votacaoParaCancelar is not null)"
+             Title="@($"Cancelar Votação — {_votacaoParaCancelar?.Titulo}")"
+             Subtitle="O cancelamento exige justificativa obrigatória e não divulga resultados oficiais."
+             MaxWidth="540px"
+             OnClose="() => _votacaoParaCancelar = null">
+        <ChildContent>
             <div class="pc-field">
                 <label class="pc-label">Justificativa *</label>
-                <input class="pc-input" @bind="_justificativaCancelamento" />
+                <textarea class="pc-textarea" rows="3" placeholder="Informe o motivo oficial do cancelamento da votação..." @bind="_justificativaCancelamento"></textarea>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarCancelamentoAsync">Confirmar Cancelamento</button>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _votacaoParaCancelar = null">Voltar</button>
-            </div>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _votacaoParaCancelar = null">Voltar</button>
+            <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarCancelamentoAsync">Confirmar Cancelamento</button>
+        </FooterContent>
+    </PcModal>
 
-    @if (_resultadoAtivo is not null)
-    {
-        <div class="pc-card">
-            <h3 style="margin-top: 0;">Resultados Consolidados — @_resultadoAtivo.Titulo</h3>
-            <p class="pc-page-subtitle">Eleitores no snapshot: @_resultadoAtivo.TotalEleitoresSnapshot | Votos registrados: @_resultadoAtivo.TotalVotosComputados</p>
+    <PcModal IsOpen="@(_resultadoAtivo is not null)"
+             Title="@($"Resultados Consolidados — {_resultadoAtivo?.Titulo}")"
+             Subtitle="@($"Eleitores no snapshot: {_resultadoAtivo?.TotalEleitoresSnapshot} | Votos registrados: {_resultadoAtivo?.TotalVotosComputados}")"
+             MaxWidth="640px"
+             OnClose="() => _resultadoAtivo = null">
+        <ChildContent>
             <table class="pc-table">
                 <thead>
                     <tr>
@@ -158,22 +162,31 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var op in _resultadoAtivo.Opcoes)
+                    @if (_resultadoAtivo is not null)
                     {
-                        <tr>
-                            <td><strong>@op.Texto</strong></td>
-                            <td>@op.QuantidadeVotos</td>
-                            <td>@op.Percentual.ToString("N2")%</td>
-                        </tr>
+                        @foreach (var op in _resultadoAtivo.Opcoes)
+                        {
+                            <tr>
+                                <td><strong>@op.Texto</strong></td>
+                                <td>@op.QuantidadeVotos</td>
+                                <td>@op.Percentual.ToString("N2")%</td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _resultadoAtivo = null">Fechar</button>
+        </FooterContent>
+    </PcModal>
 
-    @if (_votosIndividuais is not null)
-    {
-        <div class="pc-card">
+    <PcModal IsOpen="@(_votosIndividuais is not null)"
+             Title="@($"Auditoria de Votos Individuais — {_tituloVotacaoAuditoria}")"
+             Subtitle="Consulta restrita de relação eleitor → opção escolhida"
+             MaxWidth="820px"
+             OnClose="() => _votosIndividuais = null">
+        <ChildContent>
             <div class="pc-alert pc-alert-warning">
                 ⚠ <strong>Auditoria Restrita:</strong> Esta consulta de relação eleitor → opção escolhida é exclusiva do Super Admin e do Admin da unidade da votação, e foi registrada na trilha de auditoria.
             </div>
@@ -187,29 +200,36 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_votosIndividuais.Count == 0)
+                    @if (_votosIndividuais is not null && _votosIndividuais.Count == 0)
                     {
                         <tr><td colspan="4">Nenhum voto individual registrado nesta votação.</td></tr>
                     }
-                    @foreach (var vi in _votosIndividuais)
+                    @if (_votosIndividuais is not null)
                     {
-                        <tr>
-                            <td><strong>@vi.EleitorNome</strong><br /><small>@vi.CpfMascarado</small></td>
-                            <td>@vi.UnidadeNaAberturaNome — @vi.CategoriaNaAberturaNome</td>
-                            <td><strong>@vi.OpcaoEscolhidaTexto</strong></td>
-                            <td>@vi.RegistradoEm.ToString("dd/MM/yyyy HH:mm:ss")</td>
-                        </tr>
+                        @foreach (var vi in _votosIndividuais)
+                        {
+                            <tr>
+                                <td><strong>@vi.EleitorNome</strong><br /><small>@vi.CpfMascarado</small></td>
+                                <td>@vi.UnidadeNaAberturaNome — @vi.CategoriaNaAberturaNome</td>
+                                <td><strong>@vi.OpcaoEscolhidaTexto</strong></td>
+                                <td>@vi.RegistradoEm.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _votosIndividuais = null">Fechar Auditoria</button>
+        </FooterContent>
+    </PcModal>
 }
 
 @code {
     private IReadOnlyList<VotacaoDto> _votacoes = Array.Empty<VotacaoDto>();
     private ResultadoVotacaoDto? _resultadoAtivo;
     private IReadOnlyList<VotoIndividualAuditoriaDto>? _votosIndividuais;
+    private string _tituloVotacaoAuditoria = string.Empty;
     private VotacaoDto? _votacaoParaCancelar;
     private string _justificativaCancelamento = string.Empty;
 
@@ -315,11 +335,12 @@ else
         _erro = err;
     }
 
-    private async Task ConsultarVotosIndividuaisAsync(int id)
+    private async Task ConsultarVotosIndividuaisAsync(VotacaoDto votacao)
     {
         _erro = null;
         _resultadoAtivo = null;
-        var (res, err) = await Api.GetAsync<IReadOnlyList<VotoIndividualAuditoriaDto>>($"api/v1/admin/votacoes/{id}/votos");
+        _tituloVotacaoAuditoria = votacao.Titulo;
+        var (res, err) = await Api.GetAsync<IReadOnlyList<VotoIndividualAuditoriaDto>>($"api/v1/admin/votacoes/{votacao.Id}/votos");
         _votosIndividuais = res;
         _erro = err;
     }

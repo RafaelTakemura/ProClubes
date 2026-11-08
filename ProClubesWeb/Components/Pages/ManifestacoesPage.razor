@@ -11,7 +11,13 @@
         <h1 class="pc-page-title">Manifestações e Categorias Globais</h1>
         <p class="pc-page-subtitle">Atendimento de solicitações, reclamações e sugestões da unidade e gestão de categorias globais (exclusiva Super Admin)</p>
     </div>
-    <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Atualizar</button>
+    <div style="display: flex; gap: 10px;">
+        @if (Session.IsSuperAdmin)
+        {
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovaCategoria = true">+ Nova Categoria Global</button>
+        }
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Atualizar</button>
+    </div>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -25,22 +31,34 @@
 
 @if (Session.IsSuperAdmin)
 {
-    <div class="pc-card">
-        <h3 style="margin-top: 0; font-size: 18px;">Categorias Globais de Manifestações (Exclusivo Super Admin)</h3>
-        <p class="pc-page-subtitle">Categorias desativadas deixam de aparecer em novas manifestações, preservando o histórico existente.</p>
-        <div class="pc-form-grid" style="margin-top: 12px;">
-            <div class="pc-field"><label class="pc-label">Nome da Categoria *</label><input class="pc-input" @bind="_nomeCat" /></div>
-            <div class="pc-field">
-                <label class="pc-label">Tipo *</label>
-                <select class="pc-select" @bind="_tipoCat">
-                    <option value="@TipoManifestacao.Solicitacao">Solicitação</option>
-                    <option value="@TipoManifestacao.Reclamacao">Reclamação</option>
-                    <option value="@TipoManifestacao.Sugestao">Sugestão</option>
-                </select>
+    <PcModal IsOpen="_exibirNovaCategoria"
+             Title="Nova Categoria Global de Manifestação"
+             Subtitle="Exclusivo Super Admin — ficará disponível imediatamente para novas manifestações em todas as unidades"
+             MaxWidth="580px"
+             OnClose="() => _exibirNovaCategoria = false">
+        <ChildContent>
+            <div class="pc-form-grid">
+                <div class="pc-field"><label class="pc-label">Nome da Categoria *</label><input class="pc-input" @bind="_nomeCat" /></div>
+                <div class="pc-field">
+                    <label class="pc-label">Tipo *</label>
+                    <select class="pc-select" @bind="_tipoCat">
+                        <option value="@TipoManifestacao.Solicitacao">Solicitação</option>
+                        <option value="@TipoManifestacao.Reclamacao">Reclamação</option>
+                        <option value="@TipoManifestacao.Sugestao">Sugestão</option>
+                    </select>
+                </div>
             </div>
             <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descCat" /></div>
-        </div>
-        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" style="margin-bottom: 14px;" @onclick="CriarCategoriaGlobalAsync">+ Criar Categoria Global</button>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovaCategoria = false">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarCategoriaGlobalAsync">Salvar Categoria</button>
+        </FooterContent>
+    </PcModal>
+
+    <div class="pc-card">
+        <h3 style="margin-top: 0; font-size: 18px;">Categorias Globais de Manifestações (Exclusivo Super Admin)</h3>
+        <p class="pc-page-subtitle" style="margin-bottom: 14px;">Categorias desativadas deixam de aparecer em novas manifestações, preservando o histórico existente.</p>
 
         <div class="pc-table-wrap">
             <table class="pc-table">
@@ -118,48 +136,54 @@
 
 @if (_manifestacaoAtiva is not null)
 {
-    <div class="pc-card">
-        <h3 style="margin-top: 0;">Manifestação #@_manifestacaoAtiva.Id — @_manifestacaoAtiva.Titulo</h3>
-        <p style="background: var(--pc-bg); padding: 12px; border-radius: 8px;">@_manifestacaoAtiva.Descricao</p>
+    <PcModal IsOpen="true"
+             Title="@($"Manifestação #{_manifestacaoAtiva.Id} — {_manifestacaoAtiva.Titulo}")"
+             Subtitle="@($"{_manifestacaoAtiva.TipoManifestacao} ({_manifestacaoAtiva.CategoriaNome}) | Autor: {_manifestacaoAtiva.AutorNome} | Unidade: {_manifestacaoAtiva.UnidadeNome}")"
+             MaxWidth="720px"
+             OnClose="() => _manifestacaoAtiva = null">
+        <ChildContent>
+            <p style="background: var(--pc-bg); padding: 12px; border-radius: 8px; margin-top: 0;">@_manifestacaoAtiva.Descricao</p>
 
-        <h4>Histórico de Respostas</h4>
-        @if (_manifestacaoAtiva.Respostas.Count == 0)
-        {
-            <p class="pc-page-subtitle">Ainda sem respostas.</p>
-        }
-        else
-        {
-            @foreach (var r in _manifestacaoAtiva.Respostas)
+            <h4>Histórico de Respostas</h4>
+            @if (_manifestacaoAtiva.Respostas.Count == 0)
             {
-                <div style="border-left: 3px solid var(--pc-primary); padding: 8px 12px; margin-bottom: 10px; background: var(--pc-bg);">
-                    <div><strong>@r.AutorNome</strong> <small style="color: var(--pc-text-secondary);">em @r.CriadaEm.ToString("dd/MM/yyyy HH:mm")</small></div>
-                    <div>@r.Mensagem</div>
-                </div>
+                <p class="pc-page-subtitle">Ainda sem respostas.</p>
             }
-        }
+            else
+            {
+                @foreach (var r in _manifestacaoAtiva.Respostas)
+                {
+                    <div style="border-left: 3px solid var(--pc-primary); padding: 8px 12px; margin-bottom: 10px; background: var(--pc-bg);">
+                        <div><strong>@r.AutorNome</strong> <small style="color: var(--pc-text-secondary);">em @r.CriadaEm.ToString("dd/MM/yyyy HH:mm")</small></div>
+                        <div>@r.Mensagem</div>
+                    </div>
+                }
+            }
 
-        <div class="pc-field" style="margin-top: 14px;">
-            <label class="pc-label">Nova Resposta da Diretoria *</label>
-            <textarea class="pc-textarea" rows="3" @bind="_textoResposta"></textarea>
-        </div>
-        <div class="pc-field">
-            <label class="pc-label">Atualizar Status</label>
-            <select class="pc-select" @bind="_novoStatusManifestacao">
-                <option value="@StatusManifestacao.EmAtendimento">Em Atendimento</option>
-                <option value="@StatusManifestacao.Concluida">Concluída</option>
-            </select>
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button type="button" class="pc-btn pc-btn-primary" @onclick="EnviarRespostaAsync">Enviar Resposta e Notificar Autor</button>
+            <div class="pc-field" style="margin-top: 14px;">
+                <label class="pc-label">Nova Resposta da Diretoria *</label>
+                <textarea class="pc-textarea" rows="3" @bind="_textoResposta"></textarea>
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Atualizar Status</label>
+                <select class="pc-select" @bind="_novoStatusManifestacao">
+                    <option value="@StatusManifestacao.EmAtendimento">Em Atendimento</option>
+                    <option value="@StatusManifestacao.Concluida">Concluída</option>
+                </select>
+            </div>
+        </ChildContent>
+        <FooterContent>
             <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _manifestacaoAtiva = null">Fechar</button>
-        </div>
-    </div>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="EnviarRespostaAsync">Enviar Resposta e Notificar Autor</button>
+        </FooterContent>
+    </PcModal>
 }
 
 @code {
     private IReadOnlyList<CategoriaManifestacaoDto> _categorias = Array.Empty<CategoriaManifestacaoDto>();
     private IReadOnlyList<ManifestacaoDto> _manifestacoes = Array.Empty<ManifestacaoDto>();
     private ManifestacaoDto? _manifestacaoAtiva;
+    private bool _exibirNovaCategoria;
 
     private string _nomeCat = string.Empty;
     private TipoManifestacao _tipoCat = TipoManifestacao.Solicitacao;
@@ -203,6 +227,7 @@
         var (_, err) = await Api.PostAsync<CategoriaManifestacaoDto>("api/v1/admin/manifestacoes/categorias", req);
         if (err is not null) { _erro = err; return; }
         _nomeCat = _descCat = string.Empty;
+        _exibirNovaCategoria = false;
         _mensagem = "Categoria global criada.";
         await CarregarAsync();
     }
