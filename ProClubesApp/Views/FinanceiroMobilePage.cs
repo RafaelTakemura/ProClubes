@@ -26,8 +26,14 @@ public sealed class FinanceiroMobilePage : ContentPage
                 var valOrig = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
                 valOrig.SetBinding(Label.TextProperty, nameof(MensalidadeDto.ValorPrincipal), stringFormat: "Principal: R$ {0:N2}");
 
-                var status = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
+                var status = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandAccent };
                 status.SetBinding(Label.TextProperty, nameof(MensalidadeDto.SituacaoExibicao), stringFormat: "Situação: {0}");
+                status.SetBinding(Label.TextColorProperty, nameof(MensalidadeDto.SituacaoCorTexto));
+                status.BindingContextChanged += (_, _) =>
+                {
+                    if (status.BindingContext is MensalidadeDto m)
+                        status.TextColor = m.SituacaoCorTexto;
+                };
 
                 return ProClubesTheme.CreateCard(new VerticalStackLayout
                 {
