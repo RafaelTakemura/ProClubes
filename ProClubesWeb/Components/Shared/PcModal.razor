@@ -1,0 +1,64 @@
+@namespace ProClubesWeb.Components.Shared
+
+@if (IsOpen)
+{
+    <div class="pc-modal-backdrop" @onclick="HandleBackdropClick">
+        <div class="pc-modal-card"
+             style="max-width: @MaxWidth;"
+             role="dialog"
+             aria-modal="true"
+             aria-label="@Title"
+             @onclick:stopPropagation="true">
+            <div class="pc-modal-header">
+                <div>
+                    <h3 class="pc-modal-title">@Title</h3>
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <p class="pc-modal-subtitle">@Subtitle</p>
+                    }
+                </div>
+                <button type="button"
+                        class="pc-modal-close"
+                        aria-label="Fechar janela"
+                        title="Fechar"
+                        @onclick="CloseAsync">
+                    ✕
+                </button>
+            </div>
+
+            <div class="pc-modal-body">
+                @ChildContent
+            </div>
+
+            @if (FooterContent is not null)
+            {
+                <div class="pc-modal-footer">
+                    @FooterContent
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string MaxWidth { get; set; } = "680px";
+    [Parameter] public bool CloseOnBackdropClick { get; set; } = true;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+
+    private async Task HandleBackdropClick()
+    {
+        if (CloseOnBackdropClick)
+            await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (OnClose.HasDelegate)
+            await OnClose.InvokeAsync();
+    }
+}

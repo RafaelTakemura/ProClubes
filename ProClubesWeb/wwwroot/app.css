@@ -365,6 +365,106 @@ html, body {
     border-radius: 999px;
 }
 
+/* Modal / Pop-up Flutuante */
+.pc-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    overflow-y: auto;
+}
+
+.pc-modal-card {
+    background: var(--pc-surface);
+    border: 1px solid var(--pc-border);
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.28);
+    width: 100%;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: pc-modal-fade-in 150ms ease-out;
+}
+
+@keyframes pc-modal-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.pc-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px 14px 24px;
+    border-bottom: 1px solid var(--pc-border);
+}
+
+.pc-modal-title {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--pc-primary);
+}
+
+.pc-modal-subtitle {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: var(--pc-text-secondary);
+}
+
+.pc-modal-close {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--pc-radius-control);
+    border: 1px solid var(--pc-border);
+    background: var(--pc-bg);
+    color: var(--pc-text-secondary);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 150ms ease, color 150ms ease;
+}
+
+.pc-modal-close:hover {
+    background: var(--pc-danger-bg);
+    color: var(--pc-danger);
+    border-color: #FCA5A5;
+}
+
+.pc-modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.pc-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--pc-border);
+    background: var(--pc-bg);
+    flex-wrap: wrap;
+}
+
 @media (max-width: 900px) {
     .pc-shell { flex-direction: column; }
     .pc-sidebar { width: 100%; }
