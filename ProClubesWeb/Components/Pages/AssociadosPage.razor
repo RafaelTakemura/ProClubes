@@ -40,7 +40,15 @@ else
                 <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_nascimento" /></div>
                 <div class="pc-field"><label class="pc-label">Telefone *</label><input class="pc-input" @bind="_fone" /></div>
                 <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_email" /></div>
-                <div class="pc-field"><label class="pc-label">UnidadeId *</label><input type="number" class="pc-input" @bind="_unidadeIdNovo" /></div>
+                <div class="pc-field">
+                    <label class="pc-label">Unidade *</label>
+                    <select class="pc-select" @bind="_unidadeIdNovo">
+                        @foreach (var u in _unidades)
+                        {
+                            <option value="@u.Id">@u.Nome (@u.Sigla)</option>
+                        }
+                    </select>
+                </div>
                 <div class="pc-field">
                     <label class="pc-label">Categoria Associativa *</label>
                     <select class="pc-select" @bind="_categoriaNovo">
@@ -50,6 +58,17 @@ else
                         <option value="SIMPATIZANTE">Simpatizante</option>
                     </select>
                 </div>
+                @if (Session.IsSuperAdmin)
+                {
+                    <div class="pc-field">
+                        <label class="pc-label">Cargo Administrativo Inicial</label>
+                        <select class="pc-select" @bind="_roleInicialNovo">
+                            <option value="@RoleAdministrativa.Nenhuma">Associado Comum (Sem cargo)</option>
+                            <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
+                            <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                        </select>
+                    </div>
+                }
                 <div class="pc-field"><label class="pc-label">Cidade / UF *</label><input class="pc-input" @bind="_cidade" /></div>
                 <div class="pc-field"><label class="pc-label">Senha Inicial *</label><input type="password" class="pc-input" @bind="_senhaNovo" /></div>
             </div>
@@ -95,7 +114,16 @@ else
                     {
                         <tr>
                             <td>Assoc #@a.Id<br /><small style="color: var(--pc-text-secondary);">Usr #@(a.UsuarioId?.ToString() ?? "-")</small></td>
-                            <td><strong>@a.NomeCompleto</strong><br /><small>@a.CpfMascarado — @a.Email</small></td>
+                            <td>
+                                <strong>@a.NomeCompleto</strong>
+                                @if (a.RoleAdministrativa != RoleAdministrativa.Nenhuma)
+                                {
+                                    <span style="margin-left: 6px;">
+                                        <PcStatusBadge Text="@ObterRotuloRole(a.RoleAdministrativa)" Variant="@ObterVarianteRole(a.RoleAdministrativa)" />
+                                    </span>
+                                }
+                                <br /><small>@a.CpfMascarado — @a.Email</small>
+                            </td>
                             <td>@a.UnidadeNome</td>
                             <td>
                                 <PcStatusBadge Text="@a.CategoriaNome" Variant="@(a.CategoriaCodigo == "FUNDADOR" ? "fundador" : (a.CategoriaCodigo == "SIMPATIZANTE" ? "simpatizante" : "info"))" />
@@ -124,7 +152,11 @@ else
     {
         <div class="pc-card">
             <h3 style="margin-top: 0;">Detalhes de @_selecionado.NomeCompleto (#@_selecionado.Id)</h3>
-            <p class="pc-page-subtitle">Unidade: <strong>@_selecionado.UnidadeNome</strong> | Categoria atual: <strong>@_selecionado.CategoriaNome</strong></p>
+            <p class="pc-page-subtitle">
+                Unidade: <strong>@_selecionado.UnidadeNome</strong> |
+                Categoria atual: <strong>@_selecionado.CategoriaNome</strong> |
+                Cargo administrativo: <strong>@ObterRotuloRole(_selecionado.RoleAdministrativa)</strong>
+            </p>
 
             <div class="pc-form-grid" style="margin-top: 16px;">
                 <div class="pc-field">
@@ -140,12 +172,32 @@ else
                     </div>
                 </div>
 
+                @if (Session.IsSuperAdmin && _selecionado.UsuarioId.HasValue)
+                {
+                    <div class="pc-field">
+                        <label class="pc-label">Cargo Administrativo na Unidade (Exclusivo Super Admin)</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select class="pc-select" @bind="_novaRoleSel">
+                                <option value="@RoleAdministrativa.Nenhuma">Sem cargo (Associado Comum)</option>
+                                <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
+                                <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                            </select>
+                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
+                        </div>
+                    </div>
+                }
+
                 @if (Session.IsSuperAdmin)
                 {
                     <div class="pc-field">
                         <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
                         <div style="display: flex; gap: 8px;">
-                            <input type="number" class="pc-input" placeholder="UnidadeDestinoId" @bind="_unidadeDestinoTransf" />
+                            <select class="pc-select" @bind="_unidadeDestinoTransf">
+                                @foreach (var u in _unidades)
+                                {
+                                    <option value="@u.Id">@u.Nome (@u.Sigla)</option>
+                                }
+                            </select>
                             <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="TransferirUnidadeAsync">Transferir</button>
                         </div>
                     </div>
@@ -222,6 +274,7 @@ else
 
 @code {
     private IReadOnlyList<AssociadoDto> _associados = Array.Empty<AssociadoDto>();
+    private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
     private AssociadoDto? _selecionado;
     private string _busca = string.Empty;
     private string _filtroCategoria = string.Empty;
@@ -239,9 +292,11 @@ else
     private string _cidade = "Foz do Iguaçu";
     private int _unidadeIdNovo = 1;
     private string _categoriaNovo = "ASSOCIADO";
+    private RoleAdministrativa _roleInicialNovo = RoleAdministrativa.Nenhuma;
     private string _senhaNovo = "ProClubes@123";
 
     private string _novaCategoriaSel = "ASSOCIADO";
+    private RoleAdministrativa _novaRoleSel = RoleAdministrativa.Nenhuma;
     private int _unidadeDestinoTransf = 2;
 
     private string _depNome = string.Empty;
@@ -256,13 +311,27 @@ else
     {
         Session.OnChange += HandleContextChanged;
         _unidadeIdNovo = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? 1;
+        await CarregarUnidadesAsync();
         await CarregarAsync();
     }
 
     private async void HandleContextChanged()
     {
+        if (Session.UnidadeContextoId.HasValue)
+            _unidadeIdNovo = Session.UnidadeContextoId.Value;
         await CarregarAsync();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarUnidadesAsync()
+    {
+        var (data, _) = await Api.GetAsync<IReadOnlyList<UnidadeDto>>("api/v1/unidades");
+        if (data is not null && data.Count > 0)
+        {
+            _unidades = data;
+            if (!_unidades.Any(u => u.Id == _unidadeIdNovo))
+                _unidadeIdNovo = _unidades[0].Id;
+        }
     }
 
     private async Task CarregarAsync()
@@ -282,22 +351,63 @@ else
     {
         _selecionado = a;
         _novaCategoriaSel = a.CategoriaCodigo;
+        _novaRoleSel = a.RoleAdministrativa == RoleAdministrativa.SuperAdmin
+            ? RoleAdministrativa.Nenhuma
+            : a.RoleAdministrativa;
+        var outraUnidade = _unidades.FirstOrDefault(u => u.Id != a.UnidadeId);
+        if (outraUnidade is not null)
+            _unidadeDestinoTransf = outraUnidade.Id;
     }
 
     private async Task CriarAssociadoAsync()
     {
         _erro = _mensagem = null;
+        var roleInicial = Session.IsSuperAdmin ? _roleInicialNovo : RoleAdministrativa.Nenhuma;
         var req = new CriarAssociadoAdminRequest(
             _nome, _cpf, _sexo, _estadoCivil, _nascimento,
             "Rua Principal", "Centro", "100", _cidade, "PR",
-            _fone, _email, _unidadeIdNovo, _categoriaNovo, _senhaNovo);
+            _fone, _email, _unidadeIdNovo, _categoriaNovo, _senhaNovo,
+            null, roleInicial);
 
         var (criado, err) = await Api.PostAsync<AssociadoDto>("api/v1/admin/associados", req);
         if (err is not null) { _erro = err; return; }
-        _mensagem = $"Associado {criado?.NomeCompleto} cadastrado com sucesso.";
+        var sufixoCargo = roleInicial != RoleAdministrativa.Nenhuma ? $" com cargo de {ObterRotuloRole(roleInicial)}" : "";
+        _mensagem = $"Associado {criado?.NomeCompleto} cadastrado com sucesso{sufixoCargo}.";
         _exibirNovoAssociado = false;
+        _roleInicialNovo = RoleAdministrativa.Nenhuma;
         await CarregarAsync();
     }
+
+    private async Task AlterarRoleAdministrativaAsync()
+    {
+        if (_selecionado is null || !_selecionado.UsuarioId.HasValue) return;
+        _erro = _mensagem = null;
+        var (_, err) = await Api.PutAsync<UnidadeDto>(
+            $"api/v1/unidades/{_selecionado.UnidadeId}/administrador",
+            new DesignarRoleUnidadeRequest(_selecionado.UsuarioId.Value, _novaRoleSel));
+        if (err is not null) { _erro = err; return; }
+
+        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_selecionado.Id}");
+        if (recarregado is not null) _selecionado = recarregado;
+        _mensagem = $"Cargo administrativo de {_selecionado.NomeCompleto} atualizado para {ObterRotuloRole(_novaRoleSel)}.";
+        await CarregarAsync();
+    }
+
+    private static string ObterRotuloRole(RoleAdministrativa role) => role switch
+    {
+        RoleAdministrativa.SuperAdmin => "Super Admin",
+        RoleAdministrativa.Admin => "Admin",
+        RoleAdministrativa.Tesoureiro => "Tesoureiro",
+        _ => "Associado Comum"
+    };
+
+    private static string ObterVarianteRole(RoleAdministrativa role) => role switch
+    {
+        RoleAdministrativa.SuperAdmin => "superadmin",
+        RoleAdministrativa.Admin => "admin",
+        RoleAdministrativa.Tesoureiro => "tesoureiro",
+        _ => "info"
+    };
 
     private async Task AlterarCategoriaAsync()
     {
