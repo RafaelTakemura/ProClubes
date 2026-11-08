@@ -28,10 +28,12 @@ else
         <div class="pc-alert pc-alert-danger">@_erro</div>
     }
 
-    @if (_exibirNovoAssociado)
-    {
-        <div class="pc-card">
-            <h3 style="margin-top: 0;">Novo Associado Titular</h3>
+    <PcModal IsOpen="_exibirNovoAssociado"
+             Title="Novo Associado Titular"
+             Subtitle="Cadastro direto de associado titular com geração automática de conta de acesso"
+             MaxWidth="780px"
+             OnClose="() => _exibirNovoAssociado = false">
+        <ChildContent>
             <div class="pc-form-grid">
                 <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_nome" /></div>
                 <div class="pc-field"><label class="pc-label">CPF (11 dígitos) *</label><input class="pc-input" maxlength="14" @bind="_cpf" /></div>
@@ -72,12 +74,12 @@ else
                 <div class="pc-field"><label class="pc-label">Cidade / UF *</label><input class="pc-input" @bind="_cidade" /></div>
                 <div class="pc-field"><label class="pc-label">Senha Inicial *</label><input type="password" class="pc-input" @bind="_senhaNovo" /></div>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 12px;">
-                <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarAssociadoAsync">Salvar Associado</button>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovoAssociado = false">Cancelar</button>
-            </div>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovoAssociado = false">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarAssociadoAsync">Salvar Associado</button>
+        </FooterContent>
+    </PcModal>
 
     <div class="pc-card">
         <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
@@ -150,125 +152,124 @@ else
 
     @if (_selecionado is not null)
     {
-        <div class="pc-card">
-            <h3 style="margin-top: 0;">Detalhes de @_selecionado.NomeCompleto (#@_selecionado.Id)</h3>
-            <p class="pc-page-subtitle">
-                Unidade: <strong>@_selecionado.UnidadeNome</strong> |
-                Categoria atual: <strong>@_selecionado.CategoriaNome</strong> |
-                Cargo administrativo: <strong>@ObterRotuloRole(_selecionado.RoleAdministrativa)</strong>
-            </p>
-
-            <div class="pc-form-grid" style="margin-top: 16px;">
-                <div class="pc-field">
-                    <label class="pc-label">Alterar Categoria (efeito na próxima competência)</label>
-                    <div style="display: flex; gap: 8px;">
-                        <select class="pc-select" @bind="_novaCategoriaSel">
-                            <option value="ASSOCIADO">Sócio Associado</option>
-                            <option value="FUNDADOR">Sócio Fundador</option>
-                            <option value="CONVIDADO">Sócio Convidado</option>
-                            <option value="SIMPATIZANTE">Simpatizante</option>
-                        </select>
-                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarCategoriaAsync">Aplicar</button>
-                    </div>
-                </div>
-
-                @if (Session.IsSuperAdmin && _selecionado.UsuarioId.HasValue)
-                {
+        <PcModal IsOpen="true"
+                 Title="@($"Detalhes de {_selecionado.NomeCompleto} (#{_selecionado.Id})")"
+                 Subtitle="@($"Unidade: {_selecionado.UnidadeNome} | Categoria atual: {_selecionado.CategoriaNome} | Cargo: {ObterRotuloRole(_selecionado.RoleAdministrativa)}")"
+                 MaxWidth="880px"
+                 OnClose="() => _selecionado = null">
+            <ChildContent>
+                <div class="pc-form-grid">
                     <div class="pc-field">
-                        <label class="pc-label">Cargo Administrativo na Unidade (Exclusivo Super Admin)</label>
+                        <label class="pc-label">Alterar Categoria (efeito na próxima competência)</label>
                         <div style="display: flex; gap: 8px;">
-                            <select class="pc-select" @bind="_novaRoleSel">
-                                <option value="@RoleAdministrativa.Nenhuma">Sem cargo (Associado Comum)</option>
-                                <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
-                                <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                            <select class="pc-select" @bind="_novaCategoriaSel">
+                                <option value="ASSOCIADO">Sócio Associado</option>
+                                <option value="FUNDADOR">Sócio Fundador</option>
+                                <option value="CONVIDADO">Sócio Convidado</option>
+                                <option value="SIMPATIZANTE">Simpatizante</option>
                             </select>
-                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
+                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarCategoriaAsync">Aplicar</button>
                         </div>
                     </div>
-                }
 
-                @if (Session.IsSuperAdmin)
-                {
-                    <div class="pc-field">
-                        <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
-                        <div style="display: flex; gap: 8px;">
-                            <select class="pc-select" @bind="_unidadeDestinoTransf">
-                                @foreach (var u in _unidades)
-                                {
-                                    <option value="@u.Id">@u.Nome (@u.Sigla)</option>
-                                }
-                            </select>
-                            <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="TransferirUnidadeAsync">Transferir</button>
-                        </div>
-                    </div>
-                }
-
-                <div class="pc-field">
-                    <label class="pc-label">Situação do Vínculo</label>
-                    <div>
-                        @if (_selecionado.Status == StatusAssociado.Ativo)
-                        {
-                            <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AlterarStatusAsync(false)">Desativar Associado</button>
-                        }
-                        else
-                        {
-                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AlterarStatusAsync(true)">Reativar Associado</button>
-                        }
-                    </div>
-                </div>
-            </div>
-
-            <hr style="border: 0; border-top: 1px solid var(--pc-border); margin: 20px 0;" />
-            <h4>Dependentes Vinculados (Cônjuge ou Filho(a) até 21 anos, inclusive)</h4>
-            <table class="pc-table" style="margin-bottom: 16px;">
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>CPF</th>
-                        <th>Vínculo</th>
-                        <th>Nascimento</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_selecionado.Dependentes.Count == 0)
+                    @if (Session.IsSuperAdmin && _selecionado.UsuarioId.HasValue)
                     {
-                        <tr><td colspan="5">Nenhum dependente registrado.</td></tr>
+                        <div class="pc-field">
+                            <label class="pc-label">Cargo Administrativo na Unidade (Exclusivo Super Admin)</label>
+                            <div style="display: flex; gap: 8px;">
+                                <select class="pc-select" @bind="_novaRoleSel">
+                                    <option value="@RoleAdministrativa.Nenhuma">Sem cargo (Associado Comum)</option>
+                                    <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
+                                    <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                                </select>
+                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
+                            </div>
+                        </div>
                     }
-                    @foreach (var d in _selecionado.Dependentes)
+
+                    @if (Session.IsSuperAdmin)
                     {
+                        <div class="pc-field">
+                            <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
+                            <div style="display: flex; gap: 8px;">
+                                <select class="pc-select" @bind="_unidadeDestinoTransf">
+                                    @foreach (var u in _unidades)
+                                    {
+                                        <option value="@u.Id">@u.Nome (@u.Sigla)</option>
+                                    }
+                                </select>
+                                <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="TransferirUnidadeAsync">Transferir</button>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="pc-field">
+                        <label class="pc-label">Situação do Vínculo</label>
+                        <div>
+                            @if (_selecionado.Status == StatusAssociado.Ativo)
+                            {
+                                <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AlterarStatusAsync(false)">Desativar Associado</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AlterarStatusAsync(true)">Reativar Associado</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid var(--pc-border); margin: 20px 0;" />
+                <h4 style="margin-top: 0;">Dependentes Vinculados (Cônjuge ou Filho(a) até 21 anos, inclusive)</h4>
+                <table class="pc-table" style="margin-bottom: 16px;">
+                    <thead>
                         <tr>
-                            <td>@d.NomeCompleto</td>
-                            <td>@d.CpfMascarado</td>
-                            <td>@d.TipoVinculo</td>
-                            <td>@d.DataNascimento.ToString("dd/MM/yyyy")</td>
-                            <td><PcStatusBadge Text="@(d.Ativo ? "Ativo" : $"Encerrado ({d.MotivoFim})")" Variant="@(d.Ativo ? "ativo" : "neutral")" /></td>
+                            <th>Nome</th>
+                            <th>CPF</th>
+                            <th>Vínculo</th>
+                            <th>Nascimento</th>
+                            <th>Status</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @if (_selecionado.Dependentes.Count == 0)
+                        {
+                            <tr><td colspan="5">Nenhum dependente registrado.</td></tr>
+                        }
+                        @foreach (var d in _selecionado.Dependentes)
+                        {
+                            <tr>
+                                <td>@d.NomeCompleto</td>
+                                <td>@d.CpfMascarado</td>
+                                <td>@d.TipoVinculo</td>
+                                <td>@d.DataNascimento.ToString("dd/MM/yyyy")</td>
+                                <td><PcStatusBadge Text="@(d.Ativo ? "Ativo" : $"Encerrado ({d.MotivoFim})")" Variant="@(d.Ativo ? "ativo" : "neutral")" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
 
-            <h5>Vincular Novo Dependente</h5>
-            <div class="pc-form-grid">
-                <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_depNome" /></div>
-                <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" @bind="_depCpf" /></div>
-                <div class="pc-field"><label class="pc-label">Sexo *</label><input class="pc-input" @bind="_depSexo" /></div>
-                <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_depNascimento" /></div>
-                <div class="pc-field">
-                    <label class="pc-label">Tipo de Vínculo *</label>
-                    <select class="pc-select" @bind="_depVinculo">
-                        <option value="@TipoVinculoDependente.Conjuge">Cônjuge</option>
-                        <option value="@TipoVinculoDependente.Filho">Filho(a) (até 21 anos)</option>
-                    </select>
+                <h5>Vincular Novo Dependente</h5>
+                <div class="pc-form-grid">
+                    <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_depNome" /></div>
+                    <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" @bind="_depCpf" /></div>
+                    <div class="pc-field"><label class="pc-label">Sexo *</label><input class="pc-input" @bind="_depSexo" /></div>
+                    <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_depNascimento" /></div>
+                    <div class="pc-field">
+                        <label class="pc-label">Tipo de Vínculo *</label>
+                        <select class="pc-select" @bind="_depVinculo">
+                            <option value="@TipoVinculoDependente.Conjuge">Cônjuge</option>
+                            <option value="@TipoVinculoDependente.Filho">Filho(a) (até 21 anos)</option>
+                        </select>
+                    </div>
+                    <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_depEmail" /></div>
+                    <div class="pc-field"><label class="pc-label">Senha (para login próprio opcional)</label><input type="password" class="pc-input" @bind="_depSenha" /></div>
                 </div>
-                <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_depEmail" /></div>
-                <div class="pc-field"><label class="pc-label">Senha (para login próprio opcional)</label><input type="password" class="pc-input" @bind="_depSenha" /></div>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="CadastrarDependenteAsync">Vincular Dependente</button>
-                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _selecionado = null">Fechar Painel</button>
-            </div>
-        </div>
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _selecionado = null">Fechar Painel</button>
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="CadastrarDependenteAsync">Vincular Dependente</button>
+            </FooterContent>
+        </PcModal>
     }
 }
 

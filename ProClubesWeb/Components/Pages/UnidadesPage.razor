@@ -27,10 +27,12 @@ else
         <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
     }
 
-    @if (_exibirFormUnidade)
-    {
-        <div class="pc-card">
-            <h2 style="margin-top: 0; font-size: 18px;">@(_editandoId.HasValue ? "Editar Unidade" : "Cadastrar Nova Unidade")</h2>
+    <PcModal IsOpen="_exibirFormUnidade"
+             Title="@(_editandoId.HasValue ? "Editar Unidade" : "Cadastrar Nova Unidade")"
+             Subtitle="Preencha os dados cadastrais e de contato da unidade"
+             MaxWidth="720px"
+             OnClose="() => _exibirFormUnidade = false">
+        <ChildContent>
             <div class="pc-form-grid">
                 <div class="pc-field">
                     <label class="pc-label">Nome da Unidade *</label>
@@ -69,12 +71,12 @@ else
                     <input class="pc-input" @bind="_email" />
                 </div>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 12px;">
-                <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarUnidadeAsync">Salvar Unidade</button>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirFormUnidade = false">Cancelar</button>
-            </div>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirFormUnidade = false">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarUnidadeAsync">Salvar Unidade</button>
+        </FooterContent>
+    </PcModal>
 
     <div class="pc-card">
         <div class="pc-table-wrap">
@@ -148,11 +150,12 @@ else
         </div>
     </div>
 
-    @if (_unidadeDesignacao is not null)
-    {
-        <div class="pc-card">
-            <h3 style="margin-top: 0;">Designar Admin ou Tesoureiro — @_unidadeDesignacao.Nome</h3>
-            <p class="pc-page-subtitle" style="margin-bottom: 12px;">Selecione o associado pelo nome e escolha o cargo administrativo desejado para esta unidade.</p>
+    <PcModal IsOpen="@(_unidadeDesignacao is not null)"
+             Title="@($"Designar Admin ou Tesoureiro — {_unidadeDesignacao?.Nome}")"
+             Subtitle="Selecione o associado pelo nome e escolha o cargo administrativo desejado para esta unidade."
+             MaxWidth="640px"
+             OnClose="() => _unidadeDesignacao = null">
+        <ChildContent>
             <div class="pc-form-grid">
                 <div class="pc-field">
                     <label class="pc-label">Associado / Usuário *</label>
@@ -175,12 +178,12 @@ else
                     </select>
                 </div>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 12px;">
-                <button type="button" class="pc-btn pc-btn-primary" @onclick="ConfirmarDesignacaoAsync">Confirmar Designação</button>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _unidadeDesignacao = null">Fechar</button>
-            </div>
-        </div>
-    }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _unidadeDesignacao = null">Fechar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="ConfirmarDesignacaoAsync">Confirmar Designação</button>
+        </FooterContent>
+    </PcModal>
 }
 
 @code {
