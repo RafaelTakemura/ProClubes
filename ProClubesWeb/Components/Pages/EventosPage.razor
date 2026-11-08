@@ -22,10 +22,12 @@
     <div class="pc-alert pc-alert-danger">@_erro</div>
 }
 
-@if (_exibirForm)
-{
-    <div class="pc-card">
-        <h3 style="margin-top: 0;">Cadastrar Evento</h3>
+<PcModal IsOpen="_exibirForm"
+         Title="Cadastrar Evento"
+         Subtitle="Eventos públicos ou exclusivos para associados e dependentes"
+         MaxWidth="720px"
+         OnClose="() => _exibirForm = false">
+    <ChildContent>
         <div class="pc-form-grid">
             <div class="pc-field"><label class="pc-label">Nome do Evento *</label><input class="pc-input" @bind="_nome" /></div>
             <div class="pc-field"><label class="pc-label">Unidade Organizadora ID *</label><input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidadeOrgId" /></div>
@@ -40,12 +42,12 @@
             <div class="pc-field"><label class="pc-label">Limite Informativo de Participantes</label><input type="number" class="pc-input" @bind="_limiteInformativo" /></div>
             <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descricao" /></div>
         </div>
-        <div style="display: flex; gap: 10px; margin-top: 12px;">
-            <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarEventoAsync">Salvar Evento</button>
-            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirForm = false">Cancelar</button>
-        </div>
-    </div>
-}
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirForm = false">Cancelar</button>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarEventoAsync">Salvar Evento</button>
+    </FooterContent>
+</PcModal>
 
 <div class="pc-card">
     <div class="pc-table-wrap">
@@ -98,12 +100,13 @@
     </div>
 </div>
 
-@if (_eventoSelecionado is not null)
-{
-    <div class="pc-card">
-        <h3 style="margin-top: 0;">Pagamentos Manuais de Taxa — @_eventoSelecionado.Nome</h3>
-        <p class="pc-page-subtitle">Lançamento financeiro avulso de participação (não representa inscrição nem reserva vaga).</p>
-        <div class="pc-form-grid" style="margin-top: 12px;">
+<PcModal IsOpen="@(_eventoSelecionado is not null)"
+         Title="@($"Pagamentos Manuais de Taxa — {_eventoSelecionado?.Nome}")"
+         Subtitle="Lançamento financeiro avulso de participação (não representa inscrição nem reserva vaga)."
+         MaxWidth="780px"
+         OnClose="() => _eventoSelecionado = null">
+    <ChildContent>
+        <div class="pc-form-grid">
             <div class="pc-field"><label class="pc-label">Nome do Pagador (Visitante ou Associado) *</label><input class="pc-input" @bind="_nomePagador" /></div>
             <div class="pc-field"><label class="pc-label">Valor Pago (R$) *</label><input type="number" step="0.01" class="pc-input" @bind="_valorPagoEvento" /></div>
             <div class="pc-field">
@@ -116,9 +119,8 @@
                 </select>
             </div>
         </div>
-        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+        <div style="margin-bottom: 16px;">
             <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="RegistrarTaxaEventoAsync">Registrar Recebimento</button>
-            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _eventoSelecionado = null">Fechar</button>
         </div>
 
         <table class="pc-table">
@@ -132,6 +134,10 @@
                 </tr>
             </thead>
             <tbody>
+                @if (_pagamentosEvento.Count == 0)
+                {
+                    <tr><td colspan="5">Nenhum pagamento de taxa registrado para este evento.</td></tr>
+                }
                 @foreach (var p in _pagamentosEvento)
                 {
                     <tr>
@@ -144,8 +150,11 @@
                 }
             </tbody>
         </table>
-    </div>
-}
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _eventoSelecionado = null">Fechar</button>
+    </FooterContent>
+</PcModal>
 
 @code {
     private IReadOnlyList<EventoDto> _eventos = Array.Empty<EventoDto>();

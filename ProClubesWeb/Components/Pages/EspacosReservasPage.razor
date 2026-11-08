@@ -22,10 +22,12 @@
     <div class="pc-alert pc-alert-danger">@_erro</div>
 }
 
-@if (_exibirNovoEspaco)
-{
-    <div class="pc-card">
-        <h3 style="margin-top: 0;">Cadastrar Espaço Físico</h3>
+<PcModal IsOpen="_exibirNovoEspaco"
+         Title="Cadastrar Espaço Físico"
+         Subtitle="Defina as regras de funcionamento, duração máxima e antecedência para reservas"
+         MaxWidth="680px"
+         OnClose="() => _exibirNovoEspaco = false">
+    <ChildContent>
         <div class="pc-form-grid">
             <div class="pc-field"><label class="pc-label">UnidadeId *</label><input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidIdEspaco" /></div>
             <div class="pc-field"><label class="pc-label">Nome do Espaço *</label><input class="pc-input" @bind="_nomeEspaco" /></div>
@@ -33,12 +35,12 @@
             <div class="pc-field"><label class="pc-label">Duração Máxima (minutos)</label><input type="number" class="pc-input" @bind="_duracaoMaxMin" /></div>
             <div class="pc-field"><label class="pc-label">Antecedência Máxima (dias)</label><input type="number" class="pc-input" @bind="_antecedenciaMaxDias" /></div>
         </div>
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarEspacoAsync">Salvar Espaço</button>
-            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovoEspaco = false">Cancelar</button>
-        </div>
-    </div>
-}
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirNovoEspaco = false">Cancelar</button>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarEspacoAsync">Salvar Espaço</button>
+    </FooterContent>
+</PcModal>
 
 <div class="pc-card">
     <h3 style="margin-top: 0; font-size: 18px;">Espaços da Unidade</h3>
@@ -73,16 +75,18 @@
     </div>
 </div>
 
-@if (_espacoAgenda is not null)
-{
-    <div class="pc-card">
-        <h3 style="margin-top: 0;">Agenda de Ocupações — @_espacoAgenda.Nome</h3>
-        <div class="pc-form-grid" style="margin-bottom: 14px;">
-            <div class="pc-field"><label class="pc-label">Descrição de Bloqueio de Manutenção</label><input class="pc-input" @bind="_descManutencao" placeholder="Ex.: Pintura e limpeza" /></div>
-        </div>
-        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
-            <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="CriarBloqueioManutencaoAsync">Registrar Manutenção (Amanhã 14h–16h)</button>
-            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _espacoAgenda = null">Fechar Agenda</button>
+<PcModal IsOpen="@(_espacoAgenda is not null)"
+         Title="@($"Agenda de Ocupações — {_espacoAgenda?.Nome}")"
+         Subtitle="@($"Unidade: {_espacoAgenda?.UnidadeNome} | Funcionamento: {_espacoAgenda?.HoraAbertura:HH\\:mm} às {_espacoAgenda?.HoraFechamento:HH\\:mm}")"
+         MaxWidth="780px"
+         OnClose="() => _espacoAgenda = null">
+    <ChildContent>
+        <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
+            <div class="pc-field" style="flex: 1; margin-bottom: 0;">
+                <label class="pc-label">Descrição de Bloqueio de Manutenção</label>
+                <input class="pc-input" @bind="_descManutencao" placeholder="Ex.: Pintura e limpeza" />
+            </div>
+            <button type="button" class="pc-btn pc-btn-secondary" @onclick="CriarBloqueioManutencaoAsync">Registrar Manutenção (Amanhã 14h–16h)</button>
         </div>
 
         <table class="pc-table">
@@ -113,8 +117,11 @@
                 }
             </tbody>
         </table>
-    </div>
-}
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _espacoAgenda = null">Fechar Agenda</button>
+    </FooterContent>
+</PcModal>
 
 <div class="pc-card">
     <h3 style="margin-top: 0; font-size: 18px;">Reservas de Associados</h3>
@@ -152,10 +159,7 @@
                         <td>
                             @if (r.Status == StatusReserva.Confirmada)
                             {
-                                <div style="display: flex; gap: 6px;">
-                                    <input class="pc-input" style="min-height: 32px; padding: 4px 8px;" placeholder="Justificativa do cancelamento..." @bind="_justificativaCancelamento" />
-                                    <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => CancelarReservaAdminAsync(r.Id)">Cancelar</button>
-                                </div>
+                                <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AbrirModalCancelarReserva(r)">Cancelar</button>
                             }
                         </td>
                     </tr>
@@ -165,10 +169,28 @@
     </div>
 </div>
 
+<PcModal IsOpen="@(_reservaParaCancelar is not null)"
+         Title="@($"Cancelar Reserva #{_reservaParaCancelar?.Id}")"
+         Subtitle="@($"{_reservaParaCancelar?.EspacoNome} — Associado: {_reservaParaCancelar?.AssociadoNome} ({_reservaParaCancelar?.Inicio:dd/MM/yyyy HH\\:mm})")"
+         MaxWidth="540px"
+         OnClose="() => _reservaParaCancelar = null">
+    <ChildContent>
+        <div class="pc-field">
+            <label class="pc-label">Justificativa do Cancelamento Administrativo (obrigatória) *</label>
+            <textarea class="pc-textarea" rows="3" placeholder="Informe o motivo do cancelamento (será enviado como notificação interna ao associado)..." @bind="_justificativaCancelamento"></textarea>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _reservaParaCancelar = null">Voltar</button>
+        <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarCancelamentoReservaAdminAsync">Confirmar Cancelamento</button>
+    </FooterContent>
+</PcModal>
+
 @code {
     private IReadOnlyList<EspacoDto> _espacos = Array.Empty<EspacoDto>();
     private IReadOnlyList<ReservaEspacoDto> _reservas = Array.Empty<ReservaEspacoDto>();
     private EspacoDto? _espacoAgenda;
+    private ReservaEspacoDto? _reservaParaCancelar;
     private IReadOnlyList<OcupacaoEspacoDto> _ocupacoes = Array.Empty<OcupacaoEspacoDto>();
 
     private bool _exibirNovoEspaco;
@@ -244,15 +266,24 @@
         await VerAgendaAsync(_espacoAgenda);
     }
 
-    private async Task CancelarReservaAdminAsync(int reservaId)
+    private void AbrirModalCancelarReserva(ReservaEspacoDto r)
     {
+        _reservaParaCancelar = r;
+        _justificativaCancelamento = string.Empty;
+    }
+
+    private async Task ConfirmarCancelamentoReservaAdminAsync()
+    {
+        if (_reservaParaCancelar is null) return;
         _erro = _mensagem = null;
+        var reservaId = _reservaParaCancelar.Id;
         var (_, err) = await Api.PostAsync<ReservaEspacoDto>(
             $"api/v1/reservas/{reservaId}/cancelamento",
             new CancelarReservaRequest(_justificativaCancelamento));
         if (err is not null) { _erro = err; return; }
-        _mensagem = $"Reserva #{reservaId} cancelada e notificação interna enviada ao associado.";
+        _reservaParaCancelar = null;
         _justificativaCancelamento = string.Empty;
+        _mensagem = $"Reserva #{reservaId} cancelada e notificação interna enviada ao associado.";
         await CarregarAsync();
     }
 
