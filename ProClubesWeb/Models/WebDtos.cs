@@ -256,7 +256,8 @@ public record CriarAssociadoAdminRequest(
     int UnidadeId,
     string CodigoCategoria,
     string SenhaInicial,
-    IReadOnlyList<int>? InteressesIds = null);
+    IReadOnlyList<int>? InteressesIds = null,
+    RoleAdministrativa RoleInicial = RoleAdministrativa.Nenhuma);
 
 public record AlterarCategoriaAssociadoRequest(string NovoCodigoCategoria, string? Motivo = null);
 public record TransferirAssociadoUnidadeRequest(int UnidadeDestinoId);

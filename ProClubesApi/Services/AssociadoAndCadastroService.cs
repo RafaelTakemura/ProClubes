@@ -567,6 +567,14 @@ public class AssociadoAndCadastroService
     {
         _currentUser.EnsureAdminOrSuperAdminForUnit(user, req.UnidadeId);
 
+        if (req.RoleInicial != RoleAdministrativa.Nenhuma)
+        {
+            _currentUser.EnsureSuperAdmin(user);
+
+            if (req.RoleInicial == RoleAdministrativa.SuperAdmin)
+                throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Role SuperAdmin não pode ser atribuída a um associado de unidade.");
+        }
+
         var cpf = CpfHelper.Normalize(req.Cpf);
         if (!CpfHelper.IsValidFormat(cpf))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.CpfInvalido, "CPF inválido.");
@@ -576,6 +584,16 @@ public class AssociadoAndCadastroService
 
         var unidade = await _db.Unidades.FirstOrDefaultAsync(u => u.Id == req.UnidadeId && u.Ativa, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Unidade não encontrada.");
+
+        if (req.RoleInicial == RoleAdministrativa.Admin)
+        {
+            var adminExistente = await _db.Usuarios
+                .FirstOrDefaultAsync(u => u.UnidadeAdministrativaId == unidade.Id
+                                          && u.RoleAdministrativa == RoleAdministrativa.Admin
+                                          && u.EstadoConta == EstadoConta.Ativa, ct);
+            if (adminExistente is not null)
+                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.UnidadeJaPossuiAdminAtivo, "Esta unidade já possui um Admin ativo. Remova ou substitua o titular antes de designar outro.");
+        }
 
         var codCat = req.CodigoCategoria.Trim().ToUpperInvariant();
         var categoria = await _db.CategoriasAssociado.FirstOrDefaultAsync(c => c.Codigo == codCat && c.Ativa, ct)
@@ -611,7 +629,9 @@ public class AssociadoAndCadastroService
         {
             PessoaId = pessoa.Id,
             SenhaHash = PasswordHasherHelper.HashPassword(string.IsNullOrWhiteSpace(req.SenhaInicial) ? "ProClubes@123" : req.SenhaInicial),
-            RoleAdministrativa = RoleAdministrativa.Nenhuma,
+            RoleAdministrativa = req.RoleInicial,
+            UnidadeAdministrativaId = req.RoleInicial != RoleAdministrativa.Nenhuma ? unidade.Id : null,
+            AdminAtivoUnidadeId = req.RoleInicial == RoleAdministrativa.Admin ? unidade.Id : null,
             EstadoConta = EstadoConta.Ativa,
             VersaoSeguranca = 1,
             CriadoEmUtc = nowUtc
@@ -630,7 +650,8 @@ public class AssociadoAndCadastroService
         _db.Associados.Add(associado);
         await _db.SaveChangesAsync(ct);
 
-        _auditoria.Registrar(user.UsuarioId, unidade.Id, "CRIAR_ASSOCIADO", nameof(Associado), associado.Id, $"Associado #{associado.Id} cadastrado na categoria {categoria.Codigo}.");
+        var sufixoRole = req.RoleInicial != RoleAdministrativa.Nenhuma ? $" e designado como {req.RoleInicial}" : "";
+        _auditoria.Registrar(user.UsuarioId, unidade.Id, "CRIAR_ASSOCIADO", nameof(Associado), associado.Id, $"Associado #{associado.Id} cadastrado na categoria {categoria.Codigo}{sufixoRole}.");
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 

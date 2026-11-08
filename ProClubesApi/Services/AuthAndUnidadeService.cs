@@ -454,6 +454,7 @@ public class UnidadeService
                 {
                     adminAtual.RoleAdministrativa = RoleAdministrativa.Nenhuma;
                     adminAtual.UnidadeAdministrativaId = null;
+                    adminAtual.AdminAtivoUnidadeId = null;
                     adminAtual.VersaoSeguranca++;
                     _auditoria.Registrar(user.UsuarioId, unidadeId, "REMOVER_ADMIN_UNIDADE", nameof(Usuario), adminAtual.Id, $"Admin removido da unidade {unidade.Sigla}.");
                     await _db.SaveChangesAsync(ct);
@@ -477,6 +478,7 @@ public class UnidadeService
         {
             alvo.RoleAdministrativa = RoleAdministrativa.Nenhuma;
             alvo.UnidadeAdministrativaId = null;
+            alvo.AdminAtivoUnidadeId = null;
             alvo.VersaoSeguranca++;
             _auditoria.Registrar(user.UsuarioId, unidadeId, "REVOGAR_ROLE_UNIDADE", nameof(Usuario), alvo.Id, $"Role administrativa removida na unidade {unidade.Sigla}.");
         }
@@ -493,6 +495,7 @@ public class UnidadeService
 
             alvo.RoleAdministrativa = RoleAdministrativa.Admin;
             alvo.UnidadeAdministrativaId = unidadeId;
+            alvo.AdminAtivoUnidadeId = unidadeId;
             alvo.EstadoConta = EstadoConta.Ativa;
             alvo.VersaoSeguranca++;
             _auditoria.Registrar(user.UsuarioId, unidadeId, "DESIGNAR_ADMIN_UNIDADE", nameof(Usuario), alvo.Id, $"Designado Admin para a unidade {unidade.Sigla}.");
@@ -501,6 +504,7 @@ public class UnidadeService
         {
             alvo.RoleAdministrativa = RoleAdministrativa.Tesoureiro;
             alvo.UnidadeAdministrativaId = unidadeId;
+            alvo.AdminAtivoUnidadeId = null;
             alvo.EstadoConta = EstadoConta.Ativa;
             alvo.VersaoSeguranca++;
             _auditoria.Registrar(user.UsuarioId, unidadeId, "DESIGNAR_TESOUREIRO_UNIDADE", nameof(Usuario), alvo.Id, $"Designado Tesoureiro para a unidade {unidade.Sigla}.");
