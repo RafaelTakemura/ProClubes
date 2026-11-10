@@ -16,7 +16,7 @@ else
             <h1 class="pc-page-title">Associados e Dependentes</h1>
             <p class="pc-page-subtitle">Gestão de vínculos associativos, categorias, dependentes e transferências entre unidades</p>
         </div>
-        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovoAssociado = !_exibirNovoAssociado">+ Cadastrar Associado</button>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="AbrirModalNovoAssociado">+ Cadastrar Associado</button>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -34,14 +34,36 @@ else
              MaxWidth="780px"
              OnClose="() => _exibirNovoAssociado = false">
         <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_erroModalNovo))
+            {
+                <div class="pc-alert pc-alert-danger">@_erroModalNovo</div>
+            }
             <div class="pc-form-grid">
                 <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_nome" /></div>
                 <div class="pc-field"><label class="pc-label">CPF (11 dígitos) *</label><input class="pc-input" maxlength="14" @bind="_cpf" /></div>
-                <div class="pc-field"><label class="pc-label">Sexo *</label><input class="pc-input" @bind="_sexo" /></div>
-                <div class="pc-field"><label class="pc-label">Estado Civil *</label><input class="pc-input" @bind="_estadoCivil" /></div>
+                <div class="pc-field">
+                    <label class="pc-label">Sexo *</label>
+                    <select class="pc-select" @bind="_sexo">
+                        <option value="">-- Selecione --</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Estado Civil *</label>
+                    <select class="pc-select" @bind="_estadoCivil">
+                        <option value="">-- Selecione --</option>
+                        <option value="Solteiro(a)">Solteiro(a)</option>
+                        <option value="Casado(a)">Casado(a)</option>
+                        <option value="Divorciado(a)">Divorciado(a)</option>
+                        <option value="Viúvo(a)">Viúvo(a)</option>
+                        <option value="União Estável">União Estável</option>
+                    </select>
+                </div>
                 <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_nascimento" /></div>
-                <div class="pc-field"><label class="pc-label">Telefone *</label><input class="pc-input" @bind="_fone" /></div>
-                <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_email" /></div>
+                <div class="pc-field"><label class="pc-label">Telefone *</label><input class="pc-input" maxlength="15" @bind="_fone" /></div>
+                <div class="pc-field"><label class="pc-label">E-mail *</label><input type="email" class="pc-input" @bind="_email" /></div>
                 <div class="pc-field">
                     <label class="pc-label">Unidade *</label>
                     <select class="pc-select" @bind="_unidadeIdNovo">
@@ -283,18 +305,19 @@ else
     private string? _mensagem;
 
     private bool _exibirNovoAssociado;
+    private string? _erroModalNovo;
     private string _nome = string.Empty;
     private string _cpf = string.Empty;
-    private string _sexo = "Masculino";
-    private string _estadoCivil = "Solteiro(a)";
-    private DateOnly _nascimento = new(1990, 5, 10);
-    private string _fone = "(45) 99999-1111";
+    private string _sexo = string.Empty;
+    private string _estadoCivil = string.Empty;
+    private DateOnly? _nascimento;
+    private string _fone = string.Empty;
     private string _email = string.Empty;
-    private string _cidade = "Foz do Iguaçu";
+    private string _cidade = string.Empty;
     private int _unidadeIdNovo = 1;
     private string _categoriaNovo = "ASSOCIADO";
     private RoleAdministrativa _roleInicialNovo = RoleAdministrativa.Nenhuma;
-    private string _senhaNovo = "ProClubes@123";
+    private string _senhaNovo = string.Empty;
 
     private string _novaCategoriaSel = "ASSOCIADO";
     private RoleAdministrativa _novaRoleSel = RoleAdministrativa.Nenhuma;
@@ -360,23 +383,101 @@ else
             _unidadeDestinoTransf = outraUnidade.Id;
     }
 
+    private void AbrirModalNovoAssociado()
+    {
+        _erroModalNovo = null;
+        _nome = string.Empty;
+        _cpf = string.Empty;
+        _sexo = string.Empty;
+        _estadoCivil = string.Empty;
+        _nascimento = null;
+        _fone = string.Empty;
+        _email = string.Empty;
+        _cidade = string.Empty;
+        _senhaNovo = string.Empty;
+        _categoriaNovo = "ASSOCIADO";
+        _roleInicialNovo = RoleAdministrativa.Nenhuma;
+        _unidadeIdNovo = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? (_unidades.FirstOrDefault()?.Id ?? 1);
+        _exibirNovoAssociado = true;
+    }
+
     private async Task CriarAssociadoAsync()
     {
-        _erro = _mensagem = null;
+        _erro = _mensagem = _erroModalNovo = null;
+
+        if (string.IsNullOrWhiteSpace(_nome)
+            || string.IsNullOrWhiteSpace(_cpf)
+            || string.IsNullOrWhiteSpace(_sexo)
+            || string.IsNullOrWhiteSpace(_estadoCivil)
+            || !_nascimento.HasValue
+            || string.IsNullOrWhiteSpace(_fone)
+            || string.IsNullOrWhiteSpace(_email)
+            || string.IsNullOrWhiteSpace(_cidade)
+            || string.IsNullOrWhiteSpace(_senhaNovo))
+        {
+            _erroModalNovo = "Preencha todos os campos obrigatórios (*) antes de salvar.";
+            return;
+        }
+
+        if (!ValidarSintaxeCpf(_cpf))
+        {
+            _erroModalNovo = "Sintaxe de CPF inválida. Informe 11 dígitos numéricos ou no formato 000.000.000-00.";
+            return;
+        }
+
+        if (!ValidarSintaxeTelefone(_fone))
+        {
+            _erroModalNovo = "Sintaxe de telefone inválida. Informe DDD + número (10 ou 11 dígitos, ex.: (45) 99999-1111 ou 45999991111).";
+            return;
+        }
+
+        if (!ValidarSintaxeEmail(_email))
+        {
+            _erroModalNovo = "Sintaxe de e-mail inválida. Informe um endereço no formato usuario@dominio.com.";
+            return;
+        }
+
         var roleInicial = Session.IsSuperAdmin ? _roleInicialNovo : RoleAdministrativa.Nenhuma;
         var req = new CriarAssociadoAdminRequest(
-            _nome, _cpf, _sexo, _estadoCivil, _nascimento,
+            _nome, _cpf, _sexo, _estadoCivil, _nascimento.Value,
             "Rua Principal", "Centro", "100", _cidade, "PR",
             _fone, _email, _unidadeIdNovo, _categoriaNovo, _senhaNovo,
             null, roleInicial);
 
         var (criado, err) = await Api.PostAsync<AssociadoDto>("api/v1/admin/associados", req);
-        if (err is not null) { _erro = err; return; }
+        if (err is not null) { _erroModalNovo = err; return; }
         var sufixoCargo = roleInicial != RoleAdministrativa.Nenhuma ? $" com cargo de {ObterRotuloRole(roleInicial)}" : "";
         _mensagem = $"Associado {criado?.NomeCompleto} cadastrado com sucesso{sufixoCargo}.";
         _exibirNovoAssociado = false;
         _roleInicialNovo = RoleAdministrativa.Nenhuma;
         await CarregarAsync();
+    }
+
+    private static bool ValidarSintaxeCpf(string? cpf)
+    {
+        if (string.IsNullOrWhiteSpace(cpf)) return false;
+        var s = cpf.Trim();
+        var formatoAceito = System.Text.RegularExpressions.Regex.IsMatch(s, @"^(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$");
+        if (!formatoAceito) return false;
+        var digitos = new string(s.Where(char.IsDigit).ToArray());
+        return digitos.Length == 11 && digitos.Distinct().Count() > 1;
+    }
+
+    private static bool ValidarSintaxeTelefone(string? fone)
+    {
+        if (string.IsNullOrWhiteSpace(fone)) return false;
+        var s = fone.Trim();
+        var formatoAceito = System.Text.RegularExpressions.Regex.IsMatch(s, @"^(\(\d{2}\)\s?\d{4,5}-?\d{4}|\d{2}\s?\d{4,5}-?\d{4}|\d{10,11})$");
+        if (!formatoAceito) return false;
+        var digitos = new string(s.Where(char.IsDigit).ToArray());
+        return digitos.Length is 10 or 11;
+    }
+
+    private static bool ValidarSintaxeEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        var s = email.Trim();
+        return System.Text.RegularExpressions.Regex.IsMatch(s, @"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$");
     }
 
     private async Task AlterarRoleAdministrativaAsync()
