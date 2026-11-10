@@ -122,60 +122,84 @@
 
 <div class="pc-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-        <h3 style="margin: 0; font-size: 18px;">Mensalidades dos Associados</h3>
-        <div style="display: flex; gap: 10px;">
-            <select class="pc-select" @bind="_filtroSituacao" @bind:after="CarregarMensalidadesAsync">
-                <option value="">Todas as situações</option>
-                <option value="ABERTA">Em aberto</option>
-                <option value="VENCIDA">Vencidas (Em atraso)</option>
-                <option value="PAGA">Pagas</option>
+        <div>
+            <h3 style="margin: 0; font-size: 18px;">Mensalidades dos Associados</h3>
+            <p class="pc-page-subtitle">Clique em um associado para consultar o histórico de competências e registrar quitações</p>
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input class="pc-input" style="min-width: 240px;"
+                   placeholder="Buscar por nome ou CPF..."
+                   @bind="_buscaAssociado"
+                   @bind:event="oninput" />
+            <select class="pc-select" @bind="_filtroCategoria">
+                <option value="">Todas as categorias</option>
+                <option value="Sócio Associado">Sócio Associado</option>
+                <option value="Sócio Convidado">Sócio Convidado</option>
+                <option value="Sócio Fundador">Sócio Fundador</option>
             </select>
+            <select class="pc-select" @bind="_filtroSituacao">
+                <option value="">Todas as situações</option>
+                <option value="VENCIDA">Com mensalidade vencida (Em atraso)</option>
+                <option value="ABERTA">Com mensalidade em aberto</option>
+                <option value="PAGA">Em dia (Somente pagas)</option>
+            </select>
+            @if (!string.IsNullOrWhiteSpace(_buscaAssociado) || !string.IsNullOrWhiteSpace(_filtroCategoria) || !string.IsNullOrWhiteSpace(_filtroSituacao))
+            {
+                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="LimparFiltros">Limpar Filtros</button>
+            }
         </div>
     </div>
+
+    @{
+        var associadosFiltrados = ObterAssociadosFiltrados();
+    }
 
     <div class="pc-table-wrap">
         <table class="pc-table">
             <thead>
                 <tr>
-                    <th>Competência</th>
                     <th>Associado</th>
-                    <th>Unidade Emissora / Categoria</th>
-                    <th>Vencimento</th>
-                    <th>Valor Principal</th>
-                    <th>Multa + Juros</th>
-                    <th>Total Atualizado</th>
-                    <th>Status</th>
-                    <th>Ação Manual</th>
+                    <th>Unidade / Categoria</th>
+                    <th>Resumo de Mensalidades</th>
+                    <th>Total Pendente Atualizado</th>
+                    <th>Situação Financeira</th>
+                    <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
-                @if (_mensalidades.Count == 0)
+                @if (associadosFiltrados.Count == 0)
                 {
-                    <tr><td colspan="9">Nenhuma mensalidade encontrada para os filtros selecionados.</td></tr>
+                    <tr><td colspan="6">Nenhum associado encontrado para os filtros selecionados.</td></tr>
                 }
-                @foreach (var m in _mensalidades)
+                @foreach (var assoc in associadosFiltrados)
                 {
-                    <tr>
-                        <td><strong>@m.Competencia.ToString("MM/yyyy")</strong></td>
-                        <td>@m.AssociadoNome<br /><small>@m.CpfMascarado</small></td>
-                        <td>@m.UnidadeEmissoraNome<br /><small>@m.CategoriaNaEmissaoNome</small></td>
-                        <td>@m.DataVencimento.ToString("dd/MM/yyyy")</td>
-                        <td>R$ @m.ValorPrincipal.ToString("N2")</td>
-                        <td>R$ @((m.ValorMultaCalculado + m.ValorJurosCalculado).ToString("N2")) @(m.DiasAtraso > 0 ? $"({m.DiasAtraso}d)" : "")</td>
-                        <td><strong>R$ @m.ValorTotalAtualizado.ToString("N2")</strong></td>
+                    <tr style="cursor: pointer;" @onclick="() => AbrirModalAssociado(assoc)">
                         <td>
-                            <PcStatusBadge Text="@m.SituacaoExibicao"
-                                           Variant="@(m.SituacaoExibicao == "Paga" ? "paga" : (m.SituacaoExibicao == "Vencida" ? "vencida" : "info"))" />
-                            @if (m.Pagamento is not null)
-                            {
-                                <div><small>@m.Pagamento.FormaPagamento em @m.Pagamento.DataPagamento.ToString("dd/MM/yyyy")</small></div>
-                            }
+                            <strong>@assoc.AssociadoNome</strong> <small style="color: var(--pc-text-secondary);">(#@assoc.AssociadoId)</small><br />
+                            <small>@assoc.CpfMascarado</small>
                         </td>
                         <td>
-                            @if (m.Status == StatusMensalidade.Aberta)
-                            {
-                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirModalQuitacao(m)">Quitar Integral</button>
-                            }
+                            @assoc.UnidadeNome<br />
+                            <small style="color: var(--pc-text-secondary);">@assoc.CategoriaNome</small>
+                        </td>
+                        <td>
+                            <span style="font-size: 13px;">
+                                <strong>@assoc.Mensalidades.Count</strong> total —
+                                <span style="color: var(--pc-success);">@assoc.QtdPagas paga(s)</span> •
+                                <span style="color: var(--pc-accent);">@assoc.QtdEmAberto em aberto</span> •
+                                <span style="color: var(--pc-danger);">@assoc.QtdVencidas vencida(s)</span>
+                            </span>
+                        </td>
+                        <td>
+                            <strong>R$ @assoc.TotalPendenteAtualizado.ToString("N2")</strong>
+                        </td>
+                        <td>
+                            <PcStatusBadge Text="@assoc.SituacaoGeral" Variant="@assoc.VarianteBadge" />
+                        </td>
+                        <td @onclick:stopPropagation="true">
+                            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirModalAssociado(assoc)">
+                                Ver Mensalidades (@assoc.Mensalidades.Count)
+                            </button>
                         </td>
                     </tr>
                 }
@@ -183,6 +207,77 @@
         </table>
     </div>
 </div>
+
+<PcModal IsOpen="@(_associadoSelecionado is not null)"
+         Title="@($"Mensalidades — {_associadoSelecionado?.AssociadoNome}")"
+         Subtitle="@($"CPF: {_associadoSelecionado?.CpfMascarado} | Unidade: {_associadoSelecionado?.UnidadeNome} | Categoria: {_associadoSelecionado?.CategoriaNome}")"
+         MaxWidth="940px"
+         OnClose="() => _associadoSelecionado = null">
+    <ChildContent>
+        @if (_associadoSelecionado is not null)
+        {
+            <div style="display: flex; justify-content: space-between; align-items: center; background: var(--pc-bg); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <span style="color: var(--pc-text-secondary); font-size: 13px;">Resumo do Associado:</span>
+                    <strong style="margin-left: 6px;">@_associadoSelecionado.QtdPagas paga(s)</strong> •
+                    <strong>@_associadoSelecionado.QtdEmAberto em aberto</strong> •
+                    <strong>@_associadoSelecionado.QtdVencidas vencida(s)</strong>
+                </div>
+                <div>
+                    <span style="color: var(--pc-text-secondary); font-size: 13px;">Total Pendente Atualizado:</span>
+                    <strong style="margin-left: 6px; color: var(--pc-primary); font-size: 16px;">R$ @_associadoSelecionado.TotalPendenteAtualizado.ToString("N2")</strong>
+                </div>
+            </div>
+
+            <div class="pc-table-wrap">
+                <table class="pc-table">
+                    <thead>
+                        <tr>
+                            <th>Competência</th>
+                            <th>Unidade / Categoria</th>
+                            <th>Vencimento</th>
+                            <th>Valor Principal</th>
+                            <th>Multa + Juros</th>
+                            <th>Total Atualizado</th>
+                            <th>Status</th>
+                            <th>Ação Manual</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in _associadoSelecionado.Mensalidades)
+                        {
+                            <tr>
+                                <td><strong>@m.Competencia.ToString("MM/yyyy")</strong></td>
+                                <td>@m.UnidadeEmissoraNome<br /><small>@m.CategoriaNaEmissaoNome</small></td>
+                                <td>@m.DataVencimento.ToString("dd/MM/yyyy")</td>
+                                <td>R$ @m.ValorPrincipal.ToString("N2")</td>
+                                <td>R$ @((m.ValorMultaCalculado + m.ValorJurosCalculado).ToString("N2")) @(m.DiasAtraso > 0 ? $"({m.DiasAtraso}d)" : "")</td>
+                                <td><strong>R$ @m.ValorTotalAtualizado.ToString("N2")</strong></td>
+                                <td>
+                                    <PcStatusBadge Text="@m.SituacaoExibicao"
+                                                   Variant="@(m.SituacaoExibicao == "Paga" ? "paga" : (m.SituacaoExibicao == "Vencida" ? "vencida" : "warning"))" />
+                                    @if (m.Pagamento is not null)
+                                    {
+                                        <div><small>@m.Pagamento.FormaPagamento em @m.Pagamento.DataPagamento.ToString("dd/MM/yyyy")</small></div>
+                                    }
+                                </td>
+                                <td>
+                                    @if (m.Status == StatusMensalidade.Aberta)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirModalQuitacao(m)">Quitar Integral</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _associadoSelecionado = null">Fechar</button>
+    </FooterContent>
+</PcModal>
 
 <PcModal IsOpen="@(_mensalidadeParaQuitar is not null)"
          Title="@($"Quitar Mensalidade — Competência {_mensalidadeParaQuitar?.Competencia:MM/yyyy}")"
@@ -215,12 +310,30 @@
 </PcModal>
 
 @code {
+    private sealed record ResumoFinanceiroAssociado(
+        int AssociadoId,
+        string AssociadoNome,
+        string CpfMascarado,
+        string UnidadeNome,
+        string CategoriaNome,
+        int QtdPagas,
+        int QtdEmAberto,
+        int QtdVencidas,
+        decimal TotalPendenteAtualizado,
+        string SituacaoGeral,
+        string VarianteBadge,
+        IReadOnlyList<MensalidadeDto> Mensalidades);
+
     private ConfiguracaoFinanceiraDto? _config;
     private IReadOnlyList<ValorMensalidadeDto> _valores = Array.Empty<ValorMensalidadeDto>();
     private IReadOnlyList<MensalidadeDto> _mensalidades = Array.Empty<MensalidadeDto>();
+    private IReadOnlyList<ResumoFinanceiroAssociado> _resumosPorAssociado = Array.Empty<ResumoFinanceiroAssociado>();
+    private ResumoFinanceiroAssociado? _associadoSelecionado;
     private MensalidadeDto? _mensalidadeParaQuitar;
     private bool _exibirModalConfig;
     private bool _exibirModalNovoValor;
+    private string _buscaAssociado = string.Empty;
+    private string _filtroCategoria = string.Empty;
     private string _filtroSituacao = string.Empty;
     private FormaPagamento _formaPagamentoSelecionada = FormaPagamento.Pix;
 
@@ -275,13 +388,113 @@
 
     private async Task CarregarMensalidadesAsync()
     {
-        var q = new List<string> { "page=1", "pageSize=50" };
+        var q = new List<string> { "page=1", "pageSize=200" };
         if (Session.UnidadeContextoId.HasValue) q.Add($"unidadeId={Session.UnidadeContextoId.Value}");
-        if (!string.IsNullOrWhiteSpace(_filtroSituacao)) q.Add($"situacao={_filtroSituacao}");
 
         var (page, err) = await Api.GetAsync<PagedResponse<MensalidadeDto>>($"api/v1/admin/mensalidades?{string.Join("&", q)}");
-        if (page is not null) _mensalidades = page.Items;
+        if (page is not null)
+        {
+            _mensalidades = page.Items;
+            ConstruirResumosPorAssociado();
+            if (_associadoSelecionado is not null)
+            {
+                _associadoSelecionado = _resumosPorAssociado.FirstOrDefault(r => r.AssociadoId == _associadoSelecionado.AssociadoId);
+            }
+        }
         if (err is not null) _erro = err;
+    }
+
+    private void ConstruirResumosPorAssociado()
+    {
+        _resumosPorAssociado = _mensalidades
+            .GroupBy(m => m.AssociadoId)
+            .Select(g =>
+            {
+                var lista = g.OrderByDescending(m => m.Competencia).ToList();
+                var maisRecente = lista[0];
+                var qtdPagas = lista.Count(m => m.SituacaoExibicao == "Paga");
+                var qtdVencidas = lista.Count(m => m.SituacaoExibicao == "Vencida");
+                var qtdEmAberto = lista.Count(m => m.SituacaoExibicao != "Paga" && m.SituacaoExibicao != "Vencida");
+                var totalPendente = lista.Where(m => m.Status == StatusMensalidade.Aberta).Sum(m => m.ValorTotalAtualizado);
+
+                string situacaoGeral;
+                string variante;
+                if (qtdVencidas > 0)
+                {
+                    situacaoGeral = "Em atraso (Vencida)";
+                    variante = "vencida";
+                }
+                else if (qtdEmAberto > 0)
+                {
+                    situacaoGeral = "Em aberto";
+                    variante = "warning";
+                }
+                else
+                {
+                    situacaoGeral = "Em dia (Paga)";
+                    variante = "paga";
+                }
+
+                return new ResumoFinanceiroAssociado(
+                    AssociadoId: g.Key,
+                    AssociadoNome: maisRecente.AssociadoNome,
+                    CpfMascarado: maisRecente.CpfMascarado,
+                    UnidadeNome: maisRecente.UnidadeEmissoraNome,
+                    CategoriaNome: maisRecente.CategoriaNaEmissaoNome,
+                    QtdPagas: qtdPagas,
+                    QtdEmAberto: qtdEmAberto,
+                    QtdVencidas: qtdVencidas,
+                    TotalPendenteAtualizado: totalPendente,
+                    SituacaoGeral: situacaoGeral,
+                    VarianteBadge: variante,
+                    Mensalidades: lista);
+            })
+            .OrderBy(r => r.AssociadoNome)
+            .ToList();
+    }
+
+    private IReadOnlyList<ResumoFinanceiroAssociado> ObterAssociadosFiltrados()
+    {
+        IEnumerable<ResumoFinanceiroAssociado> query = _resumosPorAssociado;
+
+        if (!string.IsNullOrWhiteSpace(_buscaAssociado))
+        {
+            var termo = _buscaAssociado.Trim();
+            query = query.Where(a =>
+                a.AssociadoNome.Contains(termo, StringComparison.OrdinalIgnoreCase)
+                || a.CpfMascarado.Contains(termo, StringComparison.OrdinalIgnoreCase)
+                || a.AssociadoId.ToString() == termo);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filtroCategoria))
+        {
+            query = query.Where(a => string.Equals(a.CategoriaNome, _filtroCategoria, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filtroSituacao))
+        {
+            query = _filtroSituacao switch
+            {
+                "VENCIDA" => query.Where(a => a.QtdVencidas > 0),
+                "ABERTA" => query.Where(a => a.QtdEmAberto > 0),
+                "PAGA" => query.Where(a => a.QtdVencidas == 0 && a.QtdEmAberto == 0 && a.QtdPagas > 0),
+                _ => query
+            };
+        }
+
+        return query.ToList();
+    }
+
+    private void LimparFiltros()
+    {
+        _buscaAssociado = string.Empty;
+        _filtroCategoria = string.Empty;
+        _filtroSituacao = string.Empty;
+    }
+
+    private void AbrirModalAssociado(ResumoFinanceiroAssociado assoc)
+    {
+        _associadoSelecionado = assoc;
     }
 
     private async Task SalvarConfigGlobalAsync()
