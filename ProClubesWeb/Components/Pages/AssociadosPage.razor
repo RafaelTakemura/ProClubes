@@ -162,7 +162,8 @@ else
                             <td>@a.Dependentes.Count(d => d.Ativo)</td>
                             <td>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => SelecionarAssociado(a)">Gerenciar / Dependentes</button>
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirModalGerenciar(a)">Gerenciar</button>
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirModalDependentes(a)">Dependentes (@a.Dependentes.Count(d => d.Ativo))</button>
                                 </div>
                             </td>
                         </tr>
@@ -172,77 +173,169 @@ else
         </div>
     </div>
 
-    @if (_selecionado is not null)
+    @if (_associadoGerenciar is not null)
     {
         <PcModal IsOpen="true"
-                 Title="@($"Detalhes de {_selecionado.NomeCompleto} (#{_selecionado.Id})")"
-                 Subtitle="@($"Unidade: {_selecionado.UnidadeNome} | Categoria atual: {_selecionado.CategoriaNome} | Cargo: {ObterRotuloRole(_selecionado.RoleAdministrativa)}")"
+                 Title="@($"Gerenciar Associado — {_associadoGerenciar.NomeCompleto}")"
+                 Subtitle="@($"Unidade: {_associadoGerenciar.UnidadeNome} | Categoria atual: {_associadoGerenciar.CategoriaNome} | Cargo: {ObterRotuloRole(_associadoGerenciar.RoleAdministrativa)}")"
                  MaxWidth="880px"
-                 OnClose="() => _selecionado = null">
+                 OnClose="() => _associadoGerenciar = null">
             <ChildContent>
-                <div class="pc-form-grid">
-                    <div class="pc-field">
+                @if (!string.IsNullOrWhiteSpace(_erroModalGerenciar))
+                {
+                    <div class="pc-alert pc-alert-danger">@_erroModalGerenciar</div>
+                }
+
+                <h4 style="margin-top: 0; margin-bottom: 12px;">Informações Cadastrais e Associativas</h4>
+                <div style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                    <div class="pc-form-grid" style="gap: 12px;">
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Nome Completo</small>
+                            <strong>@_associadoGerenciar.NomeCompleto</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">CPF</small>
+                            <strong>@_associadoGerenciar.CpfMascarado</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Data de Nascimento</small>
+                            <strong>@_associadoGerenciar.DataNascimento.ToString("dd/MM/yyyy")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Sexo / Estado Civil</small>
+                            <strong>@_associadoGerenciar.Sexo — @_associadoGerenciar.EstadoCivil</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">E-mail</small>
+                            <strong>@_associadoGerenciar.Email</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Telefone</small>
+                            <strong>@_associadoGerenciar.Fone</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Cidade / UF</small>
+                            <strong>@_associadoGerenciar.Cidade / @_associadoGerenciar.UF</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Unidade Atual</small>
+                            <strong>@_associadoGerenciar.UnidadeNome</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Categoria Associativa</small>
+                            <PcStatusBadge Text="@($"{_associadoGerenciar.CategoriaNome} ({_associadoGerenciar.CategoriaCodigo})")"
+                                           Variant="@(_associadoGerenciar.CategoriaCodigo == "FUNDADOR" ? "fundador" : (_associadoGerenciar.CategoriaCodigo == "SIMPATIZANTE" ? "simpatizante" : "info"))" />
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Cargo Administrativo</small>
+                            <PcStatusBadge Text="@ObterRotuloRole(_associadoGerenciar.RoleAdministrativa)"
+                                           Variant="@ObterVarianteRole(_associadoGerenciar.RoleAdministrativa)" />
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Status do Vínculo</small>
+                            <PcStatusBadge Text="@_associadoGerenciar.Status.ToString()"
+                                           Variant="@(_associadoGerenciar.Status == StatusAssociado.Ativo ? "ativo" : "inativo")" />
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Data de Ingresso</small>
+                            <strong>@_associadoGerenciar.DataIngresso.ToString("dd/MM/yyyy")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Início de Cobrança</small>
+                            <strong>@(_associadoGerenciar.DataInicioCobranca?.ToString("dd/MM/yyyy (MM/yyyy)") ?? "Isento de mensalidade")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Dependentes</small>
+                            <strong>@_associadoGerenciar.Dependentes.Count(d => d.Ativo) ativo(s) de @_associadoGerenciar.Dependentes.Count total</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Interesses</small>
+                            <strong>@(_associadoGerenciar.Interesses.Count > 0 ? string.Join(", ", _associadoGerenciar.Interesses) : "Nenhum informado")</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 0; margin-bottom: 12px;">Ações de Gerenciamento</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
+                    <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
                         <label class="pc-label">Alterar Categoria (efeito na próxima competência)</label>
-                        <div style="display: flex; gap: 8px;">
-                            <select class="pc-select" @bind="_novaCategoriaSel">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select class="pc-select" style="flex: 1;" @bind="_novaCategoriaSel">
                                 <option value="ASSOCIADO">Sócio Associado</option>
                                 <option value="FUNDADOR">Sócio Fundador</option>
                                 <option value="CONVIDADO">Sócio Convidado</option>
                                 <option value="SIMPATIZANTE">Simpatizante</option>
                             </select>
-                            <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarCategoriaAsync">Aplicar</button>
+                            <button type="button" class="pc-btn pc-btn-primary" @onclick="AlterarCategoriaAsync">Aplicar</button>
                         </div>
                     </div>
 
-                    @if (Session.IsSuperAdmin && _selecionado.UsuarioId.HasValue)
+                    @if (Session.IsSuperAdmin && _associadoGerenciar.UsuarioId.HasValue)
                     {
-                        <div class="pc-field">
+                        <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
                             <label class="pc-label">Cargo Administrativo na Unidade (Exclusivo Super Admin)</label>
-                            <div style="display: flex; gap: 8px;">
-                                <select class="pc-select" @bind="_novaRoleSel">
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select class="pc-select" style="flex: 1;" @bind="_novaRoleSel">
                                     <option value="@RoleAdministrativa.Nenhuma">Sem cargo (Associado Comum)</option>
                                     <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
                                     <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
                                 </select>
-                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
+                                <button type="button" class="pc-btn pc-btn-primary" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
                             </div>
                         </div>
                     }
 
                     @if (Session.IsSuperAdmin)
                     {
-                        <div class="pc-field">
+                        <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
                             <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
-                            <div style="display: flex; gap: 8px;">
-                                <select class="pc-select" @bind="_unidadeDestinoTransf">
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select class="pc-select" style="flex: 1;" @bind="_unidadeDestinoTransf">
                                     @foreach (var u in _unidades)
                                     {
                                         <option value="@u.Id">@u.Nome (@u.Sigla)</option>
                                     }
                                 </select>
-                                <button type="button" class="pc-btn pc-btn-secondary pc-btn-sm" @onclick="TransferirUnidadeAsync">Transferir</button>
+                                <button type="button" class="pc-btn pc-btn-secondary" @onclick="TransferirUnidadeAsync">Transferir</button>
                             </div>
                         </div>
                     }
 
-                    <div class="pc-field">
+                    <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
                         <label class="pc-label">Situação do Vínculo</label>
                         <div>
-                            @if (_selecionado.Status == StatusAssociado.Ativo)
+                            @if (_associadoGerenciar.Status == StatusAssociado.Ativo)
                             {
-                                <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AlterarStatusAsync(false)">Desativar Associado</button>
+                                <button type="button" class="pc-btn pc-btn-danger" @onclick="() => AlterarStatusAsync(false)">Desativar Associado</button>
                             }
                             else
                             {
-                                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AlterarStatusAsync(true)">Reativar Associado</button>
+                                <button type="button" class="pc-btn pc-btn-primary" @onclick="() => AlterarStatusAsync(true)">Reativar Associado</button>
                             }
                         </div>
                     </div>
                 </div>
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _associadoGerenciar = null">Fechar</button>
+            </FooterContent>
+        </PcModal>
+    }
 
-                <hr style="border: 0; border-top: 1px solid var(--pc-border); margin: 20px 0;" />
-                <h4 style="margin-top: 0;">Dependentes Vinculados (Cônjuge ou Filho(a) até 21 anos, inclusive)</h4>
-                <table class="pc-table" style="margin-bottom: 16px;">
+    @if (_associadoDependentes is not null)
+    {
+        <PcModal IsOpen="true"
+                 Title="@($"Dependentes de {_associadoDependentes.NomeCompleto}")"
+                 Subtitle="Cônjuge ou Filho(a) até 21 anos, inclusive"
+                 MaxWidth="820px"
+                 OnClose="() => { _associadoDependentes = null; _exibirModalNovoDependente = false; }">
+            <ChildContent>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                    <h4 style="margin: 0;">Dependentes Vinculados</h4>
+                    <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AbrirModalNovoDependente">+ Cadastrar Dependente</button>
+                </div>
+
+                <table class="pc-table">
                     <thead>
                         <tr>
                             <th>Nome</th>
@@ -253,11 +346,11 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_selecionado.Dependentes.Count == 0)
+                        @if (_associadoDependentes.Dependentes.Count == 0)
                         {
                             <tr><td colspan="5">Nenhum dependente registrado.</td></tr>
                         }
-                        @foreach (var d in _selecionado.Dependentes)
+                        @foreach (var d in _associadoDependentes.Dependentes)
                         {
                             <tr>
                                 <td>@d.NomeCompleto</td>
@@ -269,12 +362,34 @@ else
                         }
                     </tbody>
                 </table>
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => { _associadoDependentes = null; _exibirModalNovoDependente = false; }">Fechar</button>
+            </FooterContent>
+        </PcModal>
 
-                <h5>Vincular Novo Dependente</h5>
+        <PcModal IsOpen="_exibirModalNovoDependente"
+                 Title="@($"Cadastrar Dependente — Titular: {_associadoDependentes.NomeCompleto}")"
+                 Subtitle="Informe os dados do cônjuge ou filho(a) até 21 anos"
+                 MaxWidth="680px"
+                 OnClose="() => _exibirModalNovoDependente = false">
+            <ChildContent>
+                @if (!string.IsNullOrWhiteSpace(_erroModalDependente))
+                {
+                    <div class="pc-alert pc-alert-danger">@_erroModalDependente</div>
+                }
                 <div class="pc-form-grid">
                     <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_depNome" /></div>
-                    <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" @bind="_depCpf" /></div>
-                    <div class="pc-field"><label class="pc-label">Sexo *</label><input class="pc-input" @bind="_depSexo" /></div>
+                    <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" maxlength="14" @bind="_depCpf" /></div>
+                    <div class="pc-field">
+                        <label class="pc-label">Sexo *</label>
+                        <select class="pc-select" @bind="_depSexo">
+                            <option value="">-- Selecione --</option>
+                            <option value="Masculino">Masculino</option>
+                            <option value="Feminino">Feminino</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
                     <div class="pc-field"><label class="pc-label">Data de Nascimento *</label><input type="date" class="pc-input" @bind="_depNascimento" /></div>
                     <div class="pc-field">
                         <label class="pc-label">Tipo de Vínculo *</label>
@@ -283,13 +398,13 @@ else
                             <option value="@TipoVinculoDependente.Filho">Filho(a) (até 21 anos)</option>
                         </select>
                     </div>
-                    <div class="pc-field"><label class="pc-label">E-mail *</label><input class="pc-input" @bind="_depEmail" /></div>
+                    <div class="pc-field"><label class="pc-label">E-mail *</label><input type="email" class="pc-input" @bind="_depEmail" /></div>
                     <div class="pc-field"><label class="pc-label">Senha (para login próprio opcional)</label><input type="password" class="pc-input" @bind="_depSenha" /></div>
                 </div>
             </ChildContent>
             <FooterContent>
-                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _selecionado = null">Fechar Painel</button>
-                <button type="button" class="pc-btn pc-btn-primary" @onclick="CadastrarDependenteAsync">Vincular Dependente</button>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalNovoDependente = false">Cancelar</button>
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="CadastrarDependenteAsync">Salvar Dependente</button>
             </FooterContent>
         </PcModal>
     }
@@ -298,7 +413,11 @@ else
 @code {
     private IReadOnlyList<AssociadoDto> _associados = Array.Empty<AssociadoDto>();
     private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
-    private AssociadoDto? _selecionado;
+    private AssociadoDto? _associadoGerenciar;
+    private AssociadoDto? _associadoDependentes;
+    private bool _exibirModalNovoDependente;
+    private string? _erroModalGerenciar;
+    private string? _erroModalDependente;
     private string _busca = string.Empty;
     private string _filtroCategoria = string.Empty;
     private string? _erro;
@@ -325,8 +444,8 @@ else
 
     private string _depNome = string.Empty;
     private string _depCpf = string.Empty;
-    private string _depSexo = "Feminino";
-    private DateOnly _depNascimento = new(2010, 6, 15);
+    private string _depSexo = string.Empty;
+    private DateOnly? _depNascimento;
     private TipoVinculoDependente _depVinculo = TipoVinculoDependente.Filho;
     private string _depEmail = string.Empty;
     private string _depSenha = string.Empty;
@@ -371,9 +490,11 @@ else
         _erro = err;
     }
 
-    private void SelecionarAssociado(AssociadoDto a)
+    private void AbrirModalGerenciar(AssociadoDto a)
     {
-        _selecionado = a;
+        _erroModalGerenciar = null;
+        _associadoDependentes = null;
+        _associadoGerenciar = a;
         _novaCategoriaSel = a.CategoriaCodigo;
         _novaRoleSel = a.RoleAdministrativa == RoleAdministrativa.SuperAdmin
             ? RoleAdministrativa.Nenhuma
@@ -381,6 +502,27 @@ else
         var outraUnidade = _unidades.FirstOrDefault(u => u.Id != a.UnidadeId);
         if (outraUnidade is not null)
             _unidadeDestinoTransf = outraUnidade.Id;
+    }
+
+    private void AbrirModalDependentes(AssociadoDto a)
+    {
+        _erroModalDependente = null;
+        _associadoGerenciar = null;
+        _exibirModalNovoDependente = false;
+        _associadoDependentes = a;
+    }
+
+    private void AbrirModalNovoDependente()
+    {
+        _erroModalDependente = null;
+        _depNome = string.Empty;
+        _depCpf = string.Empty;
+        _depSexo = string.Empty;
+        _depNascimento = null;
+        _depVinculo = TipoVinculoDependente.Filho;
+        _depEmail = string.Empty;
+        _depSenha = string.Empty;
+        _exibirModalNovoDependente = true;
     }
 
     private void AbrirModalNovoAssociado()
@@ -482,16 +624,16 @@ else
 
     private async Task AlterarRoleAdministrativaAsync()
     {
-        if (_selecionado is null || !_selecionado.UsuarioId.HasValue) return;
-        _erro = _mensagem = null;
+        if (_associadoGerenciar is null || !_associadoGerenciar.UsuarioId.HasValue) return;
+        _erro = _mensagem = _erroModalGerenciar = null;
         var (_, err) = await Api.PutAsync<UnidadeDto>(
-            $"api/v1/unidades/{_selecionado.UnidadeId}/administrador",
-            new DesignarRoleUnidadeRequest(_selecionado.UsuarioId.Value, _novaRoleSel));
-        if (err is not null) { _erro = err; return; }
+            $"api/v1/unidades/{_associadoGerenciar.UnidadeId}/administrador",
+            new DesignarRoleUnidadeRequest(_associadoGerenciar.UsuarioId.Value, _novaRoleSel));
+        if (err is not null) { _erroModalGerenciar = err; return; }
 
-        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_selecionado.Id}");
-        if (recarregado is not null) _selecionado = recarregado;
-        _mensagem = $"Cargo administrativo de {_selecionado.NomeCompleto} atualizado para {ObterRotuloRole(_novaRoleSel)}.";
+        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_associadoGerenciar.Id}");
+        if (recarregado is not null) _associadoGerenciar = recarregado;
+        _mensagem = $"Cargo administrativo de {_associadoGerenciar.NomeCompleto} atualizado para {ObterRotuloRole(_novaRoleSel)}.";
         await CarregarAsync();
     }
 
@@ -513,57 +655,85 @@ else
 
     private async Task AlterarCategoriaAsync()
     {
-        if (_selecionado is null) return;
-        _erro = _mensagem = null;
+        if (_associadoGerenciar is null) return;
+        _erro = _mensagem = _erroModalGerenciar = null;
         var (atualizado, err) = await Api.PutAsync<AssociadoDto>(
-            $"api/v1/admin/associados/{_selecionado.Id}/categoria",
+            $"api/v1/admin/associados/{_associadoGerenciar.Id}/categoria",
             new AlterarCategoriaAssociadoRequest(_novaCategoriaSel, "Alteração administrativa via ProClubesWeb"));
-        if (err is not null) { _erro = err; return; }
-        _selecionado = atualizado;
+        if (err is not null) { _erroModalGerenciar = err; return; }
+        _associadoGerenciar = atualizado;
         _mensagem = "Categoria associativa atualizada (efeito financeiro a partir da competência seguinte).";
         await CarregarAsync();
     }
 
     private async Task TransferirUnidadeAsync()
     {
-        if (_selecionado is null) return;
-        _erro = _mensagem = null;
-        var (transf, err) = await Api.PostAsync<object>(
-            $"api/v1/admin/associados/{_selecionado.Id}/transferencias",
+        if (_associadoGerenciar is null) return;
+        _erro = _mensagem = _erroModalGerenciar = null;
+        var (_, err) = await Api.PostAsync<object>(
+            $"api/v1/admin/associados/{_associadoGerenciar.Id}/transferencias",
             new TransferirAssociadoUnidadeRequest(_unidadeDestinoTransf));
-        if (err is not null) { _erro = err; return; }
+        if (err is not null) { _erroModalGerenciar = err; return; }
+        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_associadoGerenciar.Id}");
+        if (recarregado is not null) _associadoGerenciar = recarregado;
         _mensagem = "Associado transferido de unidade com preservação do histórico financeiro na unidade de origem.";
         await CarregarAsync();
     }
 
     private async Task AlterarStatusAsync(bool ativo)
     {
-        if (_selecionado is null) return;
-        _erro = _mensagem = null;
+        if (_associadoGerenciar is null) return;
+        _erro = _mensagem = _erroModalGerenciar = null;
         var (atualizado, err) = await Api.PatchAsync<AssociadoDto>(
-            $"api/v1/admin/associados/{_selecionado.Id}/status",
+            $"api/v1/admin/associados/{_associadoGerenciar.Id}/status",
             new AlterarStatusAssociadoRequest(ativo));
-        if (err is not null) { _erro = err; return; }
-        _selecionado = atualizado;
+        if (err is not null) { _erroModalGerenciar = err; return; }
+        _associadoGerenciar = atualizado;
         _mensagem = "Situação do associado atualizada.";
         await CarregarAsync();
     }
 
     private async Task CadastrarDependenteAsync()
     {
-        if (_selecionado is null) return;
-        _erro = _mensagem = null;
+        if (_associadoDependentes is null) return;
+        _erro = _mensagem = _erroModalDependente = null;
+
+        if (string.IsNullOrWhiteSpace(_depNome)
+            || string.IsNullOrWhiteSpace(_depCpf)
+            || string.IsNullOrWhiteSpace(_depSexo)
+            || !_depNascimento.HasValue
+            || string.IsNullOrWhiteSpace(_depEmail))
+        {
+            _erroModalDependente = "Preencha todos os campos obrigatórios (*) do dependente.";
+            return;
+        }
+
+        if (!ValidarSintaxeCpf(_depCpf))
+        {
+            _erroModalDependente = "Sintaxe de CPF inválida. Informe 11 dígitos numéricos ou no formato 000.000.000-00.";
+            return;
+        }
+
+        if (!ValidarSintaxeEmail(_depEmail))
+        {
+            _erroModalDependente = "Sintaxe de e-mail inválida. Informe um endereço no formato usuario@dominio.com.";
+            return;
+        }
+
         var req = new CadastrarDependenteRequest(
-            _depNome, _depCpf, _depSexo, "Solteiro(a)", _depNascimento,
-            "Mesmo endereço do titular", "Centro", "100", _selecionado.Cidade, _selecionado.UF,
-            _selecionado.Fone, _depEmail, _depVinculo,
+            _depNome, _depCpf, _depSexo, "Solteiro(a)", _depNascimento.Value,
+            "Mesmo endereço do titular", "Centro", "100", _associadoDependentes.Cidade, _associadoDependentes.UF,
+            _associadoDependentes.Fone, _depEmail, _depVinculo,
             string.IsNullOrWhiteSpace(_depSenha) ? null : _depSenha);
 
-        var (_, err) = await Api.PostAsync<DependenteDto>($"api/v1/admin/associados/{_selecionado.Id}/dependentes", req);
-        if (err is not null) { _erro = err; return; }
+        var (_, err) = await Api.PostAsync<DependenteDto>($"api/v1/admin/associados/{_associadoDependentes.Id}/dependentes", req);
+        if (err is not null) { _erroModalDependente = err; return; }
         _mensagem = "Dependente vinculado com sucesso.";
-        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_selecionado.Id}");
-        if (recarregado is not null) _selecionado = recarregado;
+        _depNome = _depCpf = _depSexo = _depEmail = _depSenha = string.Empty;
+        _depNascimento = null;
+        _exibirModalNovoDependente = false;
+        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_associadoDependentes.Id}");
+        if (recarregado is not null) _associadoDependentes = recarregado;
         await CarregarAsync();
     }
 
