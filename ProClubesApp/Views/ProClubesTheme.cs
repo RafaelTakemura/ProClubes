@@ -145,15 +145,34 @@ public static class ProClubesTheme
     public static readonly Color TextSecondary = Color.FromArgb("#475569");
     public static readonly Color TextMuted = Color.FromArgb("#64748B");
     public static readonly Color BorderDefault = Color.FromArgb("#E2E8F0");
-    public static readonly Color StatusSuccess = Color.FromArgb("#15803D");
-    public static readonly Color StatusSuccessBg = Color.FromArgb("#DCFCE7");
-    public static readonly Color StatusWarning = Color.FromArgb("#854D0E");
-    public static readonly Color StatusWarningBg = Color.FromArgb("#FEF9C3");
-    public static readonly Color StatusDanger = Color.FromArgb("#DC2626");
-    public static readonly Color StatusDangerBg = Color.FromArgb("#FEE2E2");
+    public static readonly Color StatusSuccess = Color.FromArgb("#047857");
+    public static readonly Color StatusSuccessBg = Color.FromArgb("#ECFDF5");
+    public static readonly Color StatusSuccessBorder = Color.FromArgb("#A7F3D0");
+    public static readonly Color StatusWarning = Color.FromArgb("#B45309");
+    public static readonly Color StatusWarningBg = Color.FromArgb("#FFFBEB");
+    public static readonly Color StatusWarningBorder = Color.FromArgb("#FDE68A");
+    public static readonly Color StatusDanger = Color.FromArgb("#B91C1C");
+    public static readonly Color StatusDangerBg = Color.FromArgb("#FEF2F2");
+    public static readonly Color StatusDangerBorder = Color.FromArgb("#FECACA");
     public static readonly Color StatusInfo = Color.FromArgb("#1D4ED8");
-    public static readonly Color StatusInfoBg = Color.FromArgb("#DBEAFE");
+    public static readonly Color StatusInfoBg = Color.FromArgb("#EFF6FF");
+    public static readonly Color StatusInfoBorder = Color.FromArgb("#BFDBFE");
     public static readonly Color ModalBackdrop = Color.FromArgb("#990F172A");
+
+    public static Border CreateSoftTag(View content, Color bg, Color border, Thickness? padding = null)
+    {
+        return new Border
+        {
+            BackgroundColor = bg,
+            Stroke = border,
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
+            Padding = padding ?? new Thickness(10, 3),
+            HorizontalOptions = LayoutOptions.Start,
+            VerticalOptions = LayoutOptions.Center,
+            Content = content
+        };
+    }
 
     public static Border CreateCard(View content, Color? bg = null, Color? border = null)
     {

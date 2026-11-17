@@ -51,8 +51,14 @@ public sealed class MaisGovernancaMobilePage : ContentPage
                 var desc = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
                 desc.SetBinding(Label.TextProperty, nameof(VotacaoDto.Descricao));
 
-                var st = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
-                st.SetBinding(Label.TextProperty, nameof(VotacaoDto.Estado), stringFormat: "Estado: {0}");
+                var stLbl = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusSuccess };
+                stLbl.SetBinding(Label.TextProperty, nameof(VotacaoDto.Estado), stringFormat: "Estado: {0}");
+
+                var st = ProClubesTheme.CreateSoftTag(
+                    stLbl,
+                    ProClubesTheme.StatusSuccessBg,
+                    ProClubesTheme.StatusSuccessBorder,
+                    new Thickness(10, 3));
 
                 var btnAbrirCedula = new Button
                 {

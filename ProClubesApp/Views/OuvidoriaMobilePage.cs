@@ -75,8 +75,14 @@ public sealed class OuvidoriaMobilePage : ContentPage
                 var meta = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
                 meta.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.ResumoMeta));
 
-                var statusBadge = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
-                statusBadge.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.StatusBadge));
+                var statusLbl = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusInfo };
+                statusLbl.SetBinding(Label.TextProperty, nameof(ManifestacaoDto.StatusBadge));
+
+                var statusBadge = ProClubesTheme.CreateSoftTag(
+                    statusLbl,
+                    ProClubesTheme.StatusInfoBg,
+                    ProClubesTheme.StatusInfoBorder,
+                    new Thickness(10, 3));
 
                 var btnVerRespostas = new Button
                 {

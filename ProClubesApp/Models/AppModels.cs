@@ -114,16 +114,23 @@ public record MensalidadeDto(
 
     public Microsoft.Maui.Graphics.Color SituacaoCorTexto => SituacaoExibicao switch
     {
-        "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#15803D"),
-        "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#DC2626"),
-        _ => Microsoft.Maui.Graphics.Color.FromArgb("#854D0E")
+        "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#047857"),
+        "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#B91C1C"),
+        _ => Microsoft.Maui.Graphics.Color.FromArgb("#B45309")
     };
 
     public Microsoft.Maui.Graphics.Color SituacaoCorFundo => SituacaoExibicao switch
     {
-        "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#DCFCE7"),
-        "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#FEE2E2"),
-        _ => Microsoft.Maui.Graphics.Color.FromArgb("#FEF9C3")
+        "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#ECFDF5"),
+        "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#FEF2F2"),
+        _ => Microsoft.Maui.Graphics.Color.FromArgb("#FFFBEB")
+    };
+
+    public Microsoft.Maui.Graphics.Color SituacaoCorBorda => SituacaoExibicao switch
+    {
+        "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#A7F3D0"),
+        "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#FECACA"),
+        _ => Microsoft.Maui.Graphics.Color.FromArgb("#FDE68A")
     };
 }
 

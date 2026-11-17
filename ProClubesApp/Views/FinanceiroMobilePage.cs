@@ -48,19 +48,22 @@ public sealed class FinanceiroMobilePage : ContentPage
                 var statusPill = new Border
                 {
                     BackgroundColor = ProClubesTheme.StatusWarningBg,
-                    StrokeThickness = 0,
+                    Stroke = ProClubesTheme.StatusWarningBorder,
+                    StrokeThickness = 1,
                     StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
                     Padding = new Thickness(10, 3),
                     VerticalOptions = LayoutOptions.Center,
                     Content = lblStatus
                 };
                 statusPill.SetBinding(VisualElement.BackgroundColorProperty, nameof(MensalidadeDto.SituacaoCorFundo));
+                statusPill.SetBinding(Border.StrokeProperty, nameof(MensalidadeDto.SituacaoCorBorda));
                 statusPill.BindingContextChanged += (_, _) =>
                 {
                     if (statusPill.BindingContext is MensalidadeDto m)
                     {
                         lblStatus.TextColor = m.SituacaoCorTexto;
                         statusPill.BackgroundColor = m.SituacaoCorFundo;
+                        statusPill.Stroke = m.SituacaoCorBorda;
                     }
                 };
 

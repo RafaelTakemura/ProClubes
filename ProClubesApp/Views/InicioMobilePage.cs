@@ -38,19 +38,15 @@ public sealed class InicioMobilePage : ContentPage
         {
             FontSize = 11,
             FontAttributes = FontAttributes.Bold,
-            TextColor = ProClubesTheme.BrandAccent
+            TextColor = ProClubesTheme.StatusWarning
         };
         lblCategoriaPill.SetBinding(Label.TextProperty, nameof(InicioViewModel.CategoriaTexto));
 
-        var categoriaBadge = new Border
-        {
-            BackgroundColor = ProClubesTheme.AmberSoft,
-            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
-            StrokeThickness = 0,
-            Padding = new Thickness(12, 5),
-            VerticalOptions = LayoutOptions.Center,
-            Content = lblCategoriaPill
-        };
+        var categoriaBadge = ProClubesTheme.CreateSoftTag(
+            lblCategoriaPill,
+            ProClubesTheme.StatusWarningBg,
+            ProClubesTheme.StatusWarningBorder,
+            new Thickness(12, 4));
 
         var headerGrid = new Grid
         {
@@ -90,16 +86,17 @@ public sealed class InicioMobilePage : ContentPage
 
         topoCredencialGrid.Add(new Border
         {
-            BackgroundColor = ProClubesTheme.EmeraldAction,
-            StrokeThickness = 0,
+            BackgroundColor = ProClubesTheme.StatusSuccessBg,
+            Stroke = ProClubesTheme.StatusSuccessBorder,
+            StrokeThickness = 1,
             StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
-            Padding = new Thickness(9, 3),
+            Padding = new Thickness(10, 3),
             Content = new Label
             {
                 Text = "ATIVO",
                 FontSize = 10,
                 FontAttributes = FontAttributes.Bold,
-                TextColor = Colors.White
+                TextColor = ProClubesTheme.StatusSuccess
             }
         }, 1, 0);
 
@@ -241,8 +238,9 @@ public sealed class InicioMobilePage : ContentPage
             MobileVectorIconKind.Calendar,
             "Reservas",
             nameof(InicioViewModel.ReservasBadgeTexto),
-            Color.FromArgb("#EFF6FF"),
-            Color.FromArgb("#2563EB"),
+            ProClubesTheme.StatusInfoBg,
+            ProClubesTheme.StatusInfo,
+            ProClubesTheme.StatusInfoBorder,
             "//Reservas",
             somenteTitular: true), 0, 0);
 
@@ -252,6 +250,7 @@ public sealed class InicioMobilePage : ContentPage
             nameof(InicioViewModel.MensalidadeBadgeTexto),
             ProClubesTheme.StatusSuccessBg,
             ProClubesTheme.StatusSuccess,
+            ProClubesTheme.StatusSuccessBorder,
             "//Financeiro",
             somenteTitular: true), 1, 0);
 
@@ -259,8 +258,9 @@ public sealed class InicioMobilePage : ContentPage
             MobileVectorIconKind.Ticket,
             "Eventos",
             nameof(InicioViewModel.EventosBadgeTexto),
-            ProClubesTheme.SurfaceSubtle,
-            ProClubesTheme.TextMuted,
+            ProClubesTheme.SurfaceApp,
+            ProClubesTheme.TextSecondary,
+            ProClubesTheme.BorderDefault,
             "//Eventos",
             somenteTitular: false), 0, 1);
 
@@ -268,8 +268,9 @@ public sealed class InicioMobilePage : ContentPage
             MobileVectorIconKind.Chat,
             "Ouvidoria",
             null,
-            ProClubesTheme.SurfaceSubtle,
-            ProClubesTheme.TextMuted,
+            ProClubesTheme.SurfaceApp,
+            ProClubesTheme.TextSecondary,
+            ProClubesTheme.BorderDefault,
             "//Ouvidoria",
             somenteTitular: true), 1, 1);
 
@@ -431,14 +432,17 @@ public sealed class InicioMobilePage : ContentPage
             };
             rowGrid.Add(avatarBorder, 0, 0);
             rowGrid.Add(new VerticalStackLayout { Children = { lblDepNome, lblDepVinculo } }, 1, 0);
-            rowGrid.Add(new Label
-            {
-                Text = "• Ativo",
-                FontSize = 11,
-                TextColor = ProClubesTheme.EmeraldAction,
-                FontAttributes = FontAttributes.Bold,
-                VerticalOptions = LayoutOptions.Center
-            }, 2, 0);
+            rowGrid.Add(ProClubesTheme.CreateSoftTag(
+                new Label
+                {
+                    Text = "Ativo",
+                    FontSize = 10,
+                    TextColor = ProClubesTheme.StatusSuccess,
+                    FontAttributes = FontAttributes.Bold
+                },
+                ProClubesTheme.StatusSuccessBg,
+                ProClubesTheme.StatusSuccessBorder,
+                new Thickness(9, 2)), 2, 0);
 
             return rowGrid;
         }));
@@ -574,6 +578,7 @@ public sealed class InicioMobilePage : ContentPage
         string? bindingBadge,
         Color badgeBg,
         Color badgeFg,
+        Color badgeBorder,
         string rotaDestino,
         bool somenteTitular)
     {
@@ -597,15 +602,7 @@ public sealed class InicioMobilePage : ContentPage
             };
             lblBadge.SetBinding(Label.TextProperty, bindingBadge);
 
-            topRow.Add(new Border
-            {
-                BackgroundColor = badgeBg,
-                StrokeThickness = 0,
-                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
-                Padding = new Thickness(6, 2),
-                VerticalOptions = LayoutOptions.Center,
-                Content = lblBadge
-            }, 1, 0);
+            topRow.Add(ProClubesTheme.CreateSoftTag(lblBadge, badgeBg, badgeBorder, new Thickness(8, 2)), 1, 0);
         }
 
         var tile = new Border

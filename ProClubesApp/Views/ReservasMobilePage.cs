@@ -76,22 +76,18 @@ public sealed class ReservasMobilePage : ContentPage
                 var per = new Label { FontSize = 13, TextColor = ProClubesTheme.TextSecondary };
                 per.SetBinding(Label.TextProperty, nameof(ReservaEspacoDto.PeriodoFormatado));
 
-                // Badge verde quando Confirmada
-                var badgeConfirmada = new Border
-                {
-                    BackgroundColor = ProClubesTheme.StatusSuccessBg,
-                    StrokeThickness = 0,
-                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
-                    Padding = new Thickness(10, 4),
-                    HorizontalOptions = LayoutOptions.Start,
-                    Content = new Label
+                // Badge verde Soft Tint quando Confirmada
+                var badgeConfirmada = ProClubesTheme.CreateSoftTag(
+                    new Label
                     {
                         Text = "RESERVA CONFIRMADA",
                         FontSize = 10,
                         FontAttributes = FontAttributes.Bold,
                         TextColor = ProClubesTheme.StatusSuccess
-                    }
-                };
+                    },
+                    ProClubesTheme.StatusSuccessBg,
+                    ProClubesTheme.StatusSuccessBorder,
+                    new Thickness(10, 4));
                 badgeConfirmada.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservaEspacoDto.PodeCancelar));
 
                 // Alerta vermelho destacado quando Cancelada
