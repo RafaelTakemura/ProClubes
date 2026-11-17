@@ -154,7 +154,7 @@ else
                             </td>
                             <td>
                                 <PcStatusBadge Text="@a.Status.ToString()" Variant="@(a.Status == StatusAssociado.Ativo ? "ativo" : "inativo")" />
-                                @if (a.DataInicioCobranca.HasValue)
+                                @if (a.Status == StatusAssociado.Ativo && a.DataInicioCobranca.HasValue)
                                 {
                                     <div><small>Cobrança: @a.DataInicioCobranca.Value.ToString("MM/yyyy")</small></div>
                                 }
