@@ -18,12 +18,20 @@ public sealed class ReservasMobilePage : ContentPage
         Title = "Reservas";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
+        var headerGrid = ProClubesTheme.CreatePageHeader(
+            "ESPAÇOS & LAZER",
+            "Reservas do Clube",
+            "Consulte agendamentos ou reserve um novo horário",
+            MobileVectorIconKind.Calendar);
+
         var btnNovaReserva = new Button
         {
-            Text = "+ Nova Reserva de Espaço",
+            Text = "+ Nova Reserva",
             BackgroundColor = ProClubesTheme.BrandPrimary,
             TextColor = Colors.White,
             CornerRadius = 10,
+            HeightRequest = 42,
+            FontSize = 13,
             FontAttributes = FontAttributes.Bold
         };
         btnNovaReserva.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.PermiteOperarReserva));
@@ -31,13 +39,29 @@ public sealed class ReservasMobilePage : ContentPage
 
         var btnAtualizar = new Button
         {
-            Text = "Atualizar Reservas",
-            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            Text = "Atualizar",
+            BackgroundColor = ProClubesTheme.SurfaceCard,
             TextColor = ProClubesTheme.BrandPrimary,
+            BorderColor = ProClubesTheme.BorderDefault,
+            BorderWidth = 1,
             CornerRadius = 10,
-            FontSize = 12,
+            HeightRequest = 42,
+            FontSize = 13,
+            FontAttributes = FontAttributes.Bold,
             Command = _vm.AtualizarCommand
         };
+
+        var actionsGrid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
+            },
+            ColumnSpacing = 10
+        };
+        actionsGrid.Add(btnNovaReserva, 0, 0);
+        actionsGrid.Add(btnAtualizar, 1, 0);
 
         var abrirCancelamentoCmd = new Command<ReservaEspacoDto>(reserva => AbrirPopupCancelarReserva(reserva));
 
@@ -56,15 +80,14 @@ public sealed class ReservasMobilePage : ContentPage
                 var badgeConfirmada = new Border
                 {
                     BackgroundColor = ProClubesTheme.StatusSuccessBg,
-                    Stroke = Color.FromArgb("#BBF7D0"),
-                    StrokeThickness = 1,
+                    StrokeThickness = 0,
                     StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
                     Padding = new Thickness(10, 4),
                     HorizontalOptions = LayoutOptions.Start,
                     Content = new Label
                     {
-                        Text = "✔ RESERVA CONFIRMADA",
-                        FontSize = 11,
+                        Text = "RESERVA CONFIRMADA",
+                        FontSize = 10,
                         FontAttributes = FontAttributes.Bold,
                         TextColor = ProClubesTheme.StatusSuccess
                     }
@@ -95,8 +118,8 @@ public sealed class ReservasMobilePage : ContentPage
                         {
                             new Label
                             {
-                                Text = "✖ RESERVA CANCELADA",
-                                FontSize = 12,
+                                Text = "RESERVA CANCELADA",
+                                FontSize = 11,
                                 FontAttributes = FontAttributes.Bold,
                                 TextColor = ProClubesTheme.StatusDanger
                             },
@@ -130,19 +153,17 @@ public sealed class ReservasMobilePage : ContentPage
 
         var mainScroll = new ScrollView
         {
-            Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
-                Spacing = 8,
+                Spacing = 14,
+                Padding = new Thickness(20, 18, 20, 36),
                 Children =
                 {
                     ProClubesTheme.CreateOfflineBanner(),
                     ProClubesTheme.CreateStatusBanner(),
-                    new Label { Text = "Reservas de Espaços do Clube", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                    new Label { Text = "Consulte suas reservas agendadas ou solicite um novo horário com confirmação imediata.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
-                    btnNovaReserva,
-                    btnAtualizar,
-                    new Label { Text = "Minhas Reservas", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary, Margin = new Thickness(0, 6, 0, 2) },
+                    headerGrid,
+                    actionsGrid,
+                    new Label { Text = "MINHAS RESERVAS", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextMuted, CharacterSpacing = 1, Margin = new Thickness(0, 4, 0, 0) },
                     minhasList
                 }
             }

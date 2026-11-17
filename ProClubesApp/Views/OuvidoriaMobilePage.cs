@@ -18,25 +18,49 @@ public sealed class OuvidoriaMobilePage : ContentPage
         Title = "Ouvidoria";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
+        var headerGrid = ProClubesTheme.CreatePageHeader(
+            "ATENDIMENTO AO SÓCIO",
+            "Canal de Ouvidoria",
+            "Solicitações, sugestões, reclamações e respostas da diretoria",
+            MobileVectorIconKind.Chat);
+
         var btnNova = new Button
         {
             Text = "+ Nova Manifestação",
             BackgroundColor = ProClubesTheme.BrandPrimary,
             TextColor = Colors.White,
             CornerRadius = 10,
+            HeightRequest = 42,
+            FontSize = 13,
             FontAttributes = FontAttributes.Bold
         };
         btnNova.Clicked += (_, _) => AbrirPopupNovaManifestacao();
 
         var btnAtualizar = new Button
         {
-            Text = "Atualizar Lista e Respostas",
-            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            Text = "Atualizar",
+            BackgroundColor = ProClubesTheme.SurfaceCard,
             TextColor = ProClubesTheme.BrandPrimary,
+            BorderColor = ProClubesTheme.BorderDefault,
+            BorderWidth = 1,
             CornerRadius = 10,
-            FontSize = 12,
+            HeightRequest = 42,
+            FontSize = 13,
+            FontAttributes = FontAttributes.Bold,
             Command = _vm.AtualizarCommand
         };
+
+        var actionsGrid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
+            },
+            ColumnSpacing = 10
+        };
+        actionsGrid.Add(btnNova, 0, 0);
+        actionsGrid.Add(btnAtualizar, 1, 0);
 
         var abrirDetalhesCmd = new Command<ManifestacaoDto>(async item => await AbrirPopupDetalhesManifestacaoAsync(item));
 
@@ -82,19 +106,17 @@ public sealed class OuvidoriaMobilePage : ContentPage
 
         var mainScroll = new ScrollView
         {
-            Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
-                Spacing = 8,
+                Spacing = 14,
+                Padding = new Thickness(20, 18, 20, 36),
                 Children =
                 {
                     ProClubesTheme.CreateOfflineBanner(),
                     ProClubesTheme.CreateStatusBanner(),
-                    new Label { Text = "Canal de Ouvidoria", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                    new Label { Text = "Envie solicitações, sugestões ou reclamações e toque em qualquer card abaixo para abrir as respostas da diretoria em um pop-up.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
-                    btnNova,
-                    btnAtualizar,
-                    new Label { Text = "Minhas Manifestações", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary, Margin = new Thickness(0, 6, 0, 2) },
+                    headerGrid,
+                    actionsGrid,
+                    new Label { Text = "MINHAS MANIFESTAÇÕES", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextMuted, CharacterSpacing = 1, Margin = new Thickness(0, 4, 0, 0) },
                     list
                 }
             }

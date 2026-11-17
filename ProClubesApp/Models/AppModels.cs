@@ -108,12 +108,22 @@ public record MensalidadeDto(
     int DiasAtraso)
 {
     public string ResumoFormatado => $"Competência {Competencia:MM/yyyy} • Venc.: {DataVencimento:dd/MM/yyyy} • R$ {ValorTotalAtualizado:N2} ({SituacaoExibicao})";
+    public string CompetenciaTitulo => $"Competência {Competencia:MM/yyyy}";
+    public string VencimentoEUnidade => $"Vencimento: {DataVencimento:dd/MM/yyyy} • {UnidadeEmissoraNome}";
+    public string TotalAtualizadoTexto => $"Total atualizado: R$ {ValorTotalAtualizado:N2}";
 
     public Microsoft.Maui.Graphics.Color SituacaoCorTexto => SituacaoExibicao switch
     {
         "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#15803D"),
         "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#DC2626"),
-        _ => Microsoft.Maui.Graphics.Color.FromArgb("#D97706")
+        _ => Microsoft.Maui.Graphics.Color.FromArgb("#854D0E")
+    };
+
+    public Microsoft.Maui.Graphics.Color SituacaoCorFundo => SituacaoExibicao switch
+    {
+        "Paga" => Microsoft.Maui.Graphics.Color.FromArgb("#DCFCE7"),
+        "Vencida" => Microsoft.Maui.Graphics.Color.FromArgb("#FEE2E2"),
+        _ => Microsoft.Maui.Graphics.Color.FromArgb("#FEF9C3")
     };
 }
 

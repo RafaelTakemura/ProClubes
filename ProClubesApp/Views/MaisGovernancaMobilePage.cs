@@ -18,13 +18,23 @@ public sealed class MaisGovernancaMobilePage : ContentPage
         Title = "Votações";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
+        var headerGrid = ProClubesTheme.CreatePageHeader(
+            "ASSEMBLEIAS DIGITAIS",
+            "Votações do Clube",
+            "Participação exclusiva com voto único e sigilo garantido",
+            MobileVectorIconKind.CheckVote);
+
         var btnAtualizar = new Button
         {
             Text = "Atualizar Assembleias",
-            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            BackgroundColor = ProClubesTheme.SurfaceCard,
             TextColor = ProClubesTheme.BrandPrimary,
+            BorderColor = ProClubesTheme.BorderDefault,
+            BorderWidth = 1,
             CornerRadius = 10,
-            FontSize = 12,
+            HeightRequest = 42,
+            FontSize = 13,
+            FontAttributes = FontAttributes.Bold,
             Command = _vm.AtualizarCommand
         };
 
@@ -72,16 +82,15 @@ public sealed class MaisGovernancaMobilePage : ContentPage
 
         var mainScroll = new ScrollView
         {
-            Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
-                Spacing = 8,
+                Spacing = 14,
+                Padding = new Thickness(20, 18, 20, 36),
                 Children =
                 {
                     ProClubesTheme.CreateOfflineBanner(),
                     ProClubesTheme.CreateStatusBanner(),
-                    new Label { Text = "Assembleias e Votações Digitais", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                    new Label { Text = "Toque em uma assembleia abaixo para abrir a cédula de votação secreta.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
+                    headerGrid,
                     btnAtualizar,
                     votacoesList
                 }
@@ -167,7 +176,7 @@ public sealed class MaisGovernancaMobilePage : ContentPage
                     Padding = new Thickness(12, 8),
                     Content = new Label
                     {
-                        Text = "🔒 Sigilo Garantido: sua presença é registrada separadamente da cédula. Uma vez confirmado, o voto não poderá ser alterado.",
+                        Text = "Sigilo Garantido: sua presença é registrada separadamente da cédula. Uma vez confirmado, o voto não poderá ser alterado.",
                         FontSize = 12,
                         TextColor = ProClubesTheme.StatusInfo
                     }

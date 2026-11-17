@@ -16,15 +16,11 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         Title = "Solicitar Cadastro";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
-        var headerCard = ProClubesTheme.CreateCard(new VerticalStackLayout
-        {
-            Spacing = 4,
-            Children =
-            {
-                new Label { Text = "Solicitar Filiação ao Clube", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = Colors.White },
-                new Label { Text = "Preencha seus dados para análise da secretaria da unidade escolhida.", FontSize = 12, TextColor = Color.FromArgb("#CBD5E1") }
-            }
-        }, ProClubesTheme.BrandPrimary, ProClubesTheme.BrandPrimaryHover);
+        var headerGrid = ProClubesTheme.CreatePageHeader(
+            "ADMISSÃO DE ASSOCIADOS",
+            "Solicitar Filiação",
+            "Envie seus dados para avaliação da diretoria da unidade",
+            MobileVectorIconKind.CheckVote);
 
         var unidadePicker = new Picker
         {
@@ -36,19 +32,19 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         };
         unidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.UnidadeSelecionada));
 
-        var nomeEntry = new Entry { Placeholder = "Nome completo", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var nomeEntry = new Entry { Placeholder = "Nome completo", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
 
-        var cpfEntry = new Entry { Placeholder = "CPF (11 dígitos)", Keyboard = Keyboard.Numeric, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var cpfEntry = new Entry { Placeholder = "CPF (11 dígitos)", Keyboard = Keyboard.Numeric, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         cpfEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cpf));
 
-        var emailCadEntry = new Entry { Placeholder = "E-mail", Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var emailCadEntry = new Entry { Placeholder = "E-mail", Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         emailCadEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Email));
 
-        var telEntry = new Entry { Placeholder = "Telefone celular", Keyboard = Keyboard.Telephone, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var telEntry = new Entry { Placeholder = "Telefone celular", Keyboard = Keyboard.Telephone, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         telEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Telefone));
 
-        var senhaCadEntry = new Entry { Placeholder = "Senha de acesso (mín. 8 caracteres)", IsPassword = true, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var senhaCadEntry = new Entry { Placeholder = "Senha de acesso (mín. 8 caracteres)", IsPassword = true, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         senhaCadEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.SenhaCadastro));
 
         var btnEnviarCadastro = new Button
@@ -57,6 +53,7 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
             BackgroundColor = ProClubesTheme.BrandSecondary,
             TextColor = Colors.White,
             CornerRadius = 10,
+            HeightRequest = 44,
             FontAttributes = FontAttributes.Bold,
             Command = _vm.SolicitarCadastroCommand
         };
@@ -67,16 +64,30 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
             BackgroundColor = ProClubesTheme.SurfaceSubtle,
             TextColor = ProClubesTheme.BrandPrimary,
             CornerRadius = 10,
+            HeightRequest = 42,
+            FontAttributes = FontAttributes.Bold,
             Command = _vm.IrParaLoginCommand
         };
 
         var cadastroCard = ProClubesTheme.CreateCard(new VerticalStackLayout
         {
-            Spacing = 10,
+            Spacing = 12,
             Children =
             {
-                new Label { Text = "Solicitar Cadastro de Associado", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                new Label { Text = "Após o envio, você poderá acompanhar o status da sua solicitação fazendo login com seu CPF/e-mail e senha.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
+                new Label
+                {
+                    Text = "DADOS DO CANDIDATO",
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextMuted,
+                    CharacterSpacing = 1
+                },
+                new Label
+                {
+                    Text = "Após o envio, você poderá acompanhar o status da sua solicitação fazendo login com seu CPF/e-mail e senha.",
+                    FontSize = 12,
+                    TextColor = ProClubesTheme.TextSecondary
+                },
                 unidadePicker,
                 nomeEntry,
                 cpfEntry,
@@ -90,12 +101,13 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
 
         Content = new ScrollView
         {
-            Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
+                Spacing = 18,
+                Padding = new Thickness(20, 18, 20, 36),
                 Children =
                 {
-                    headerCard,
+                    headerGrid,
                     ProClubesTheme.CreateStatusBanner(),
                     cadastroCard
                 }

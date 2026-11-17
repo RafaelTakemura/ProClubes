@@ -253,6 +253,57 @@ public static class ProClubesTheme
             Drawable = new VectorIconDrawable(kind, strokeColor)
         };
     }
+
+    public static Grid CreatePageHeader(string eyebrow, string title, string subtitle, MobileVectorIconKind iconKind)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto }
+            },
+            ColumnSpacing = 12,
+            VerticalOptions = LayoutOptions.Center,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+
+        var stack = new VerticalStackLayout
+        {
+            Spacing = 3,
+            Children =
+            {
+                new Label
+                {
+                    Text = eyebrow,
+                    FontSize = 10,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = TextMuted,
+                    CharacterSpacing = 1.2
+                },
+                new Label
+                {
+                    Text = title,
+                    FontSize = 22,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = TextPrimary
+                },
+                new Label
+                {
+                    Text = subtitle,
+                    FontSize = 13,
+                    TextColor = TextMuted
+                }
+            }
+        };
+
+        var iconTile = CreateVectorIconTile(iconKind);
+        iconTile.BackgroundColor = SurfaceCard;
+
+        grid.Add(stack, 0, 0);
+        grid.Add(iconTile, 1, 0);
+        return grid;
+    }
 }
 
 public enum MobileVectorIconKind
@@ -261,7 +312,8 @@ public enum MobileVectorIconKind
     CreditCard,
     Ticket,
     Chat,
-    QrCode
+    QrCode,
+    CheckVote
 }
 
 internal sealed class VectorIconDrawable : IDrawable
@@ -332,6 +384,13 @@ internal sealed class VectorIconDrawable : IDrawable
                 canvas.DrawLine(w * 0.58f, h * 0.72f, w * 0.72f, h * 0.72f);
                 canvas.DrawLine(w * 0.86f, h * 0.72f, w * 0.86f, h * 0.86f);
                 canvas.DrawLine(w * 0.58f, h * 0.86f, w * 0.74f, h * 0.86f);
+                break;
+
+            case MobileVectorIconKind.CheckVote:
+                // Urna / Votação Auditada
+                canvas.DrawRoundedRectangle(w * 0.14f, h * 0.16f, w * 0.72f, h * 0.68f, 2.5f);
+                canvas.DrawLine(w * 0.32f, h * 0.52f, w * 0.45f, h * 0.65f);
+                canvas.DrawLine(w * 0.45f, h * 0.65f, w * 0.70f, h * 0.36f);
                 break;
         }
     }

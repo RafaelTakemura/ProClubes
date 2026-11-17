@@ -1,4 +1,5 @@
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Controls.Shapes;
 using ProClubesApp.Models;
 using ProClubesApp.ViewModels;
 
@@ -15,38 +16,69 @@ public sealed class EventosMobilePage : ContentPage
         Title = "Eventos";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
+        var headerGrid = ProClubesTheme.CreatePageHeader(
+            "AGENDA CULTURAL & ESPORTIVA",
+            "Eventos do Clube",
+            "Programação oficial das unidades e atividades abertas",
+            MobileVectorIconKind.Ticket);
+
         var list = new CollectionView
         {
             ItemsSource = _vm.Eventos,
             ItemTemplate = new DataTemplate(() =>
             {
-                var tit = new Label { FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary };
+                var tit = new Label
+                {
+                    FontSize = 16,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextPrimary
+                };
                 tit.SetBinding(Label.TextProperty, nameof(EventoDto.Nome));
 
-                var desc = new Label { FontSize = 13, TextColor = ProClubesTheme.TextSecondary };
+                var desc = new Label
+                {
+                    FontSize = 13,
+                    TextColor = ProClubesTheme.TextMuted
+                };
                 desc.SetBinding(Label.TextProperty, nameof(EventoDto.Descricao));
 
-                var resumo = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary };
+                var resumo = new Label
+                {
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.BrandPrimary
+                };
                 resumo.SetBinding(Label.TextProperty, nameof(EventoDto.ResumoDataTaxa));
+
+                var pillBox = new Border
+                {
+                    BackgroundColor = ProClubesTheme.SurfaceApp,
+                    StrokeThickness = 0,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(8) },
+                    Padding = new Thickness(10, 6),
+                    Margin = new Thickness(0, 4, 0, 0),
+                    Content = resumo
+                };
 
                 return ProClubesTheme.CreateCard(new VerticalStackLayout
                 {
                     Spacing = 6,
-                    Children = { tit, desc, resumo }
+                    Children = { tit, desc, pillBox }
                 });
             })
         };
 
         Content = new ScrollView
         {
-            Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
+                Spacing = 16,
+                Padding = new Thickness(20, 18, 20, 36),
                 Children =
                 {
                     ProClubesTheme.CreateOfflineBanner(),
                     ProClubesTheme.CreateStatusBanner(),
-                    new Label { Text = "Agenda de Eventos do Clube", FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary, Margin = new Thickness(0,0,0,8) },
+                    headerGrid,
                     list
                 }
             }

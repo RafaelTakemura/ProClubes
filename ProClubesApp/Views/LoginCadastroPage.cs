@@ -18,43 +18,94 @@ public sealed class LoginCadastroPage : ContentPage
         Title = "Login";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
-        var headerCard = ProClubesTheme.CreateCard(new VerticalStackLayout
+        var headerCard = new Border
         {
-            Spacing = 6,
-            Children =
+            StrokeThickness = 0,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(16) },
+            Background = new LinearGradientBrush
             {
-                new HorizontalStackLayout
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops =
                 {
-                    Spacing = 12,
-                    VerticalOptions = LayoutOptions.Center,
-                    Children =
+                    new GradientStop(ProClubesTheme.BrandPrimary, 0.0f),
+                    new GradientStop(ProClubesTheme.BrandPrimaryHover, 1.0f)
+                }
+            },
+            Shadow = new Shadow
+            {
+                Brush = new SolidColorBrush(ProClubesTheme.BrandPrimary),
+                Offset = new Point(0, 6),
+                Radius = 14,
+                Opacity = 0.22f
+            },
+            Padding = new Thickness(20, 18),
+            Content = new HorizontalStackLayout
+            {
+                Spacing = 14,
+                VerticalOptions = LayoutOptions.Center,
+                Children =
+                {
+                    new Image { Source = "proclubes_logo.png", WidthRequest = 44, HeightRequest = 44 },
+                    new VerticalStackLayout
                     {
-                        new Image { Source = "proclubes_logo.png", WidthRequest = 44, HeightRequest = 44 },
-                        new VerticalStackLayout
+                        Spacing = 2,
+                        Children =
                         {
-                            Children =
+                            new Label
                             {
-                                new Label { Text = "ProClubes Mobile", FontSize = 20, FontAttributes = FontAttributes.Bold, TextColor = Colors.White },
-                                new Label { Text = "Autosserviço do Associado e Portal do Clube", FontSize = 12, TextColor = Color.FromArgb("#CBD5E1") }
+                                Text = "PROCLUBES ENTERPRISE",
+                                FontSize = 10,
+                                FontAttributes = FontAttributes.Bold,
+                                TextColor = Color.FromArgb("#94A3B8"),
+                                CharacterSpacing = 1.4
+                            },
+                            new Label
+                            {
+                                Text = "Portal Mobile do Associado",
+                                FontSize = 19,
+                                FontAttributes = FontAttributes.Bold,
+                                TextColor = Colors.White
+                            },
+                            new Label
+                            {
+                                Text = "Credencial digital, reservas, eventos e governança",
+                                FontSize = 12,
+                                TextColor = Color.FromArgb("#CBD5E1")
                             }
                         }
                     }
                 }
             }
-        }, ProClubesTheme.BrandPrimary, ProClubesTheme.BrandPrimaryHover);
+        };
 
-        var emailEntry = new Entry { Placeholder = "E-mail ou CPF", Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var emailEntry = new Entry
+        {
+            Placeholder = "E-mail ou CPF",
+            Keyboard = Keyboard.Email,
+            TextColor = ProClubesTheme.TextPrimary,
+            PlaceholderColor = ProClubesTheme.TextMuted,
+            HeightRequest = 44
+        };
         emailEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.LoginOuEmail));
 
-        var senhaEntry = new Entry { Placeholder = "Senha", IsPassword = true, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var senhaEntry = new Entry
+        {
+            Placeholder = "Senha",
+            IsPassword = true,
+            TextColor = ProClubesTheme.TextPrimary,
+            PlaceholderColor = ProClubesTheme.TextMuted,
+            HeightRequest = 44
+        };
         senhaEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Senha));
 
         var btnEntrar = new Button
         {
-            Text = "Entrar no App",
+            Text = "Entrar na Conta",
             BackgroundColor = ProClubesTheme.BrandPrimary,
             TextColor = Colors.White,
             CornerRadius = 10,
+            HeightRequest = 44,
             FontAttributes = FontAttributes.Bold,
             Command = _vm.EntrarCommand
         };
@@ -65,6 +116,7 @@ public sealed class LoginCadastroPage : ContentPage
             BackgroundColor = ProClubesTheme.SurfaceSubtle,
             TextColor = ProClubesTheme.BrandPrimary,
             CornerRadius = 10,
+            HeightRequest = 42,
             FontAttributes = FontAttributes.Bold,
             Command = _vm.AlternarModoCommand
         };
@@ -72,18 +124,36 @@ public sealed class LoginCadastroPage : ContentPage
         var btnIrParaEventos = new Button
         {
             Text = "Consultar Eventos Públicos do Clube",
-            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            BackgroundColor = ProClubesTheme.SurfaceApp,
             TextColor = ProClubesTheme.BrandSecondary,
+            BorderColor = ProClubesTheme.BorderDefault,
+            BorderWidth = 1,
             CornerRadius = 10,
+            HeightRequest = 42,
+            FontAttributes = FontAttributes.Bold,
             Command = _vm.IrParaEventosCommand
         };
 
         var loginCard = ProClubesTheme.CreateCard(new VerticalStackLayout
         {
-            Spacing = 10,
+            Spacing = 12,
             Children =
             {
-                new Label { Text = "Entrar na Conta", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                new Label
+                {
+                    Text = "ACESSO À CONTA",
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextMuted,
+                    CharacterSpacing = 1
+                },
+                new Label
+                {
+                    Text = "Identifique-se com seu e-mail ou CPF",
+                    FontSize = 16,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextPrimary
+                },
                 emailEntry,
                 senhaEntry,
                 btnEntrar,
@@ -98,11 +168,11 @@ public sealed class LoginCadastroPage : ContentPage
             BackgroundColor = ProClubesTheme.StatusWarningBg,
             Stroke = ProClubesTheme.BrandAccent,
             StrokeThickness = 1,
-            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(16) },
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(14) },
             Padding = new Thickness(16),
             Margin = new Thickness(0, 0, 0, 12)
         };
-        var lblStatusTit = new Label { Text = "Acompanhamento de Solicitação de Cadastro", FontSize = 16, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusWarning };
+        var lblStatusTit = new Label { Text = "Acompanhamento de Solicitação de Cadastro", FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusWarning };
         var lblStatusVal = new Label { FontSize = 14, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary };
         lblStatusVal.SetBinding(Label.TextProperty, "StatusCadastroAtual.Status", stringFormat: "Status atual: {0}");
         var lblMotivoRej = new Label { FontSize = 13, TextColor = ProClubesTheme.StatusDanger };
@@ -136,9 +206,10 @@ public sealed class LoginCadastroPage : ContentPage
 
         var mainScroll = new ScrollView
         {
-            Padding = new Thickness(16),
             Content = new VerticalStackLayout
             {
+                Spacing = 18,
+                Padding = new Thickness(20, 18, 20, 36),
                 Children =
                 {
                     headerCard,
