@@ -12,11 +12,20 @@
 else
 {
     <div class="pc-page-header">
-        <div>
-            <h1 class="pc-page-title">Votações Digitais e Governança</h1>
-            <p class="pc-page-subtitle">Congelamento de snapshot de eleitores na abertura, voto único, resultados consolidados e auditoria protegida de votos</p>
+        <div class="pc-header-titles">
+            <span class="pc-badge-eyebrow">ProClubes Enterprise • Assembleias &amp; Governança</span>
+            <h1 class="pc-title">Votações Digitais e Governança</h1>
+            <p class="pc-subtitle">Congelamento de snapshot de eleitores na abertura, voto único, resultados consolidados e auditoria protegida de votos.</p>
         </div>
-        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNova = !_exibirNova">+ Nova Votação</button>
+        <div class="pc-header-actions">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNova = !_exibirNova">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Nova Votação
+            </button>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -88,8 +97,20 @@ else
                             <td>@(v.Escopo == EscopoVotacao.Global ? "Global (Clube Inteiro)" : v.UnidadeNome)</td>
                             <td>@v.Inicio.ToString("dd/MM/yyyy HH:mm") até @v.FimPrevisto.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>
-                                Aptos no snapshot: <strong>@v.TotalEleitoresAptos</strong><br />
-                                Votos computados: <strong>@v.TotalVotosRegistrados</strong>
+                                @{
+                                    var pctQuorum = v.TotalEleitoresAptos > 0
+                                        ? Math.Min(100, (int)Math.Round(v.TotalVotosRegistrados * 100.0 / v.TotalEleitoresAptos))
+                                        : 0;
+                                }
+                                <div style="min-width: 170px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                        <span><strong>@v.TotalVotosRegistrados</strong> de <strong>@v.TotalEleitoresAptos</strong> aptos</span>
+                                        <span style="color: var(--pc-text-muted);">@(pctQuorum)%</span>
+                                    </div>
+                                    <div class="pc-progress-bar">
+                                        <div class="pc-progress-fill @(v.Estado == EstadoVotacao.Aberta ? "" : "bg-blue-accent")" style="width: @(pctQuorum)%"></div>
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 <PcStatusBadge Text="@v.Estado.ToString()"

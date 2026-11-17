@@ -6,14 +6,34 @@
 <PageTitle>Financeiro e Mensalidades — ProClubesWeb</PageTitle>
 
 <div class="pc-page-header">
-    <div>
-        <h1 class="pc-page-title">Módulo Financeiro e Mensalidades</h1>
-        <p class="pc-page-subtitle">Parâmetros globais, tabela de valores por unidade/categoria, mensalidades por competência e quitação manual integral</p>
+    <div class="pc-header-titles">
+        <span class="pc-badge-eyebrow">ProClubes Enterprise • Tesouraria &amp; Faturamento</span>
+        <h1 class="pc-title">Módulo Financeiro e Mensalidades</h1>
+        <p class="pc-subtitle">Parâmetros globais, tabela de valores por unidade/categoria, mensalidades por competência e quitação manual integral.</p>
     </div>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalConfig = true">⚙ Parâmetros Globais</button>
-        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirModalNovoValor = true">+ Definir Novo Valor</button>
-        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarTudoAsync">Atualizar Dados</button>
+    <div class="pc-header-actions">
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalConfig = true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Parâmetros Globais
+        </button>
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirModalNovoValor = true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Definir Novo Valor
+        </button>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarTudoAsync">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Atualizar Dados
+        </button>
     </div>
 </div>
 
@@ -175,8 +195,13 @@
                 {
                     <tr style="cursor: pointer;" @onclick="() => AbrirModalAssociado(assoc)">
                         <td>
-                            <strong>@assoc.AssociadoNome</strong> <small style="color: var(--pc-text-secondary);">(#@assoc.AssociadoId)</small><br />
-                            <small>@assoc.CpfMascarado</small>
+                            <div class="pc-user-info">
+                                <div class="pc-avatar">@ObterIniciais(assoc.AssociadoNome)</div>
+                                <div>
+                                    <div class="pc-user-name">@assoc.AssociadoNome <small style="color: var(--pc-text-muted); font-weight: 500;">(#@assoc.AssociadoId)</small></div>
+                                    <div class="pc-user-meta">@assoc.CpfMascarado</div>
+                                </div>
+                            </div>
                         </td>
                         <td>
                             @assoc.UnidadeNome<br />
@@ -190,7 +215,7 @@
                                 <span style="color: var(--pc-danger);">@assoc.QtdVencidas vencida(s)</span>
                             </span>
                         </td>
-                        <td>
+                        <td style="text-align: right; font-variant-numeric: tabular-nums;">
                             <strong>R$ @assoc.TotalPendenteAtualizado.ToString("N2")</strong>
                         </td>
                         <td>
@@ -540,6 +565,14 @@
         _mensalidadeParaQuitar = null;
         _mensagem = $"Pagamento integral da mensalidade #{mensalidadeId} registrado com sucesso.";
         await CarregarMensalidadesAsync();
+    }
+
+    private static string ObterIniciais(string nomeCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCompleto)) return "PC";
+        var partes = nomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 1) return partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant();
+        return $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[^1][0])}";
     }
 
     public void Dispose()

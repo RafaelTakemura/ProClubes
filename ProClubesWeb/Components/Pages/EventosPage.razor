@@ -6,11 +6,20 @@
 <PageTitle>Eventos e Taxas — ProClubesWeb</PageTitle>
 
 <div class="pc-page-header">
-    <div>
-        <h1 class="pc-page-title">Eventos e Taxas de Participação</h1>
-        <p class="pc-page-subtitle">Eventos públicos ou restritos a associados, compartilhamento entre unidades (Super Admin) e registro manual de taxas (sem inscrições/RSVP)</p>
+    <div class="pc-header-titles">
+        <span class="pc-badge-eyebrow">ProClubes Enterprise • Agenda Cultural &amp; Social</span>
+        <h1 class="pc-title">Eventos e Taxas de Participação</h1>
+        <p class="pc-subtitle">Eventos públicos ou restritos a associados, compartilhamento entre unidades e registro manual de taxas.</p>
     </div>
-    <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirForm = !_exibirForm">+ Novo Evento</button>
+    <div class="pc-header-actions">
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirForm = !_exibirForm">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Novo Evento
+        </button>
+    </div>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(_mensagem))

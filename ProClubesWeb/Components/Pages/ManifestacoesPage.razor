@@ -1,22 +1,42 @@
 @page "/manifestacoes"
-@page "/categorias-manifestacoes"
 @implements IDisposable
 @inject ProClubesApiClient Api
 @inject WebSessionState Session
 
-<PageTitle>Manifestações e Categorias — ProClubesWeb</PageTitle>
+<PageTitle>Manifestações e Ouvidoria — ProClubesWeb</PageTitle>
 
 <div class="pc-page-header">
-    <div>
-        <h1 class="pc-page-title">Manifestações e Categorias Globais</h1>
-        <p class="pc-page-subtitle">Atendimento de solicitações, reclamações e sugestões da unidade e gestão de categorias globais (exclusiva Super Admin)</p>
+    <div class="pc-header-titles">
+        <span class="pc-badge-eyebrow">ProClubes Enterprise • Ouvidoria &amp; Relacionamento</span>
+        <h1 class="pc-title">Manifestações e Ouvidoria</h1>
+        <p class="pc-subtitle">Atendimento de solicitações, reclamações e sugestões dos associados.</p>
     </div>
-    <div style="display: flex; gap: 10px;">
+    <div class="pc-header-actions">
         @if (Session.IsSuperAdmin)
         {
-            <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovaCategoria = true">+ Nova Categoria Global</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalCategorias = true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                </svg>
+                Categorias Globais (@_categorias.Count)
+            </button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovaCategoria = true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Nova Categoria Global
+            </button>
         }
-        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Atualizar</button>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Atualizar
+        </button>
     </div>
 </div>
 
@@ -31,6 +51,50 @@
 
 @if (Session.IsSuperAdmin)
 {
+    <PcModal IsOpen="_exibirModalCategorias"
+             Title="Categorias Globais de Manifestações"
+             Subtitle="Exclusivo Super Admin — Categorias desativadas deixam de aparecer em novas manifestações, preservando o histórico existente."
+             MaxWidth="780px"
+             OnClose="() => _exibirModalCategorias = false">
+        <ChildContent>
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 14px;">
+                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => _exibirNovaCategoria = true">+ Nova Categoria Global</button>
+            </div>
+            <div class="pc-table-wrap">
+                <table class="pc-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Categoria</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _categorias)
+                        {
+                            <tr>
+                                <td>#@c.Id</td>
+                                <td><strong>@c.Nome</strong> — <small>@c.Descricao</small></td>
+                                <td>@c.TipoManifestacao</td>
+                                <td><PcStatusBadge Text="@(c.Ativa ? "Ativa" : "Inativa")" Variant="@(c.Ativa ? "ativo" : "inativo")" /></td>
+                                <td>
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AlternarAtivaCategoriaAsync(c)">
+                                        @(c.Ativa ? "Desativar" : "Reativar")
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalCategorias = false">Fechar</button>
+        </FooterContent>
+    </PcModal>
+
     <PcModal IsOpen="_exibirNovaCategoria"
              Title="Nova Categoria Global de Manifestação"
              Subtitle="Exclusivo Super Admin — ficará disponível imediatamente para novas manifestações em todas as unidades"
@@ -55,41 +119,6 @@
             <button type="button" class="pc-btn pc-btn-primary" @onclick="CriarCategoriaGlobalAsync">Salvar Categoria</button>
         </FooterContent>
     </PcModal>
-
-    <div class="pc-card">
-        <h3 style="margin-top: 0; font-size: 18px;">Categorias Globais de Manifestações (Exclusivo Super Admin)</h3>
-        <p class="pc-page-subtitle" style="margin-bottom: 14px;">Categorias desativadas deixam de aparecer em novas manifestações, preservando o histórico existente.</p>
-
-        <div class="pc-table-wrap">
-            <table class="pc-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Categoria</th>
-                        <th>Tipo</th>
-                        <th>Status</th>
-                        <th>Ação</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var c in _categorias)
-                    {
-                        <tr>
-                            <td>#@c.Id</td>
-                            <td><strong>@c.Nome</strong> — <small>@c.Descricao</small></td>
-                            <td>@c.TipoManifestacao</td>
-                            <td><PcStatusBadge Text="@(c.Ativa ? "Ativa" : "Inativa")" Variant="@(c.Ativa ? "ativo" : "inativo")" /></td>
-                            <td>
-                                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AlternarAtivaCategoriaAsync(c)">
-                                    @(c.Ativa ? "Desativar" : "Reativar")
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
 }
 
 <div class="pc-card">
@@ -183,6 +212,7 @@
     private IReadOnlyList<CategoriaManifestacaoDto> _categorias = Array.Empty<CategoriaManifestacaoDto>();
     private IReadOnlyList<ManifestacaoDto> _manifestacoes = Array.Empty<ManifestacaoDto>();
     private ManifestacaoDto? _manifestacaoAtiva;
+    private bool _exibirModalCategorias;
     private bool _exibirNovaCategoria;
 
     private string _nomeCat = string.Empty;

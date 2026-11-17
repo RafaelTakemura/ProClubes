@@ -6,11 +6,20 @@
 <PageTitle>Espaços e Reservas — ProClubesWeb</PageTitle>
 
 <div class="pc-page-header">
-    <div>
-        <h1 class="pc-page-title">Espaços, Agenda e Reservas</h1>
-        <p class="pc-page-subtitle">Gestão de espaços, bloqueios de manutenção, agenda de ocupação e cancelamento administrativo com justificativa</p>
+    <div class="pc-header-titles">
+        <span class="pc-badge-eyebrow">ProClubes Enterprise • Operações &amp; Infraestrutura</span>
+        <h1 class="pc-title">Espaços, Agenda e Reservas</h1>
+        <p class="pc-subtitle">Gestão de espaços, bloqueios de manutenção, agenda de ocupação e cancelamento administrativo com justificativa.</p>
     </div>
-    <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovoEspaco = !_exibirNovoEspaco">+ Novo Espaço</button>
+    <div class="pc-header-actions">
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirNovoEspaco = !_exibirNovoEspaco">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Novo Espaço
+        </button>
+    </div>
 </div>
 
 @if (!string.IsNullOrWhiteSpace(_mensagem))

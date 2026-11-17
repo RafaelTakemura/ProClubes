@@ -5,11 +5,12 @@
 <PageTitle>Central de Notificações — ProClubesWeb</PageTitle>
 
 <div class="pc-page-header">
-    <div>
-        <h1 class="pc-page-title">Central de Notificações Internas</h1>
-        <p class="pc-page-subtitle">Notificações exclusivas da conta autenticada</p>
+    <div class="pc-header-titles">
+        <span class="pc-badge-eyebrow">ProClubes Enterprise • Alertas do Sistema</span>
+        <h1 class="pc-title">Central de Notificações Internas</h1>
+        <p class="pc-subtitle">Notificações operacionais e administrativas exclusivas da conta autenticada.</p>
     </div>
-    <div style="display: flex; gap: 10px;">
+    <div class="pc-header-actions">
         <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CarregarAsync(true)">Apenas Não Lidas</button>
         <button type="button" class="pc-btn pc-btn-outline" @onclick="() => CarregarAsync(null)">Todas</button>
     </div>
