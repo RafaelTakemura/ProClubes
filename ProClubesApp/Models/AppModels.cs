@@ -258,3 +258,31 @@ public record ResumoSincronizacaoAppDto(
     IReadOnlyList<ReservaEspacoDto> ReservasFuturas,
     IReadOnlyList<NotificacaoDto> NotificacoesRecentes,
     int NotificacoesNaoLidas);
+
+public record DependenteMobileDto(
+    int DependenciaId,
+    int AssociadoTitularId,
+    int PessoaDependenteId,
+    string NomeCompleto,
+    string CpfMascarado,
+    string TipoVinculo,
+    bool Ativo)
+{
+    public string Iniciais
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(NomeCompleto)) return "DP";
+            var partes = NomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (partes.Length == 1) return partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant();
+            return $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[^1][0])}";
+        }
+    }
+
+    public string VinculoFormatado => TipoVinculo == "Conjuge" ? "Cônjuge" : "Filho(a)";
+}
+
+public record AssociadoDetalheMobileDto(
+    int Id,
+    string NomeCompleto,
+    IReadOnlyList<DependenteMobileDto> Dependentes);

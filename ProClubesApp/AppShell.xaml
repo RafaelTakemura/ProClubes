@@ -5,10 +5,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:views="clr-namespace:ProClubesApp.Views"
     Title="ProClubes"
-    Shell.BackgroundColor="#0F2C59"
+    Shell.BackgroundColor="#0B192C"
     Shell.TitleColor="#FFFFFF"
     Shell.TabBarBackgroundColor="#FFFFFF"
-    Shell.TabBarTitleColor="#0F2C59"
+    Shell.TabBarTitleColor="#0B192C"
     Shell.TabBarUnselectedColor="#64748B">
 
     <TabBar>

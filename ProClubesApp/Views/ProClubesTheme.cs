@@ -132,10 +132,12 @@ public sealed class PopupOverlayHost
 
 public static class ProClubesTheme
 {
-    public static readonly Color BrandPrimary = Color.FromArgb("#0F2C59");
-    public static readonly Color BrandPrimaryHover = Color.FromArgb("#163E7A");
-    public static readonly Color BrandSecondary = Color.FromArgb("#1E7E5A");
+    public static readonly Color BrandPrimary = Color.FromArgb("#0B192C");
+    public static readonly Color BrandPrimaryHover = Color.FromArgb("#153448");
+    public static readonly Color BrandSecondary = Color.FromArgb("#1E5128");
+    public static readonly Color EmeraldAction = Color.FromArgb("#10B981");
     public static readonly Color BrandAccent = Color.FromArgb("#D97706");
+    public static readonly Color AmberSoft = Color.FromArgb("#FEF3C7");
     public static readonly Color SurfaceApp = Color.FromArgb("#F8FAFC");
     public static readonly Color SurfaceCard = Color.FromArgb("#FFFFFF");
     public static readonly Color SurfaceSubtle = Color.FromArgb("#F1F5F9");
@@ -145,9 +147,9 @@ public static class ProClubesTheme
     public static readonly Color BorderDefault = Color.FromArgb("#E2E8F0");
     public static readonly Color StatusSuccess = Color.FromArgb("#15803D");
     public static readonly Color StatusSuccessBg = Color.FromArgb("#DCFCE7");
-    public static readonly Color StatusWarning = Color.FromArgb("#B45309");
-    public static readonly Color StatusWarningBg = Color.FromArgb("#FEF3C7");
-    public static readonly Color StatusDanger = Color.FromArgb("#B91C1C");
+    public static readonly Color StatusWarning = Color.FromArgb("#854D0E");
+    public static readonly Color StatusWarningBg = Color.FromArgb("#FEF9C3");
+    public static readonly Color StatusDanger = Color.FromArgb("#DC2626");
     public static readonly Color StatusDangerBg = Color.FromArgb("#FEE2E2");
     public static readonly Color StatusInfo = Color.FromArgb("#1D4ED8");
     public static readonly Color StatusInfoBg = Color.FromArgb("#DBEAFE");
@@ -160,7 +162,7 @@ public static class ProClubesTheme
             BackgroundColor = bg ?? SurfaceCard,
             Stroke = border ?? BorderDefault,
             StrokeThickness = 1,
-            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(16) },
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(14) },
             Padding = new Thickness(16),
             Margin = new Thickness(0, 0, 0, 12),
             Content = content
@@ -221,5 +223,116 @@ public static class ProClubesTheme
 
         var stack = new VerticalStackLayout { Children = { errBorder, okBorder } };
         return new Border { StrokeThickness = 0, BackgroundColor = Colors.Transparent, Content = stack };
+    }
+
+    public static Border CreateVectorIconTile(MobileVectorIconKind kind, Color? iconColor = null)
+    {
+        return new Border
+        {
+            WidthRequest = 34,
+            HeightRequest = 34,
+            BackgroundColor = SurfaceApp,
+            Stroke = BorderDefault,
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(9) },
+            HorizontalOptions = LayoutOptions.Start,
+            VerticalOptions = LayoutOptions.Center,
+            Content = CreateVectorIcon(kind, iconColor ?? BrandPrimary, 18)
+        };
+    }
+
+    public static GraphicsView CreateVectorIcon(MobileVectorIconKind kind, Color strokeColor, double size = 18)
+    {
+        return new GraphicsView
+        {
+            WidthRequest = size,
+            HeightRequest = size,
+            HorizontalOptions = LayoutOptions.Center,
+            VerticalOptions = LayoutOptions.Center,
+            InputTransparent = true,
+            Drawable = new VectorIconDrawable(kind, strokeColor)
+        };
+    }
+}
+
+public enum MobileVectorIconKind
+{
+    Calendar,
+    CreditCard,
+    Ticket,
+    Chat,
+    QrCode
+}
+
+internal sealed class VectorIconDrawable : IDrawable
+{
+    private readonly MobileVectorIconKind _kind;
+    private readonly Color _color;
+
+    public VectorIconDrawable(MobileVectorIconKind kind, Color color)
+    {
+        _kind = kind;
+        _color = color;
+    }
+
+    public void Draw(ICanvas canvas, RectF dirtyRect)
+    {
+        var w = dirtyRect.Width;
+        var h = dirtyRect.Height;
+        canvas.StrokeColor = _color;
+        canvas.StrokeSize = 1.8f;
+        canvas.StrokeLineCap = LineCap.Round;
+        canvas.StrokeLineJoin = LineJoin.Round;
+
+        switch (_kind)
+        {
+            case MobileVectorIconKind.Calendar:
+                // Calendário (Reservas)
+                canvas.DrawRoundedRectangle(w * 0.14f, h * 0.22f, w * 0.72f, h * 0.64f, 2.5f);
+                canvas.DrawLine(w * 0.14f, h * 0.42f, w * 0.86f, h * 0.42f);
+                canvas.DrawLine(w * 0.34f, h * 0.12f, w * 0.34f, h * 0.28f);
+                canvas.DrawLine(w * 0.66f, h * 0.12f, w * 0.66f, h * 0.28f);
+                break;
+
+            case MobileVectorIconKind.CreditCard:
+                // Cartão / Faturamento (Mensalidade)
+                canvas.DrawRoundedRectangle(w * 0.10f, h * 0.22f, w * 0.80f, h * 0.56f, 2.5f);
+                canvas.DrawLine(w * 0.10f, h * 0.42f, w * 0.90f, h * 0.42f);
+                canvas.DrawLine(w * 0.24f, h * 0.60f, w * 0.46f, h * 0.60f);
+                break;
+
+            case MobileVectorIconKind.Ticket:
+                // Ingresso / Agenda (Eventos)
+                canvas.DrawRoundedRectangle(w * 0.12f, h * 0.25f, w * 0.76f, h * 0.50f, 2.5f);
+                canvas.DrawLine(w * 0.40f, h * 0.25f, w * 0.40f, h * 0.75f);
+                canvas.DrawLine(w * 0.54f, h * 0.43f, w * 0.74f, h * 0.43f);
+                canvas.DrawLine(w * 0.54f, h * 0.57f, w * 0.68f, h * 0.57f);
+                break;
+
+            case MobileVectorIconKind.Chat:
+                // Balão de diálogo (Ouvidoria)
+                var path = new PathF();
+                path.MoveTo(w * 0.15f, h * 0.22f);
+                path.LineTo(w * 0.85f, h * 0.22f);
+                path.LineTo(w * 0.85f, h * 0.66f);
+                path.LineTo(w * 0.42f, h * 0.66f);
+                path.LineTo(w * 0.20f, h * 0.84f);
+                path.LineTo(w * 0.20f, h * 0.66f);
+                path.LineTo(w * 0.15f, h * 0.66f);
+                path.Close();
+                canvas.DrawPath(path);
+                break;
+
+            case MobileVectorIconKind.QrCode:
+                // QR Code (Acesso Catraca)
+                canvas.DrawRoundedRectangle(w * 0.14f, h * 0.14f, w * 0.28f, h * 0.28f, 1.5f);
+                canvas.DrawRoundedRectangle(w * 0.58f, h * 0.14f, w * 0.28f, h * 0.28f, 1.5f);
+                canvas.DrawRoundedRectangle(w * 0.14f, h * 0.58f, w * 0.28f, h * 0.28f, 1.5f);
+                canvas.DrawLine(w * 0.58f, h * 0.58f, w * 0.86f, h * 0.58f);
+                canvas.DrawLine(w * 0.58f, h * 0.72f, w * 0.72f, h * 0.72f);
+                canvas.DrawLine(w * 0.86f, h * 0.72f, w * 0.86f, h * 0.86f);
+                canvas.DrawLine(w * 0.58f, h * 0.86f, w * 0.74f, h * 0.86f);
+                break;
+        }
     }
 }
