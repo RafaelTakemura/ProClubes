@@ -12,11 +12,20 @@
 else
 {
     <div class="pc-page-header">
-        <div>
-            <h1 class="pc-page-title">Associados e Dependentes</h1>
-            <p class="pc-page-subtitle">Gestão de vínculos associativos, categorias, dependentes e transferências entre unidades</p>
+        <div class="pc-header-titles">
+            <span class="pc-badge-eyebrow">ProClubes Enterprise • Quadro Associativo</span>
+            <h1 class="pc-title">Associados e Dependentes</h1>
+            <p class="pc-subtitle">Gestão de vínculos associativos, categorias, dependentes e transferências entre unidades.</p>
         </div>
-        <button type="button" class="pc-btn pc-btn-primary" @onclick="AbrirModalNovoAssociado">+ Cadastrar Associado</button>
+        <div class="pc-header-actions">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="AbrirModalNovoAssociado">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Cadastrar Associado
+            </button>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -105,7 +114,7 @@ else
 
     <div class="pc-card">
         <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-            <input class="pc-input" style="min-width: 240px;" placeholder="Buscar por nome, e-mail ou CPF..." @bind="_busca" />
+            <input class="pc-input" style="min-width: 260px; flex: 1;" placeholder="Buscar por nome, e-mail ou CPF..." @bind="_busca" />
             <select class="pc-select" @bind="_filtroCategoria">
                 <option value="">Todas as categorias</option>
                 <option value="ASSOCIADO">Sócio Associado</option>
@@ -113,7 +122,13 @@ else
                 <option value="CONVIDADO">Sócio Convidado</option>
                 <option value="SIMPATIZANTE">Simpatizante</option>
             </select>
-            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Buscar</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                Buscar
+            </button>
         </div>
 
         <div class="pc-table-wrap">
@@ -137,16 +152,23 @@ else
                     @foreach (var a in _associados)
                     {
                         <tr>
-                            <td>Assoc #@a.Id<br /><small style="color: var(--pc-text-secondary);">Usr #@(a.UsuarioId?.ToString() ?? "-")</small></td>
+                            <td>Assoc #@a.Id<br /><small style="color: var(--pc-text-muted);">Usr #@(a.UsuarioId?.ToString() ?? "-")</small></td>
                             <td>
-                                <strong>@a.NomeCompleto</strong>
-                                @if (a.RoleAdministrativa != RoleAdministrativa.Nenhuma)
-                                {
-                                    <span style="margin-left: 6px;">
-                                        <PcStatusBadge Text="@ObterRotuloRole(a.RoleAdministrativa)" Variant="@ObterVarianteRole(a.RoleAdministrativa)" />
-                                    </span>
-                                }
-                                <br /><small>@a.CpfMascarado — @a.Email</small>
+                                <div class="pc-user-info">
+                                    <div class="pc-avatar">@ObterIniciais(a.NomeCompleto)</div>
+                                    <div>
+                                        <div class="pc-user-name">
+                                            @a.NomeCompleto
+                                            @if (a.RoleAdministrativa != RoleAdministrativa.Nenhuma)
+                                            {
+                                                <span style="margin-left: 6px;">
+                                                    <PcStatusBadge Text="@ObterRotuloRole(a.RoleAdministrativa)" Variant="@ObterVarianteRole(a.RoleAdministrativa)" />
+                                                </span>
+                                            }
+                                        </div>
+                                        <div class="pc-user-meta">@a.CpfMascarado — @a.Email</div>
+                                    </div>
+                                </div>
                             </td>
                             <td>@a.UnidadeNome</td>
                             <td>
@@ -735,6 +757,14 @@ else
         var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_associadoDependentes.Id}");
         if (recarregado is not null) _associadoDependentes = recarregado;
         await CarregarAsync();
+    }
+
+    private static string ObterIniciais(string nomeCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCompleto)) return "PC";
+        var partes = nomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 1) return partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant();
+        return $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[^1][0])}";
     }
 
     public void Dispose()

@@ -11,11 +11,78 @@
 else
 {
     <div class="pc-page-header">
-        <div>
-            <h1 class="pc-page-title">Unidades do Clube</h1>
-            <p class="pc-page-subtitle">Gerenciamento global de unidades e designação de Admin (máx. 1 ativo por unidade) e Tesoureiro</p>
+        <div class="pc-header-titles">
+            <span class="pc-badge-eyebrow">ProClubes Enterprise • Governança Multiunidade</span>
+            <h1 class="pc-title">Unidades e Equipe</h1>
+            <p class="pc-subtitle">Gerenciamento global de unidades e designação de Admin (máx. 1 ativo por unidade) e Tesoureiros.</p>
         </div>
-        <button type="button" class="pc-btn pc-btn-primary" @onclick="NovaUnidade">+ Nova Unidade</button>
+        <div class="pc-header-actions">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="NovaUnidade">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Nova Unidade
+            </button>
+        </div>
+    </div>
+
+    <div class="pc-kpi-grid">
+        <div class="pc-kpi-card">
+            <div class="pc-kpi-header">
+                <span class="pc-kpi-label">Unidades Ativas</span>
+                <span class="pc-kpi-icon-pill bg-blue">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 21h18"></path>
+                        <path d="M5 21V7l8-4v18"></path>
+                        <path d="M19 21V11l-6-4"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="pc-kpi-body">
+                <span class="pc-kpi-value">@_unidades.Count(u => u.Ativa)</span>
+                <div class="pc-kpi-trend neutral">
+                    <span class="pc-trend-desc">de @_unidades.Count unidade(s) cadastrada(s)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="pc-kpi-card">
+            <div class="pc-kpi-header">
+                <span class="pc-kpi-label">Admins Designados</span>
+                <span class="pc-kpi-icon-pill bg-purple">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <polyline points="17 11 19 13 23 9"></polyline>
+                    </svg>
+                </span>
+            </div>
+            <div class="pc-kpi-body">
+                <span class="pc-kpi-value">@_unidades.Count(u => u.AdminAtivoUsuarioId.HasValue)</span>
+                <div class="pc-kpi-trend positive">
+                    <span class="pc-trend-desc">gestores locais ativos</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="pc-kpi-card">
+            <div class="pc-kpi-header">
+                <span class="pc-kpi-label">Tesoureiros em Exercício</span>
+                <span class="pc-kpi-icon-pill bg-green">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                </span>
+            </div>
+            <div class="pc-kpi-body">
+                <span class="pc-kpi-value">@_unidades.Sum(u => u.Tesoureiros.Count)</span>
+                <div class="pc-kpi-trend positive">
+                    <span class="pc-trend-desc">equipe financeira nas unidades</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(_mensagem))
@@ -96,7 +163,15 @@ else
                     @foreach (var u in _unidades)
                     {
                         <tr>
-                            <td><strong>@u.Sigla</strong> — @u.Nome</td>
+                            <td>
+                                <div class="pc-user-info">
+                                    <div class="pc-avatar">@u.Sigla</div>
+                                    <div>
+                                        <div class="pc-user-name">@u.Nome</div>
+                                        <div class="pc-user-meta">@u.Logradouro, @u.Numero — @u.Bairro</div>
+                                    </div>
+                                </div>
+                            </td>
                             <td>@u.Cidade / @u.UF</td>
                             <td>@u.Fone<br /><small style="color: var(--pc-text-secondary);">@u.Email</small></td>
                             <td><PcStatusBadge Text="@(u.Ativa ? "Ativa" : "Inativa")" Variant="@(u.Ativa ? "ativo" : "inativo")" /></td>

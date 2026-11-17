@@ -12,18 +12,24 @@
 else
 {
     <div class="pc-page-header">
-        <div>
-            <h1 class="pc-page-title">Solicitações de Cadastro</h1>
-            <p class="pc-page-subtitle">Aprovação com atribuição de categoria associativa ou rejeição com justificativa</p>
+        <div class="pc-header-titles">
+            <span class="pc-badge-eyebrow">ProClubes Enterprise • Admissão de Sócios</span>
+            <h1 class="pc-title">Solicitações de Cadastro</h1>
+            <p class="pc-subtitle">Aprovação com atribuição de categoria associativa ou rejeição com justificativa.</p>
         </div>
-        <div style="display: flex; gap: 10px;">
-            <select class="pc-select" @bind="_filtroStatus" @bind:after="CarregarAsync">
+        <div class="pc-header-actions">
+            <select class="pc-select" @bind="_filtroStatus" @bind:after="CarregarAsync" aria-label="Filtrar por status">
                 <option value="">Todos os status</option>
                 <option value="Pendente">Pendentes</option>
                 <option value="Aprovada">Aprovadas</option>
                 <option value="Rejeitada">Rejeitadas</option>
             </select>
-            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Filtrar</button>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                Filtrar
+            </button>
         </div>
     </div>
 
@@ -59,8 +65,16 @@ else
                     {
                         <tr>
                             <td>#@s.Id</td>
-                            <td><strong>@s.NomeCompleto</strong><br /><small>@s.CpfMascarado</small></td>
-                            <td>@s.Email<br /><small>@s.Fone</small></td>
+                            <td>
+                                <div class="pc-user-info">
+                                    <div class="pc-avatar">@ObterIniciais(s.NomeCompleto)</div>
+                                    <div>
+                                        <div class="pc-user-name">@s.NomeCompleto</div>
+                                        <div class="pc-user-meta">@s.CpfMascarado</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>@s.Email<br /><small style="color: var(--pc-text-muted);">@s.Fone</small></td>
                             <td>@s.UnidadePretendidaNome</td>
                             <td>@s.SolicitadaEm.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>
@@ -201,6 +215,14 @@ else
         _solicitacaoParaRejeitar = null;
         _justificativaRejeicao = string.Empty;
         await CarregarAsync();
+    }
+
+    private static string ObterIniciais(string nomeCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCompleto)) return "PC";
+        var partes = nomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 1) return partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant();
+        return $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[^1][0])}";
     }
 
     public void Dispose()
