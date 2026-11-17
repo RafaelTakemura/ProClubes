@@ -4,7 +4,7 @@
 @inject WebSessionState Session
 @inject NavigationManager Nav
 
-<PageTitle>Dashboard — ProClubesWeb</PageTitle>
+<PageTitle>Dashboard Executivo — ProClubesWeb</PageTitle>
 
 @if (!Session.IsAuthenticated)
 {
@@ -15,85 +15,410 @@
 }
 else
 {
-    <div class="pc-page-header">
-        <div>
-            <h1 class="pc-page-title">Dashboard Administrativo</h1>
-            <p class="pc-page-subtitle">Contexto ativo: <strong>@(_dashboard?.EscopoNome ?? "Carregando...")</strong></p>
-        </div>
-        <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Atualizar Indicadores</button>
-    </div>
+    <div class="pc-dashboard-container">
+        @* Cabeçalho de Boas-Vindas e Ações Globais *@
+        <header class="pc-page-header">
+            <div class="pc-header-titles">
+                <span class="pc-badge-eyebrow">ProClubes Enterprise • @(_dashboard?.EscopoNome ?? "Visão Consolidada")</span>
+                <h1 class="pc-title">Dashboard Executivo</h1>
+                <p class="pc-subtitle">Acompanhamento estratégico em tempo real das unidades e associados.</p>
+            </div>
+            <div class="pc-header-actions">
+                <div class="pc-period-selector">
+                    <select class="pc-select" @bind="_periodoSelecionado" aria-label="Período de análise">
+                        <option value="30">Últimos 30 dias</option>
+                        <option value="60">Últimos 60 dias</option>
+                        <option value="90">Este Trimestre</option>
+                        <option value="365">Este Ano</option>
+                    </select>
+                </div>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    Atualizar
+                </button>
+                <button type="button" class="pc-btn-primary" @onclick="() => _exibirModalNovaOperacao = true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Nova Ação
+                </button>
+            </div>
+        </header>
 
-    @if (!string.IsNullOrWhiteSpace(_erro))
-    {
-        <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
-    }
+        @if (!string.IsNullOrWhiteSpace(_erro))
+        {
+            <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
+        }
 
-    @if (_carregando)
-    {
-        <div class="pc-card">Carregando indicadores da API...</div>
-    }
-    else if (_dashboard is not null)
-    {
-        <div class="pc-kpi-grid">
-            @if (Session.IsSuperAdmin || Session.IsAdmin)
-            {
-                @if (Session.IsSuperAdmin)
-                {
-                    <div class="pc-kpi-card">
-                        <div class="pc-kpi-label">Unidades Ativas</div>
-                        <div class="pc-kpi-value">@_dashboard.TotalUnidadesAtivas</div>
+        @if (_carregando && _dashboard is null)
+        {
+            <div class="pc-card">Carregando indicadores estratégicos da API...</div>
+        }
+        else if (_dashboard is not null)
+        {
+            @* 1. Métricas Principais (4 KPIs Essenciais com Amplo Respiro) *@
+            <section class="pc-kpi-grid">
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-header">
+                        <span class="pc-kpi-label">Associados Ativos</span>
+                        <span class="pc-kpi-icon-pill bg-blue">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </span>
                     </div>
-                }
-                <div class="pc-kpi-card">
-                    <div class="pc-kpi-label">Associados Ativos</div>
-                    <div class="pc-kpi-value">@_dashboard.TotalAssociadosAtivos</div>
+                    <div class="pc-kpi-body">
+                        <span class="pc-kpi-value">@_dashboard.TotalAssociadosAtivos.ToString("N0")</span>
+                        <div class="pc-kpi-trend positive">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                <polyline points="17 6 23 6 23 12"></polyline>
+                            </svg>
+                            <span>@_dashboard.TotalUnidadesAtivas unid.</span>
+                            <span class="pc-trend-desc">• @_dashboard.CadastrosPendentes solicitações pendentes</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="pc-kpi-card">
-                    <div class="pc-kpi-label">Solicitações Pendentes</div>
-                    <div class="pc-kpi-value">@_dashboard.CadastrosPendentes</div>
-                </div>
-            }
 
-            <div class="pc-kpi-card">
-                <div class="pc-kpi-label">Mensalidades em Aberto (Mês)</div>
-                <div class="pc-kpi-value">@_dashboard.MensalidadesEmAbertoMesAtual</div>
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-header">
+                        <span class="pc-kpi-label">Arrecadação do Mês</span>
+                        <span class="pc-kpi-icon-pill bg-green">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="pc-kpi-body">
+                        <span class="pc-kpi-value">R$ @_dashboard.TotalRecebidoMesAtual.ToString("N2")</span>
+                        <div class="pc-kpi-trend positive">
+                            <span class="pc-pill-success">@_percentualLiquidadoMes.ToString("F0")% liquidado</span>
+                            <span class="pc-trend-desc">@_dashboard.MensalidadesEmAbertoMesAtual em aberto no mês</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-header">
+                        <span class="pc-kpi-label">Índice de Inadimplência</span>
+                        <span class="pc-kpi-icon-pill bg-amber">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="pc-kpi-body">
+                        <span class="pc-kpi-value">@_taxaInadimplencia.ToString("F1")%</span>
+                        <div class="pc-kpi-trend neutral">
+                            <span class="pc-pill-amber">R$ @_totalVencidoAtualizado.ToString("N2")</span>
+                            <span class="pc-trend-desc">em @_dashboard.MensalidadesVencidas título(s) vencido(s)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pc-kpi-card">
+                    <div class="pc-kpi-header">
+                        <span class="pc-kpi-label">Agenda &amp; Ocupação</span>
+                        <span class="pc-kpi-icon-pill bg-purple">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="pc-kpi-body">
+                        <span class="pc-kpi-value">@_dashboard.ReservasFuturasConfirmadas</span>
+                        <div class="pc-kpi-trend positive">
+                            <span>@_dashboard.EventosFuturos evento(s)</span>
+                            <span class="pc-trend-desc">• @_dashboard.ManifestacoesPendentes ouvidoria(s)</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            @* 2. Grid Central em 2 Colunas Despoluídas *@
+            <div class="pc-main-grid">
+                @* Coluna Esquerda: Gráfico Financeiro + Fila Limpa de Cadastros *@
+                <div class="pc-column-left">
+                    @* Gráfico Financeiro Minimalista *@
+                    <div class="pc-card pc-chart-card">
+                        <div class="pc-card-header">
+                            <div>
+                                <h2 class="pc-card-title">Arrecadação e Fluxo de Mensalidades</h2>
+                                <p class="pc-card-desc">Histórico dos últimos 6 meses (previsto vs liquidado)</p>
+                            </div>
+                            <div class="pc-legend-group">
+                                <span class="pc-legend-item"><span class="pc-legend-dot dot-previsto"></span> Previsto</span>
+                                <span class="pc-legend-item"><span class="pc-legend-dot dot-realizado"></span> Liquidado</span>
+                            </div>
+                        </div>
+                        <div class="pc-chart-container">
+                            <div class="pc-bar-chart">
+                                @foreach (var mes in _historicoMensalidades)
+                                {
+                                    <div class="pc-chart-col">
+                                        <div class="pc-bars-wrapper">
+                                            <div class="pc-bar bar-previsto"
+                                                 style="height: @(mes.PercentualPrevisto)%"
+                                                 title="@($"Previsto ({mes.SiglaMes}): R$ {mes.ValorPrevisto:N2}")"></div>
+                                            <div class="pc-bar bar-realizado @(mes.IsMesAtual ? "is-current" : "")"
+                                                 style="height: @(mes.PercentualRealizado)%"
+                                                 title="@($"Liquidado ({mes.SiglaMes}): R$ {mes.ValorRealizado:N2}")"></div>
+                                        </div>
+                                        <span class="pc-chart-label @(mes.IsMesAtual ? "active" : "")">@mes.SiglaMes</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (Session.IsSuperAdmin || Session.IsAdmin)
+                    {
+                        @* Fila de Solicitações de Cadastro Pendentes *@
+                        <div class="pc-card pc-table-card">
+                            <div class="pc-card-header">
+                                <div>
+                                    <div class="pc-title-with-badge">
+                                        <h2 class="pc-card-title">Solicitações de Cadastro</h2>
+                                        <span class="pc-counter-pill">@_dashboard.CadastrosPendentes pendente(s)</span>
+                                    </div>
+                                    <p class="pc-card-desc">Candidatos aguardando homologação da diretoria</p>
+                                </div>
+                                <button type="button" class="pc-link-btn" @onclick='() => Nav.NavigateTo("/cadastros")'>
+                                    Ver fila completa
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M5 12h14"></path>
+                                        <path d="m12 5 7 7-7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="pc-compact-list">
+                                @if (_solicitacoesPendentes.Count == 0)
+                                {
+                                    <div class="pc-empty-state">
+                                        <p style="margin: 0;">Nenhuma solicitação pendente de análise no momento.</p>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var item in _solicitacoesPendentes.Take(4))
+                                    {
+                                        <div class="pc-list-row">
+                                            <div class="pc-user-info">
+                                                <div class="pc-avatar">@ObterIniciais(item.NomeCompleto)</div>
+                                                <div>
+                                                    <div class="pc-user-name">@item.NomeCompleto</div>
+                                                    <div class="pc-user-meta">@item.UnidadePretendidaNome • Solicitado em @item.SolicitadaEm.ToString("dd/MM/yyyy")</div>
+                                                </div>
+                                            </div>
+                                            <div class="pc-row-actions">
+                                                <span class="pc-badge-category">Candidato</span>
+                                                <button type="button" class="pc-btn-sm" @onclick='() => Nav.NavigateTo("/cadastros")'>Avaliar</button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Coluna Direita: Governança & Ações Rápidas Executivas *@
+                <div class="pc-column-right">
+                    @* Ações Rápidas da Diretoria *@
+                    <div class="pc-card pc-actions-card">
+                        <div class="pc-card-header">
+                            <h2 class="pc-card-title">Ações Rápidas</h2>
+                        </div>
+                        <div class="pc-actions-grid">
+                            <button type="button" class="pc-action-tile" @onclick='() => Nav.NavigateTo("/financeiro")'>
+                                <div class="pc-tile-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                                        <line x1="2" y1="10" x2="22" y2="10"></line>
+                                    </svg>
+                                </div>
+                                <span class="pc-tile-label">Faturamento</span>
+                                <span class="pc-tile-sub">Mensalidades e baixas</span>
+                            </button>
+
+                            @if (Session.IsSuperAdmin || Session.IsAdmin)
+                            {
+                                <button type="button" class="pc-action-tile" @onclick='() => Nav.NavigateTo("/manifestacoes")'>
+                                    <div class="pc-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="m3 11 18-5v12L3 14v-3z"></path>
+                                            <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="pc-tile-label">Ouvidoria</span>
+                                    <span class="pc-tile-sub">Atender manifestações</span>
+                                </button>
+
+                                <button type="button" class="pc-action-tile" @onclick='() => Nav.NavigateTo("/espacos")'>
+                                    <div class="pc-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                        </svg>
+                                    </div>
+                                    <span class="pc-tile-label">Espaços</span>
+                                    <span class="pc-tile-sub">Áreas e reservas</span>
+                                </button>
+
+                                <button type="button" class="pc-action-tile" @onclick='() => Nav.NavigateTo("/associados")'>
+                                    <div class="pc-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                            <polyline points="14 2 14 8 20 8"></polyline>
+                                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        </svg>
+                                    </div>
+                                    <span class="pc-tile-label">Quadro Social</span>
+                                    <span class="pc-tile-sub">Associados e titulares</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="pc-action-tile" @onclick='() => Nav.NavigateTo("/notificacoes")'>
+                                    <div class="pc-tile-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="pc-tile-label">Notificações</span>
+                                    <span class="pc-tile-sub">Central de alertas</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @if (Session.IsSuperAdmin || Session.IsAdmin)
+                    {
+                        @* Governança & Assembleias Digitais *@
+                        <div class="pc-card pc-governance-card">
+                            <div class="pc-card-header">
+                                <div>
+                                    <span class="pc-pill-active">@_dashboard.VotacoesAbertas Em Andamento</span>
+                                    <h2 class="pc-card-title mt-2">Votações &amp; Assembleias</h2>
+                                </div>
+                                <button type="button" class="pc-link-btn" @onclick='() => Nav.NavigateTo("/votacoes")'>Ver todas</button>
+                            </div>
+
+                            <div class="pc-governance-list">
+                                @if (_votacoesDestaque.Count == 0)
+                                {
+                                    <div class="pc-empty-state">
+                                        <p style="margin: 0;">Nenhuma assembleia registrada no escopo atual.</p>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var pauta in _votacoesDestaque)
+                                    {
+                                        var quor = pauta.TotalEleitoresAptos > 0
+                                            ? Math.Min(100, (int)Math.Round(pauta.TotalVotosRegistrados * 100.0 / pauta.TotalEleitoresAptos))
+                                            : (pauta.TotalVotosRegistrados > 0 ? 100 : 0);
+
+                                        <div class="pc-pauta-item">
+                                            <div class="pc-pauta-header">
+                                                <span class="pc-pauta-name">@pauta.Titulo</span>
+                                                <span class="pc-pauta-days">@ObterRotuloPrazoVotacao(pauta)</span>
+                                            </div>
+                                            <div class="pc-progress-bar">
+                                                <div class="pc-progress-fill @(pauta.Estado == EstadoVotacao.Aberta ? "" : "bg-blue-accent")"
+                                                     style="width: @(quor)%"></div>
+                                            </div>
+                                            <div class="pc-pauta-footer">
+                                                <span>Participação: <strong>@(quor)%</strong></span>
+                                                <span>@pauta.TotalVotosRegistrados voto(s) registrado(s)</span>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
             </div>
+        }
 
-            <div class="pc-kpi-card">
-                <div class="pc-kpi-label">Mensalidades em Atraso</div>
-                <div class="pc-kpi-value" style="color: var(--pc-danger);">@_dashboard.MensalidadesVencidas</div>
-            </div>
-
-            <div class="pc-kpi-card">
-                <div class="pc-kpi-label">Recebido no Mês Atual</div>
-                <div class="pc-kpi-value" style="color: var(--pc-secondary);">R$ @_dashboard.TotalRecebidoMesAtual.ToString("N2")</div>
-            </div>
-
-            @if (Session.IsSuperAdmin || Session.IsAdmin)
-            {
-                <div class="pc-kpi-card">
-                    <div class="pc-kpi-label">Eventos Programados</div>
-                    <div class="pc-kpi-value">@_dashboard.EventosFuturos</div>
+        <PcModal IsOpen="_exibirModalNovaOperacao"
+                 Title="Nova Ação Executiva"
+                 Subtitle="Selecione o módulo administrativo para iniciar uma operação rápida"
+                 MaxWidth="560px"
+                 OnClose="() => _exibirModalNovaOperacao = false">
+            <ChildContent>
+                <div class="pc-actions-grid">
+                    @if (Session.IsSuperAdmin || Session.IsAdmin)
+                    {
+                        <button type="button" class="pc-action-tile" @onclick='() => IrParaModulo("/associados")'>
+                            <span class="pc-tile-label">Cadastrar Associado</span>
+                            <span class="pc-tile-sub">Novo titular ou dependente</span>
+                        </button>
+                        <button type="button" class="pc-action-tile" @onclick='() => IrParaModulo("/eventos")'>
+                            <span class="pc-tile-label">Publicar Evento</span>
+                            <span class="pc-tile-sub">Agenda social ou esportiva</span>
+                        </button>
+                        <button type="button" class="pc-action-tile" @onclick='() => IrParaModulo("/votacoes")'>
+                            <span class="pc-tile-label">Abrir Assembleia</span>
+                            <span class="pc-tile-sub">Nova pauta de votação digital</span>
+                        </button>
+                    }
+                    <button type="button" class="pc-action-tile" @onclick='() => IrParaModulo("/financeiro")'>
+                        <span class="pc-tile-label">Gestão de Mensalidades</span>
+                        <span class="pc-tile-sub">Emitir competência ou quitar título</span>
+                    </button>
                 </div>
-                <div class="pc-kpi-card">
-                    <div class="pc-kpi-label">Reservas Futuras</div>
-                    <div class="pc-kpi-value">@_dashboard.ReservasFuturasConfirmadas</div>
-                </div>
-                <div class="pc-kpi-card">
-                    <div class="pc-kpi-label">Manifestações em Aberto/Atend.</div>
-                    <div class="pc-kpi-value">@_dashboard.ManifestacoesPendentes</div>
-                </div>
-                <div class="pc-kpi-card">
-                    <div class="pc-kpi-label">Votações Abertas</div>
-                    <div class="pc-kpi-value">@_dashboard.VotacoesAbertas</div>
-                </div>
-            }
-        </div>
-    }
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalNovaOperacao = false">Fechar</button>
+            </FooterContent>
+        </PcModal>
+    </div>
 }
 
 @code {
+    private sealed record HistoricoMensalidadeMes(
+        string SiglaMes,
+        decimal ValorPrevisto,
+        decimal ValorRealizado,
+        int PercentualPrevisto,
+        int PercentualRealizado,
+        bool IsMesAtual);
+
+    private static readonly string[] NomesMesesCurto =
+    [
+        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+        "Jul", "Ago", "Set", "Out", "Nov", "Dez"
+    ];
+
     private DashboardAdminDto? _dashboard;
+    private IReadOnlyList<SolicitacaoCadastroListItemDto> _solicitacoesPendentes = Array.Empty<SolicitacaoCadastroListItemDto>();
+    private IReadOnlyList<VotacaoDto> _votacoesDestaque = Array.Empty<VotacaoDto>();
+    private IReadOnlyList<HistoricoMensalidadeMes> _historicoMensalidades = Array.Empty<HistoricoMensalidadeMes>();
+
+    private decimal _percentualLiquidadoMes = 100m;
+    private decimal _taxaInadimplencia;
+    private decimal _totalVencidoAtualizado;
+
+    private string _periodoSelecionado = "30";
+    private bool _exibirModalNovaOperacao;
     private string? _erro;
     private bool _carregando;
 
@@ -121,13 +446,112 @@ else
     {
         _carregando = true;
         _erro = null;
-        var url = Session.UnidadeContextoId.HasValue
-            ? $"api/v1/admin/dashboard?unidadeId={Session.UnidadeContextoId.Value}"
-            : "api/v1/admin/dashboard";
-        var (data, err) = await Api.GetAsync<DashboardAdminDto>(url);
-        _dashboard = data;
-        _erro = err;
+
+        var unidadeParam = Session.UnidadeContextoId.HasValue
+            ? $"unidadeId={Session.UnidadeContextoId.Value}"
+            : string.Empty;
+
+        var urlDash = string.IsNullOrEmpty(unidadeParam)
+            ? "api/v1/admin/dashboard"
+            : $"api/v1/admin/dashboard?{unidadeParam}";
+
+        var (dash, errDash) = await Api.GetAsync<DashboardAdminDto>(urlDash);
+        _dashboard = dash;
+        _erro = errDash;
+
+        var qMens = new List<string> { "page=1", "pageSize=200" };
+        if (!string.IsNullOrEmpty(unidadeParam)) qMens.Add(unidadeParam);
+        var (mensPage, _) = await Api.GetAsync<PagedResponse<MensalidadeDto>>($"api/v1/admin/mensalidades?{string.Join("&", qMens)}");
+        CalcularIndicadoresFinanceiros(mensPage?.Items ?? Array.Empty<MensalidadeDto>());
+
+        if (Session.IsSuperAdmin || Session.IsAdmin)
+        {
+            var qCad = new List<string> { "page=1", "pageSize=6", "status=Pendente" };
+            if (!string.IsNullOrEmpty(unidadeParam)) qCad.Add(unidadeParam);
+            var (cadPage, _) = await Api.GetAsync<PagedResponse<SolicitacaoCadastroListItemDto>>($"api/v1/admin/cadastros/solicitacoes?{string.Join("&", qCad)}");
+            _solicitacoesPendentes = cadPage?.Items ?? Array.Empty<SolicitacaoCadastroListItemDto>();
+
+            var urlVot = string.IsNullOrEmpty(unidadeParam)
+                ? "api/v1/votacoes"
+                : $"api/v1/votacoes?{unidadeParam}";
+            var (vots, _) = await Api.GetAsync<IReadOnlyList<VotacaoDto>>(urlVot);
+            _votacoesDestaque = (vots ?? Array.Empty<VotacaoDto>())
+                .OrderByDescending(v => v.Estado == EstadoVotacao.Aberta)
+                .ThenByDescending(v => v.Inicio)
+                .Take(3)
+                .ToList();
+        }
+
         _carregando = false;
+    }
+
+    private void CalcularIndicadoresFinanceiros(IReadOnlyList<MensalidadeDto> mensalidades)
+    {
+        var hoje = DateOnly.FromDateTime(DateTime.Today);
+        var competenciaAtual = new DateOnly(hoje.Year, hoje.Month, 1);
+
+        var totalTitulos = mensalidades.Count;
+        var vencidas = mensalidades.Where(m => m.SituacaoExibicao == "Vencida").ToList();
+        _taxaInadimplencia = totalTitulos > 0
+            ? Math.Round((decimal)vencidas.Count * 100m / totalTitulos, 1)
+            : 0m;
+        _totalVencidoAtualizado = vencidas.Sum(m => m.ValorTotalAtualizado);
+
+        var doMesAtual = mensalidades.Where(m => m.Competencia.Year == competenciaAtual.Year && m.Competencia.Month == competenciaAtual.Month).ToList();
+        var previstoMesAtual = doMesAtual.Sum(m => m.ValorPrincipal);
+        var realizadoMesAtual = doMesAtual.Where(m => m.Status == StatusMensalidade.Paga).Sum(m => m.Pagamento?.ValorTotalPago ?? m.ValorPrincipal);
+        _percentualLiquidadoMes = previstoMesAtual > 0
+            ? Math.Min(100m, Math.Round(realizadoMesAtual * 100m / previstoMesAtual, 1))
+            : (_dashboard?.TotalRecebidoMesAtual > 0 ? 100m : 0m);
+
+        var ultimos6Meses = Enumerable.Range(0, 6)
+            .Select(offset => competenciaAtual.AddMonths(offset - 5))
+            .ToList();
+
+        var agrupado = ultimos6Meses.Select(comp =>
+        {
+            var itensMes = mensalidades.Where(m => m.Competencia.Year == comp.Year && m.Competencia.Month == comp.Month).ToList();
+            var prev = itensMes.Sum(m => m.ValorPrincipal);
+            var real = itensMes.Where(m => m.Status == StatusMensalidade.Paga).Sum(m => m.Pagamento?.ValorTotalPago ?? m.ValorPrincipal);
+            return (Comp: comp, Previsto: prev, Realizado: real);
+        }).ToList();
+
+        var maiorValor = agrupado.Count > 0
+            ? agrupado.Max(x => Math.Max(x.Previsto, x.Realizado))
+            : 0m;
+
+        _historicoMensalidades = agrupado.Select(x =>
+        {
+            var pctPrev = maiorValor > 0 ? Math.Max(10, (int)Math.Round(x.Previsto * 100m / maiorValor)) : 12;
+            var pctReal = maiorValor > 0 ? (x.Realizado > 0 ? Math.Max(10, (int)Math.Round(x.Realizado * 100m / maiorValor)) : 4) : 6;
+            var sigla = NomesMesesCurto[x.Comp.Month - 1];
+            var isAtual = x.Comp.Year == competenciaAtual.Year && x.Comp.Month == competenciaAtual.Month;
+            return new HistoricoMensalidadeMes(sigla, x.Previsto, x.Realizado, pctPrev, pctReal, isAtual);
+        }).ToList();
+    }
+
+    private static string ObterIniciais(string nomeCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCompleto)) return "PC";
+        var partes = nomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 1) return partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant();
+        return $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[^1][0])}";
+    }
+
+    private static string ObterRotuloPrazoVotacao(VotacaoDto pauta)
+    {
+        if (pauta.Estado == EstadoVotacao.Aberta)
+        {
+            var dias = (int)Math.Ceiling((pauta.FimPrevisto - DateTimeOffset.Now).TotalDays);
+            return dias <= 1 ? "Encerra em breve" : $"Restam {dias} dias";
+        }
+        return pauta.Estado.ToString();
+    }
+
+    private void IrParaModulo(string rota)
+    {
+        _exibirModalNovaOperacao = false;
+        Nav.NavigateTo(rota);
     }
 
     public void Dispose()

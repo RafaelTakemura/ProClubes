@@ -19,3 +19,4 @@ appsettings.*.Local.json
 *.pfx
 *.pem
 *.key
+.design_novo
