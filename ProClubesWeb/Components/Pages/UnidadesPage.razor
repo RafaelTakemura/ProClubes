@@ -197,8 +197,8 @@ else
                                         {
                                             <div style="display: flex; align-items: center; gap: 6px;">
                                                 <PcStatusBadge Text="@t.NomeCompleto" Variant="tesoureiro" />
-                                                <button type="button" class="pc-btn pc-btn-danger pc-btn-sm"
-                                                        style="padding: 2px 8px; font-size: 11px;"
+                                                <button type="button" class="pc-btn pc-btn-sm"
+                                                        style="padding: 2px 9px; font-size: 11px; border-radius: 9999px; background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA;"
                                                         title="Remover cargo de Tesoureiro"
                                                         @onclick="() => RemoverTesoureiroAsync(u.Id, t.UsuarioId, t.NomeCompleto)">
                                                     Remover
