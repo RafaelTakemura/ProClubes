@@ -18,19 +18,22 @@ else
                 <img src="/images/proclubes-logo.svg" alt="Logotipo ProClubes" />
                 <div>
                     <div class="pc-sidebar-brand-title">ProClubes</div>
-                    <div style="font-size: 11px; opacity: 0.8;">Painel da Diretoria</div>
+                    <div style="font-size: 11px; color: rgba(255, 255, 255, 0.65); letter-spacing: 0.03em;">PAINEL DA DIRETORIA</div>
                 </div>
             </div>
             <NavMenu />
+            <div style="padding: 16px 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 11px; color: rgba(255, 255, 255, 0.55);">
+                ProClubes Enterprise • Governança
+            </div>
         </aside>
 
         <div class="pc-main">
             <header class="pc-topbar">
-                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     @if (Session.IsSuperAdmin)
                     {
-                        <label for="seletor-unidade" class="pc-label" style="margin: 0;">Escopo de Unidade:</label>
-                        <select id="seletor-unidade" class="pc-select" style="min-width: 220px;"
+                        <label for="seletor-unidade" class="pc-label" style="margin: 0; color: var(--pc-text-secondary); text-transform: uppercase; letter-spacing: 0.03em;">Escopo de Unidade:</label>
+                        <select id="seletor-unidade" class="pc-select" style="min-width: 240px;"
                                 value="@(Session.UnidadeContextoId?.ToString() ?? "")"
                                 @onchange="OnUnidadeContextoChanged">
                             <option value="">Todas as Unidades (Global)</option>
@@ -43,7 +46,11 @@ else
                     else
                     {
                         <span class="pc-badge pc-badge-info">
-                            <span>🏢</span>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M3 21h18"></path>
+                                <path d="M5 21V7l8-4v18"></path>
+                                <path d="M19 21V11l-6-4"></path>
+                            </svg>
                             <span>Unidade: @(Session.Usuario?.UnidadeAdministrativaNome ?? "Vinculada")</span>
                         </span>
                     }
@@ -54,11 +61,17 @@ else
                     {
                         <PcStatusBadge Text="@ObterRotuloRole(Session.Usuario.RoleAdministrativa)"
                                        Variant="@ObterVarianteRole(Session.Usuario.RoleAdministrativa)" />
-                        <span style="font-weight: 600; font-size: 14px;">@Session.Usuario.NomeCompleto</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="pc-avatar" style="width: 32px; height: 32px; font-size: 11px;">@ObterIniciais(Session.Usuario.NomeCompleto)</div>
+                            <span style="font-weight: 600; font-size: 14px; color: var(--pc-text-primary);">@Session.Usuario.NomeCompleto</span>
+                        </div>
                     }
 
                     <a href="/notificacoes" class="pc-btn pc-btn-outline pc-btn-sm" aria-label="Central de notificações">
-                        <span aria-hidden="true">🔔</span>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
                         <span>Notificações</span>
                         @if (Session.NotificacoesNaoLidas > 0)
                         {
@@ -66,7 +79,14 @@ else
                         }
                     </a>
 
-                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="SairAsync">Sair</button>
+                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="SairAsync">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        <span>Sair</span>
+                    </button>
                 </div>
             </header>
 
@@ -115,6 +135,14 @@ else
     {
         await Api.LogoutAsync();
         Nav.NavigateTo("/login");
+    }
+
+    private static string ObterIniciais(string nomeCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCompleto)) return "PC";
+        var partes = nomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 1) return partes[0][..Math.Min(2, partes[0].Length)].ToUpperInvariant();
+        return $"{char.ToUpperInvariant(partes[0][0])}{char.ToUpperInvariant(partes[^1][0])}";
     }
 
     private static string ObterRotuloRole(RoleAdministrativa r) => r switch

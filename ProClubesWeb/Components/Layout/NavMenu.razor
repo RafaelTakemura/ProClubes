@@ -2,14 +2,27 @@
 
 <nav class="pc-nav">
     <NavLink class="pc-nav-link" href="" Match="NavLinkMatch.All">
-        <span aria-hidden="true">📊</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        </svg>
         <span>Dashboard</span>
     </NavLink>
 
     @if (Session.IsSuperAdmin)
     {
         <NavLink class="pc-nav-link" href="unidades">
-            <span aria-hidden="true">🏛️</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 21h18"></path>
+                <path d="M5 21V7l8-4v18"></path>
+                <path d="M19 21V11l-6-4"></path>
+                <path d="M9 9v.01"></path>
+                <path d="M9 12v.01"></path>
+                <path d="M9 15v.01"></path>
+                <path d="M9 18v.01"></path>
+            </svg>
             <span>Unidades e Equipe</span>
         </NavLink>
     }
@@ -17,12 +30,21 @@
     @if (Session.IsSuperAdmin || Session.IsAdmin)
     {
         <NavLink class="pc-nav-link" href="cadastros">
-            <span aria-hidden="true">📋</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                <path d="m9 14 2 2 4-4"></path>
+            </svg>
             <span>Solicitações de Cadastro</span>
         </NavLink>
 
         <NavLink class="pc-nav-link" href="associados">
-            <span aria-hidden="true">👥</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
             <span>Associados e Dependentes</span>
         </NavLink>
     }
@@ -30,7 +52,10 @@
     @if (Session.IsSuperAdmin || Session.IsAdmin || Session.IsTesoureiro)
     {
         <NavLink class="pc-nav-link" href="financeiro">
-            <span aria-hidden="true">💰</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="12" y1="1" x2="12" y2="23"></line>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
             <span>Financeiro e Mensalidades</span>
         </NavLink>
     }
@@ -38,17 +63,27 @@
     @if (Session.IsSuperAdmin || Session.IsAdmin)
     {
         <NavLink class="pc-nav-link" href="eventos">
-            <span aria-hidden="true">🎉</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
             <span>Eventos e Taxas</span>
         </NavLink>
 
         <NavLink class="pc-nav-link" href="espacos">
-            <span aria-hidden="true">📅</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
             <span>Espaços e Reservas</span>
         </NavLink>
 
         <NavLink class="pc-nav-link" href="manifestacoes">
-            <span aria-hidden="true">💬</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
             <span>Manifestações</span>
         </NavLink>
     }
@@ -56,7 +91,10 @@
     @if (Session.IsSuperAdmin)
     {
         <NavLink class="pc-nav-link" href="categorias-manifestacoes">
-            <span aria-hidden="true">🏷️</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                <line x1="7" y1="7" x2="7.01" y2="7"></line>
+            </svg>
             <span>Categorias Globais</span>
         </NavLink>
     }
@@ -64,13 +102,19 @@
     @if (Session.IsSuperAdmin || Session.IsAdmin)
     {
         <NavLink class="pc-nav-link" href="votacoes">
-            <span aria-hidden="true">🗳️</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="m9 11 3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            </svg>
             <span>Votações Digitais</span>
         </NavLink>
     }
 
     <NavLink class="pc-nav-link" href="notificacoes">
-        <span aria-hidden="true">🔔</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
         <span>Notificações</span>
     </NavLink>
 </nav>

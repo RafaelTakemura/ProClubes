@@ -5,12 +5,15 @@
 
 <PageTitle>Acesso à Diretoria — ProClubesWeb</PageTitle>
 
-<div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px;">
-    <div class="pc-card" style="max-width: 440px; width: 100%; padding: 32px;">
-        <div style="text-align: center; margin-bottom: 24px;">
-            <img src="/images/proclubes-logo.svg" alt="Logotipo Hexagonal ProClubes" style="width: 96px; height: 96px; margin-bottom: 12px;" />
-            <h1 style="font-size: 24px; font-weight: 700; margin: 0;">Acesso à Diretoria</h1>
-            <p class="pc-page-subtitle">Painel administrativo e financeiro ProClubesWeb</p>
+<div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; background: linear-gradient(135deg, #0B192C 0%, #153448 100%);">
+    <div class="pc-card" style="max-width: 440px; width: 100%; padding: 36px 32px; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: var(--pc-shadow-modal); margin-bottom: 0;">
+        <div style="text-align: center; margin-bottom: 28px;">
+            <img src="/images/proclubes-logo.svg" alt="Logotipo ProClubes" style="width: 76px; height: 76px; margin-bottom: 14px;" />
+            <div style="margin-bottom: 6px;">
+                <span class="pc-badge-eyebrow">ProClubes Enterprise • Governança</span>
+            </div>
+            <h1 class="pc-title" style="font-size: 24px; line-height: 32px;">Acesso à Diretoria</h1>
+            <p class="pc-subtitle">Painel administrativo e financeiro multiunidade</p>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(_erro))
@@ -28,9 +31,16 @@
             <input id="senha" type="password" class="pc-input" @bind="_senha" />
         </div>
 
-        <button type="button" class="pc-btn pc-btn-primary" style="width: 100%; margin-top: 12px;"
+        <button type="button" class="pc-btn pc-btn-primary" style="width: 100%; margin-top: 14px;"
                 disabled="@_carregando" @onclick="EntrarAsync">
-            @(_carregando ? "Autenticando..." : "Entrar")
+            <span>@(_carregando ? "Autenticando..." : "Entrar no Painel")</span>
+            @if (!_carregando)
+            {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M5 12h14"></path>
+                    <path d="m12 5 7 7-7 7"></path>
+                </svg>
+            }
         </button>
     </div>
 </div>
