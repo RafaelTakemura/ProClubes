@@ -455,8 +455,8 @@ html, body {
 
 .pc-bar-chart {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+    gap: 12px;
     height: 190px;
     align-items: end;
     padding: 12px 8px 0 8px;
@@ -584,10 +584,23 @@ html, body {
     color: var(--pc-primary);
     font-size: 12px;
     font-weight: 700;
+    line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+.pc-avatar.pc-avatar-sigla {
+    width: auto;
+    min-width: 48px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    text-align: center;
+    white-space: nowrap;
 }
 
 .pc-user-name {
