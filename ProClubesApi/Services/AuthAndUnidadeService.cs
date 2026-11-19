@@ -466,6 +466,7 @@ public class UnidadeService
 
         var alvo = await _db.Usuarios
             .Include(u => u.Pessoa)
+                .ThenInclude(p => p.Associado)
             .FirstOrDefaultAsync(u => u.Id == req.UsuarioId.Value, ct);
 
         if (alvo is null)
@@ -473,6 +474,14 @@ public class UnidadeService
 
         if (alvo.RoleAdministrativa == RoleAdministrativa.SuperAdmin)
             throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido alterar a role do Super Admin por este endpoint.");
+
+        if (req.Role != RoleAdministrativa.Nenhuma
+            && alvo.Pessoa.Associado is not null
+            && alvo.Pessoa.Associado.Status == StatusAssociado.Inativo)
+        {
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos,
+                "Não é permitido atribuir cargo administrativo a um associado inativo. Reative o vínculo associativo antes de designá-lo.");
+        }
 
         if (req.Role == RoleAdministrativa.Nenhuma)
         {

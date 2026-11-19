@@ -671,6 +671,9 @@ public class AssociadoAndCadastroService
 
         _currentUser.EnsureAdminOrSuperAdminForUnit(user, associado.UnidadeId);
 
+        if (associado.Status != StatusAssociado.Ativo)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido alterar a categoria de um associado inativo.");
+
         var novoCod = req.NovoCodigoCategoria.Trim().ToUpperInvariant();
         var novaCat = await _db.CategoriasAssociado.FirstOrDefaultAsync(c => c.Codigo == novoCod && c.Ativa, ct)
             ?? throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Nova categoria associativa inválida.");
@@ -745,8 +748,14 @@ public class AssociadoAndCadastroService
         {
             associado.Status = StatusAssociado.Inativo;
             associado.DesativadoEmUtc = nowUtc;
-            if (associado.Pessoa.Usuario is not null && associado.Pessoa.Usuario.RoleAdministrativa == RoleAdministrativa.Nenhuma)
+            if (associado.Pessoa.Usuario is not null && associado.Pessoa.Usuario.RoleAdministrativa != RoleAdministrativa.SuperAdmin)
             {
+                if (associado.Pessoa.Usuario.RoleAdministrativa != RoleAdministrativa.Nenhuma)
+                {
+                    associado.Pessoa.Usuario.RoleAdministrativa = RoleAdministrativa.Nenhuma;
+                    associado.Pessoa.Usuario.UnidadeAdministrativaId = null;
+                    associado.Pessoa.Usuario.AdminAtivoUnidadeId = null;
+                }
                 associado.Pessoa.Usuario.EstadoConta = EstadoConta.Desativada;
                 associado.Pessoa.Usuario.VersaoSeguranca++;
             }
@@ -770,6 +779,9 @@ public class AssociadoAndCadastroService
             .Include(a => a.Unidade)
             .FirstOrDefaultAsync(a => a.Id == associadoId, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado não encontrado.");
+
+        if (associado.Status != StatusAssociado.Ativo)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido transferir um associado inativo.");
 
         if (associado.UnidadeId == req.UnidadeDestinoId)
             throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.TransferenciaMesmaUnidade, "A unidade de destino deve ser diferente da unidade atual.");
@@ -834,6 +846,9 @@ public class AssociadoAndCadastroService
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado titular não encontrado.");
 
         _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
+
+        if (titular.Status != StatusAssociado.Ativo)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido vincular dependentes a um associado titular inativo.");
 
         var cpf = CpfHelper.Normalize(req.Cpf);
         if (!CpfHelper.IsValidFormat(cpf))
