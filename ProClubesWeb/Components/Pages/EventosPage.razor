@@ -39,7 +39,15 @@
     <ChildContent>
         <div class="pc-form-grid">
             <div class="pc-field"><label class="pc-label">Nome do Evento *</label><input class="pc-input" @bind="_nome" /></div>
-            <div class="pc-field"><label class="pc-label">Unidade Organizadora ID *</label><input type="number" class="pc-input" disabled="@(!Session.IsSuperAdmin)" @bind="_unidadeOrgId" /></div>
+            <div class="pc-field">
+                <label class="pc-label">Unidade Organizadora *</label>
+                <select class="pc-select" disabled="@(!Session.IsSuperAdmin)" @bind="_unidadeOrgId">
+                    @foreach (var u in _unidades)
+                    {
+                        <option value="@u.Id">@u.Nome (@u.Sigla)</option>
+                    }
+                </select>
+            </div>
             <div class="pc-field">
                 <label class="pc-label">Público-Alvo *</label>
                 <select class="pc-select" @bind="_publicoAlvo">
@@ -166,6 +174,7 @@
 </PcModal>
 
 @code {
+    private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
     private IReadOnlyList<EventoDto> _eventos = Array.Empty<EventoDto>();
     private EventoDto? _eventoSelecionado;
     private IReadOnlyList<PagamentoEventoDto> _pagamentosEvento = Array.Empty<PagamentoEventoDto>();
@@ -202,6 +211,9 @@
     private async Task CarregarAsync()
     {
         _erro = null;
+        var (unids, _) = await Api.GetAsync<IReadOnlyList<UnidadeDto>>("api/v1/unidades");
+        if (unids is not null) _unidades = unids;
+
         var url = Session.UnidadeContextoId.HasValue ? $"api/v1/eventos?unidadeId={Session.UnidadeContextoId.Value}" : "api/v1/eventos";
         var (data, err) = await Api.GetAsync<IReadOnlyList<EventoDto>>(url);
         if (data is not null) _eventos = data;
