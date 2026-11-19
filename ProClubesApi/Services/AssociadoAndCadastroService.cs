@@ -34,12 +34,7 @@ public class AssociadoAndCadastroService
         if (string.IsNullOrWhiteSpace(req.NomeCompleto)
             || string.IsNullOrWhiteSpace(req.Sexo)
             || string.IsNullOrWhiteSpace(req.EstadoCivil)
-            || string.IsNullOrWhiteSpace(req.Logradouro)
-            || string.IsNullOrWhiteSpace(req.Bairro)
-            || string.IsNullOrWhiteSpace(req.Numero)
-            || string.IsNullOrWhiteSpace(req.Cidade)
-            || string.IsNullOrWhiteSpace(req.UF)
-            || req.UF.Trim().Length != 2
+            || (!string.IsNullOrWhiteSpace(req.UF) && req.UF.Trim().Length != 2)
             || string.IsNullOrWhiteSpace(req.Fone)
             || string.IsNullOrWhiteSpace(req.Email)
             || string.IsNullOrWhiteSpace(req.Senha)
@@ -79,11 +74,11 @@ public class AssociadoAndCadastroService
             pessoa.Sexo = req.Sexo.Trim();
             pessoa.EstadoCivil = req.EstadoCivil.Trim();
             pessoa.DataNascimento = req.DataNascimento;
-            pessoa.Logradouro = req.Logradouro.Trim();
-            pessoa.Bairro = req.Bairro.Trim();
-            pessoa.Numero = req.Numero.Trim();
-            pessoa.Cidade = req.Cidade.Trim();
-            pessoa.UF = req.UF.Trim().ToUpperInvariant();
+            pessoa.Logradouro = (req.Logradouro ?? string.Empty).Trim();
+            pessoa.Bairro = (req.Bairro ?? string.Empty).Trim();
+            pessoa.Numero = (req.Numero ?? string.Empty).Trim();
+            pessoa.Cidade = (req.Cidade ?? string.Empty).Trim();
+            pessoa.UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant();
             pessoa.Fone = req.Fone.Trim();
             pessoa.Email = req.Email.Trim();
             pessoa.AtualizadaEmUtc = nowUtc;
@@ -119,11 +114,11 @@ public class AssociadoAndCadastroService
                 Sexo = req.Sexo.Trim(),
                 EstadoCivil = req.EstadoCivil.Trim(),
                 DataNascimento = req.DataNascimento,
-                Logradouro = req.Logradouro.Trim(),
-                Bairro = req.Bairro.Trim(),
-                Numero = req.Numero.Trim(),
-                Cidade = req.Cidade.Trim(),
-                UF = req.UF.Trim().ToUpperInvariant(),
+                Logradouro = (req.Logradouro ?? string.Empty).Trim(),
+                Bairro = (req.Bairro ?? string.Empty).Trim(),
+                Numero = (req.Numero ?? string.Empty).Trim(),
+                Cidade = (req.Cidade ?? string.Empty).Trim(),
+                UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant(),
                 Fone = req.Fone.Trim(),
                 Email = req.Email.Trim(),
                 CriadaEmUtc = nowUtc,
@@ -206,11 +201,11 @@ public class AssociadoAndCadastroService
         pessoa.Sexo = req.Sexo.Trim();
         pessoa.EstadoCivil = req.EstadoCivil.Trim();
         pessoa.DataNascimento = req.DataNascimento;
-        pessoa.Logradouro = req.Logradouro.Trim();
-        pessoa.Bairro = req.Bairro.Trim();
-        pessoa.Numero = req.Numero.Trim();
-        pessoa.Cidade = req.Cidade.Trim();
-        pessoa.UF = req.UF.Trim().ToUpperInvariant();
+        pessoa.Logradouro = (req.Logradouro ?? string.Empty).Trim();
+        pessoa.Bairro = (req.Bairro ?? string.Empty).Trim();
+        pessoa.Numero = (req.Numero ?? string.Empty).Trim();
+        pessoa.Cidade = (req.Cidade ?? string.Empty).Trim();
+        pessoa.UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant();
         pessoa.Fone = req.Fone.Trim();
         pessoa.Email = req.Email.Trim();
         pessoa.AtualizadaEmUtc = nowUtc;
@@ -603,6 +598,9 @@ public class AssociadoAndCadastroService
         var nowUtc = DateTime.UtcNow;
         var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
 
+        if (!string.IsNullOrWhiteSpace(req.UF) && req.UF.Trim().Length != 2)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Quando informada, a UF deve conter 2 caracteres.");
+
         var pessoa = new Pessoa
         {
             NomeCompleto = req.NomeCompleto.Trim(),
@@ -610,11 +608,11 @@ public class AssociadoAndCadastroService
             Sexo = req.Sexo.Trim(),
             EstadoCivil = req.EstadoCivil.Trim(),
             DataNascimento = req.DataNascimento,
-            Logradouro = req.Logradouro.Trim(),
-            Bairro = req.Bairro.Trim(),
-            Numero = req.Numero.Trim(),
-            Cidade = req.Cidade.Trim(),
-            UF = req.UF.Trim().ToUpperInvariant(),
+            Logradouro = (req.Logradouro ?? string.Empty).Trim(),
+            Bairro = (req.Bairro ?? string.Empty).Trim(),
+            Numero = (req.Numero ?? string.Empty).Trim(),
+            Cidade = (req.Cidade ?? string.Empty).Trim(),
+            UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant(),
             Fone = req.Fone.Trim(),
             Email = req.Email.Trim(),
             CriadaEmUtc = nowUtc,
@@ -1108,6 +1106,9 @@ public class AssociadoAndCadastroService
         DataNascimento: a.Pessoa.DataNascimento,
         Email: a.Pessoa.Email,
         Fone: a.Pessoa.Fone,
+        Logradouro: a.Pessoa.Logradouro,
+        Bairro: a.Pessoa.Bairro,
+        Numero: a.Pessoa.Numero,
         Cidade: a.Pessoa.Cidade,
         UF: a.Pessoa.UF,
         UnidadeId: a.UnidadeId,
