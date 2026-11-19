@@ -278,49 +278,58 @@ else
                 </div>
 
                 <h4 style="margin-top: 0; margin-bottom: 12px;">Ações de Gerenciamento</h4>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
-                    <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
-                        <label class="pc-label">Alterar Categoria (efeito na próxima competência)</label>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <select class="pc-select" style="flex: 1;" @bind="_novaCategoriaSel">
-                                <option value="ASSOCIADO">Sócio Associado</option>
-                                <option value="FUNDADOR">Sócio Fundador</option>
-                                <option value="CONVIDADO">Sócio Convidado</option>
-                                <option value="SIMPATIZANTE">Simpatizante</option>
-                            </select>
-                            <button type="button" class="pc-btn pc-btn-primary" @onclick="AlterarCategoriaAsync">Aplicar</button>
-                        </div>
+                @if (_associadoGerenciar.Status == StatusAssociado.Inativo)
+                {
+                    <div class="pc-alert pc-alert-warning" style="margin-bottom: 14px;">
+                        Este associado encontra-se <strong>Inativo</strong>. As ações de alteração de categoria, designação de cargo administrativo e transferência de unidade ficam disponíveis apenas para associados ativos.
                     </div>
-
-                    @if (Session.IsSuperAdmin && _associadoGerenciar.UsuarioId.HasValue)
+                }
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">
+                    @if (_associadoGerenciar.Status == StatusAssociado.Ativo)
                     {
                         <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
-                            <label class="pc-label">Cargo Administrativo na Unidade (Exclusivo Super Admin)</label>
+                            <label class="pc-label">Alterar Categoria (efeito na próxima competência)</label>
                             <div style="display: flex; gap: 10px; align-items: center;">
-                                <select class="pc-select" style="flex: 1;" @bind="_novaRoleSel">
-                                    <option value="@RoleAdministrativa.Nenhuma">Sem cargo (Associado Comum)</option>
-                                    <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
-                                    <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                                <select class="pc-select" style="flex: 1;" @bind="_novaCategoriaSel">
+                                    <option value="ASSOCIADO">Sócio Associado</option>
+                                    <option value="FUNDADOR">Sócio Fundador</option>
+                                    <option value="CONVIDADO">Sócio Convidado</option>
+                                    <option value="SIMPATIZANTE">Simpatizante</option>
                                 </select>
-                                <button type="button" class="pc-btn pc-btn-primary" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
+                                <button type="button" class="pc-btn pc-btn-primary" @onclick="AlterarCategoriaAsync">Aplicar</button>
                             </div>
                         </div>
-                    }
 
-                    @if (Session.IsSuperAdmin)
-                    {
-                        <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
-                            <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <select class="pc-select" style="flex: 1;" @bind="_unidadeDestinoTransf">
-                                    @foreach (var u in _unidades)
-                                    {
-                                        <option value="@u.Id">@u.Nome (@u.Sigla)</option>
-                                    }
-                                </select>
-                                <button type="button" class="pc-btn pc-btn-secondary" @onclick="TransferirUnidadeAsync">Transferir</button>
+                        @if (Session.IsSuperAdmin && _associadoGerenciar.UsuarioId.HasValue)
+                        {
+                            <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
+                                <label class="pc-label">Cargo Administrativo na Unidade (Exclusivo Super Admin)</label>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <select class="pc-select" style="flex: 1;" @bind="_novaRoleSel">
+                                        <option value="@RoleAdministrativa.Nenhuma">Sem cargo (Associado Comum)</option>
+                                        <option value="@RoleAdministrativa.Admin">Admin da Unidade</option>
+                                        <option value="@RoleAdministrativa.Tesoureiro">Tesoureiro da Unidade</option>
+                                    </select>
+                                    <button type="button" class="pc-btn pc-btn-primary" @onclick="AlterarRoleAdministrativaAsync">Aplicar Cargo</button>
+                                </div>
                             </div>
-                        </div>
+                        }
+
+                        @if (Session.IsSuperAdmin)
+                        {
+                            <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
+                                <label class="pc-label">Transferir para outra Unidade (Exclusivo Super Admin)</label>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <select class="pc-select" style="flex: 1;" @bind="_unidadeDestinoTransf">
+                                        @foreach (var u in _unidades)
+                                        {
+                                            <option value="@u.Id">@u.Nome (@u.Sigla)</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="pc-btn pc-btn-secondary" @onclick="TransferirUnidadeAsync">Transferir</button>
+                                </div>
+                            </div>
+                        }
                     }
 
                     <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
@@ -354,7 +363,10 @@ else
             <ChildContent>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                     <h4 style="margin: 0;">Dependentes Vinculados</h4>
-                    <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AbrirModalNovoDependente">+ Cadastrar Dependente</button>
+                    @if (_associadoDependentes.Status == StatusAssociado.Ativo)
+                    {
+                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AbrirModalNovoDependente">+ Cadastrar Dependente</button>
+                    }
                 </div>
 
                 <table class="pc-table">

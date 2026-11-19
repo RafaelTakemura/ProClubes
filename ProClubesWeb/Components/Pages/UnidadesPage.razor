@@ -295,9 +295,9 @@ else
         if (data is not null) _unidades = data;
         _erro = err;
 
-        var (assocPage, _) = await Api.GetAsync<PagedResponse<AssociadoDto>>("api/v1/admin/associados?page=1&pageSize=100");
+        var (assocPage, _) = await Api.GetAsync<PagedResponse<AssociadoDto>>("api/v1/admin/associados?page=1&pageSize=100&status=Ativo");
         if (assocPage is not null)
-            _associados = assocPage.Items.Where(a => a.UsuarioId.HasValue).ToList();
+            _associados = assocPage.Items.Where(a => a.UsuarioId.HasValue && a.Status == StatusAssociado.Ativo).ToList();
     }
 
     private void NovaUnidade()
