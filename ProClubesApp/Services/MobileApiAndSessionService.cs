@@ -206,6 +206,28 @@ public class MobileSessionAndApiService
         }
     }
 
+    public async Task<(T? Data, string? Error)> PatchAsync<T>(string relativeUrl)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Patch, relativeUrl);
+            var token = await SecureStorage.Default.GetAsync(KeyAccessToken);
+            if (!string.IsNullOrWhiteSpace(token))
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await _http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode)
+                return (default, await ExtractProblemDetailAsync(resp));
+
+            var data = await resp.Content.ReadFromJsonAsync<T>(JsonOptions);
+            return (data, null);
+        }
+        catch (Exception ex)
+        {
+            return (default, $"Sem conexão para atualizar dados: {ex.Message}");
+        }
+    }
+
     private static async Task<string> ExtractProblemDetailAsync(HttpResponseMessage resp)
     {
         try

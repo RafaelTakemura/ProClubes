@@ -18,19 +18,21 @@ public sealed class InicioMobilePage : ContentPage
         Title = "Início";
         BackgroundColor = ProClubesTheme.SurfaceApp;
 
-        // 1. Saudação ao Associado Despoluída
+        // 1. Saudação ao Associado Despoluída + Botão de Notificações no Canto Superior Direito
         var lblSaudacao = new Label
         {
-            FontSize = 22,
+            FontSize = 21,
             FontAttributes = FontAttributes.Bold,
-            TextColor = ProClubesTheme.TextPrimary
+            TextColor = ProClubesTheme.TextPrimary,
+            LineBreakMode = LineBreakMode.TailTruncation
         };
         lblSaudacao.SetBinding(Label.TextProperty, nameof(InicioViewModel.Saudacao));
 
         var lblUnidadeMatricula = new Label
         {
-            FontSize = 13,
-            TextColor = ProClubesTheme.TextMuted
+            FontSize = 12,
+            TextColor = ProClubesTheme.TextMuted,
+            LineBreakMode = LineBreakMode.TailTruncation
         };
         lblUnidadeMatricula.SetBinding(Label.TextProperty, nameof(InicioViewModel.UnidadeTexto));
 
@@ -46,7 +48,65 @@ public sealed class InicioMobilePage : ContentPage
             lblCategoriaPill,
             ProClubesTheme.StatusWarningBg,
             ProClubesTheme.StatusWarningBorder,
-            new Thickness(12, 4));
+            new Thickness(10, 3));
+
+        var lblContadorSino = new Label
+        {
+            FontSize = 9,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.White,
+            HorizontalOptions = LayoutOptions.Center,
+            VerticalOptions = LayoutOptions.Center
+        };
+        lblContadorSino.SetBinding(Label.TextProperty, nameof(InicioViewModel.NotificacoesNaoLidas));
+
+        var badgeContadorSino = new Border
+        {
+            BackgroundColor = ProClubesTheme.BrandAccent,
+            StrokeThickness = 0,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
+            MinimumWidthRequest = 16,
+            HeightRequest = 16,
+            Padding = new Thickness(4, 0),
+            HorizontalOptions = LayoutOptions.End,
+            VerticalOptions = LayoutOptions.Start,
+            Margin = new Thickness(0, -4, -4, 0),
+            InputTransparent = true,
+            Content = lblContadorSino
+        };
+        badgeContadorSino.SetBinding(VisualElement.IsVisibleProperty, nameof(InicioViewModel.TemNotificacoesNaoLidas));
+
+        var sinoBtnBorder = new Border
+        {
+            WidthRequest = 40,
+            HeightRequest = 40,
+            BackgroundColor = ProClubesTheme.SurfaceCard,
+            Stroke = ProClubesTheme.BorderDefault,
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(11) },
+            HorizontalOptions = LayoutOptions.Center,
+            VerticalOptions = LayoutOptions.Center,
+            Content = ProClubesTheme.CreateVectorIcon(MobileVectorIconKind.Bell, ProClubesTheme.BrandPrimary, 19)
+        };
+
+        var sinoContainer = new Grid
+        {
+            WidthRequest = 42,
+            HeightRequest = 42,
+            VerticalOptions = LayoutOptions.Center,
+            Children = { sinoBtnBorder, badgeContadorSino }
+        };
+        var tapSino = new TapGestureRecognizer();
+        tapSino.Tapped += (_, _) => AbrirPopupNotificacoes();
+        sinoContainer.GestureRecognizers.Add(tapSino);
+        sinoBtnBorder.GestureRecognizers.Add(tapSino);
+
+        var topoDireitaStack = new HorizontalStackLayout
+        {
+            Spacing = 8,
+            VerticalOptions = LayoutOptions.Center,
+            Children = { categoriaBadge, sinoContainer }
+        };
 
         var headerGrid = new Grid
         {
@@ -55,15 +115,16 @@ public sealed class InicioMobilePage : ContentPage
                 new ColumnDefinition { Width = GridLength.Star },
                 new ColumnDefinition { Width = GridLength.Auto }
             },
+            ColumnSpacing = 10,
             VerticalOptions = LayoutOptions.Center
         };
         var saudacaoStack = new VerticalStackLayout
         {
-            Spacing = 4,
+            Spacing = 3,
             Children = { lblSaudacao, lblUnidadeMatricula }
         };
         headerGrid.Add(saudacaoStack, 0, 0);
-        headerGrid.Add(categoriaBadge, 1, 0);
+        headerGrid.Add(topoDireitaStack, 1, 0);
 
         // 2. Credencial Digital Minimalista
         var topoCredencialGrid = new Grid
@@ -464,51 +525,7 @@ public sealed class InicioMobilePage : ContentPage
         };
         secaoDependentes.SetBinding(VisualElement.IsVisibleProperty, nameof(InicioViewModel.TemDependentes));
 
-        // 6. Notificações Recentes & Ações de Sessão
-        var notifStack = new VerticalStackLayout { Spacing = 8 };
-        BindableLayout.SetItemsSource(notifStack, _vm.NotificacoesRecentes);
-        BindableLayout.SetItemTemplate(notifStack, new DataTemplate(() =>
-        {
-            var t = new Label { FontAttributes = FontAttributes.Bold, FontSize = 13, TextColor = ProClubesTheme.TextPrimary };
-            t.SetBinding(Label.TextProperty, nameof(NotificacaoDto.Titulo));
-            var m = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
-            m.SetBinding(Label.TextProperty, nameof(NotificacaoDto.Mensagem));
-            return new Border
-            {
-                BackgroundColor = ProClubesTheme.SurfaceApp,
-                Stroke = ProClubesTheme.BorderDefault,
-                StrokeThickness = 1,
-                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
-                Padding = new Thickness(12, 10),
-                Content = new VerticalStackLayout { Spacing = 2, Children = { t, m } }
-            };
-        }));
-
-        var secaoNotificacoes = new VerticalStackLayout
-        {
-            Spacing = 10,
-            Children =
-            {
-                new Label
-                {
-                    Text = "NOTIFICAÇÕES RECENTES",
-                    FontSize = 11,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = ProClubesTheme.TextMuted,
-                    CharacterSpacing = 1
-                },
-                new Border
-                {
-                    BackgroundColor = ProClubesTheme.SurfaceCard,
-                    Stroke = ProClubesTheme.BorderDefault,
-                    StrokeThickness = 1,
-                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(14) },
-                    Padding = new Thickness(14, 12),
-                    Content = notifStack
-                }
-            }
-        };
-
+        // 6. Ações de Sessão
         var btnSincronizar = new Button
         {
             Text = "Sincronizar Dados",
@@ -562,7 +579,6 @@ public sealed class InicioMobilePage : ContentPage
                     secaoAcessoRapido,
                     secaoCompromisso,
                     secaoDependentes,
-                    secaoNotificacoes,
                     acoesContaGrid
                 }
             }
@@ -724,6 +740,84 @@ public sealed class InicioMobilePage : ContentPage
         };
 
         _popupHost.Show("Credencial de Acesso — Catraca", body);
+    }
+
+    private void AbrirPopupNotificacoes()
+    {
+        _ = _vm.MarcarTodasNotificacoesComoLidasAsync();
+        var body = new VerticalStackLayout { Spacing = 10 };
+
+        if (_vm.NotificacoesRecentes.Count == 0)
+        {
+            body.Children.Add(new Border
+            {
+                BackgroundColor = ProClubesTheme.SurfaceApp,
+                Stroke = ProClubesTheme.BorderDefault,
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+                Padding = new Thickness(16),
+                Content = new Label
+                {
+                    Text = "Nenhuma notificação recente registrada na sua conta.",
+                    FontSize = 13,
+                    TextColor = ProClubesTheme.TextSecondary,
+                    HorizontalTextAlignment = TextAlignment.Center
+                }
+            });
+        }
+        else
+        {
+            foreach (var n in _vm.NotificacoesRecentes)
+            {
+                body.Children.Add(new Border
+                {
+                    BackgroundColor = ProClubesTheme.SurfaceApp,
+                    Stroke = ProClubesTheme.BorderDefault,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+                    Padding = new Thickness(12, 10),
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 4,
+                        Children =
+                        {
+                            new Label
+                            {
+                                Text = n.Titulo,
+                                FontAttributes = FontAttributes.Bold,
+                                FontSize = 13,
+                                TextColor = ProClubesTheme.TextPrimary
+                            },
+                            new Label
+                            {
+                                Text = n.Mensagem,
+                                FontSize = 12,
+                                TextColor = ProClubesTheme.TextSecondary
+                            },
+                            new Label
+                            {
+                                Text = n.CriadaEm.ToString("dd/MM/yyyy HH:mm"),
+                                FontSize = 11,
+                                TextColor = ProClubesTheme.TextMuted
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        var btnFechar = new Button
+        {
+            Text = "Fechar",
+            BackgroundColor = ProClubesTheme.BrandPrimary,
+            TextColor = Colors.White,
+            CornerRadius = 10,
+            FontAttributes = FontAttributes.Bold
+        };
+        btnFechar.Clicked += (_, _) => _popupHost.Close();
+        body.Children.Add(btnFechar);
+
+        _popupHost.Show("Notificações e Avisos", body);
     }
 
     private void AbrirPopupConfirmarLogout()

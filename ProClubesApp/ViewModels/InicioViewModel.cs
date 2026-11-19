@@ -58,7 +58,16 @@ public class InicioViewModel : BaseViewModel
     public string DependentesContagemTexto { get => _dependentesContagemTexto; set => SetProperty(ref _dependentesContagemTexto, value); }
     public bool TemDependentes { get => _temDependentes; set => SetProperty(ref _temDependentes, value); }
     public bool IsTitularPagante => _api.IsTitularPagante;
-    public int NotificacoesNaoLidas { get => _notificacoesNaoLidas; set => SetProperty(ref _notificacoesNaoLidas, value); }
+    public int NotificacoesNaoLidas
+    {
+        get => _notificacoesNaoLidas;
+        set
+        {
+            if (SetProperty(ref _notificacoesNaoLidas, value))
+                OnPropertyChanged(nameof(TemNotificacoesNaoLidas));
+        }
+    }
+    public bool TemNotificacoesNaoLidas => _notificacoesNaoLidas > 0;
 
     public ICommand AtualizarCommand { get; }
 
@@ -189,6 +198,40 @@ public class InicioViewModel : BaseViewModel
         foreach (var n in resumo.NotificacoesRecentes) NotificacoesRecentes.Add(n);
 
         IsBusy = false;
+    }
+
+    public async Task MarcarTodasNotificacoesComoLidasAsync()
+    {
+        if (NotificacoesNaoLidas == 0 && !NotificacoesRecentes.Any(n => !n.Lida))
+            return;
+
+        NotificacoesNaoLidas = 0;
+
+        if (IsOffline)
+            return;
+
+        var naoLidasIds = NotificacoesRecentes
+            .Where(n => !n.Lida)
+            .Select(n => n.Id)
+            .ToHashSet();
+
+        var (paginaNaoLidas, _) = await _api.GetAsync<PagedResponse<NotificacaoDto>>("api/v1/notificacoes?apenasNaoLidas=true&page=1&pageSize=50");
+        if (paginaNaoLidas?.Items is not null)
+        {
+            foreach (var item in paginaNaoLidas.Items)
+                naoLidasIds.Add(item.Id);
+        }
+
+        foreach (var id in naoLidasIds)
+        {
+            await _api.PatchAsync<NotificacaoDto>($"api/v1/notificacoes/{id}/leitura");
+        }
+
+        for (var i = 0; i < NotificacoesRecentes.Count; i++)
+        {
+            if (!NotificacoesRecentes[i].Lida)
+                NotificacoesRecentes[i] = NotificacoesRecentes[i] with { Lida = true };
+        }
     }
 
     private static string ObterNomeSaudacao(string nomeCompleto)

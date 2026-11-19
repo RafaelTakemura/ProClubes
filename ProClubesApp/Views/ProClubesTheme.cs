@@ -332,7 +332,8 @@ public enum MobileVectorIconKind
     Ticket,
     Chat,
     QrCode,
-    CheckVote
+    CheckVote,
+    Bell
 }
 
 internal sealed class VectorIconDrawable : IDrawable
@@ -410,6 +411,19 @@ internal sealed class VectorIconDrawable : IDrawable
                 canvas.DrawRoundedRectangle(w * 0.14f, h * 0.16f, w * 0.72f, h * 0.68f, 2.5f);
                 canvas.DrawLine(w * 0.32f, h * 0.52f, w * 0.45f, h * 0.65f);
                 canvas.DrawLine(w * 0.45f, h * 0.65f, w * 0.70f, h * 0.36f);
+                break;
+
+            case MobileVectorIconKind.Bell:
+                // Sino de Notificações
+                var bellPath = new PathF();
+                bellPath.MoveTo(w * 0.22f, h * 0.68f);
+                bellPath.LineTo(w * 0.28f, h * 0.38f);
+                bellPath.QuadTo(w * 0.50f, h * 0.12f, w * 0.72f, h * 0.38f);
+                bellPath.LineTo(w * 0.78f, h * 0.68f);
+                bellPath.Close();
+                canvas.DrawPath(bellPath);
+                canvas.DrawLine(w * 0.16f, h * 0.68f, w * 0.84f, h * 0.68f);
+                canvas.DrawLine(w * 0.42f, h * 0.82f, w * 0.58f, h * 0.82f);
                 break;
         }
     }
