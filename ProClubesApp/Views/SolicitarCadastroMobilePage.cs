@@ -24,7 +24,7 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
 
         var unidadePicker = new Picker
         {
-            Title = "Unidade do Clube pretendida",
+            Title = "Selecione a unidade",
             TextColor = ProClubesTheme.TextPrimary,
             TitleColor = ProClubesTheme.TextMuted,
             ItemsSource = _vm.UnidadesPublicas,
@@ -32,20 +32,64 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         };
         unidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.UnidadeSelecionada));
 
-        var nomeEntry = new Entry { Placeholder = "Nome completo", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
 
-        var cpfEntry = new Entry { Placeholder = "CPF (11 dígitos)", Keyboard = Keyboard.Numeric, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        var cpfEntry = new Entry { Keyboard = Keyboard.Numeric, MaxLength = 14, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         cpfEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cpf));
 
-        var emailCadEntry = new Entry { Placeholder = "E-mail", Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
-        emailCadEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Email));
+        var sexoPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesSexo.ToList()
+        };
+        sexoPicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.Sexo));
 
-        var telEntry = new Entry { Placeholder = "Telefone celular", Keyboard = Keyboard.Telephone, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        var estadoCivilPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesEstadoCivil.ToList()
+        };
+        estadoCivilPicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.EstadoCivil));
+
+        var dataNascPicker = new DatePicker
+        {
+            Format = "dd/MM/yyyy",
+            MaximumDate = DateTime.Today,
+            MinimumDate = new DateTime(1920, 1, 1),
+            TextColor = ProClubesTheme.TextPrimary,
+            HeightRequest = 44
+        };
+        dataNascPicker.SetBinding(DatePicker.DateProperty, nameof(LoginCadastroViewModel.DataNascimento));
+
+        var telEntry = new Entry { Keyboard = Keyboard.Telephone, MaxLength = 15, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         telEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Telefone));
 
-        var senhaCadEntry = new Entry { Placeholder = "Senha de acesso (mín. 8 caracteres)", IsPassword = true, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        var emailCadEntry = new Entry { Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        emailCadEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Email));
+
+        var senhaCadEntry = new Entry { IsPassword = true, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         senhaCadEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.SenhaCadastro));
+
+        // Campos Opcionais de Endereço
+        var logradouroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        logradouroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Logradouro));
+
+        var numeroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        numeroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Numero));
+
+        var bairroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        bairroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Bairro));
+
+        var cidadeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        cidadeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cidade));
+
+        var ufEntry = new Entry { MaxLength = 2, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        ufEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.UF));
 
         var btnEnviarCadastro = new Button
         {
@@ -71,12 +115,12 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
 
         var cadastroCard = ProClubesTheme.CreateCard(new VerticalStackLayout
         {
-            Spacing = 12,
+            Spacing = 10,
             Children =
             {
                 new Label
                 {
-                    Text = "DADOS DO CANDIDATO",
+                    Text = "DADOS OBRIGATÓRIOS (*)",
                     FontSize = 11,
                     FontAttributes = FontAttributes.Bold,
                     TextColor = ProClubesTheme.TextMuted,
@@ -88,12 +132,29 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
                     FontSize = 12,
                     TextColor = ProClubesTheme.TextSecondary
                 },
-                unidadePicker,
-                nomeEntry,
-                cpfEntry,
-                emailCadEntry,
-                telEntry,
-                senhaCadEntry,
+                CriarCampo("Unidade do Clube *", unidadePicker),
+                CriarCampo("Nome Completo *", nomeEntry),
+                CriarCampo("CPF (11 dígitos) *", cpfEntry),
+                CriarCampo("Sexo *", sexoPicker),
+                CriarCampo("Estado Civil *", estadoCivilPicker),
+                CriarCampo("Data de Nascimento *", dataNascPicker),
+                CriarCampo("Telefone *", telEntry),
+                CriarCampo("E-mail *", emailCadEntry),
+                CriarCampo("Senha Inicial (mín. 6 caracteres) *", senhaCadEntry),
+                new BoxView { HeightRequest = 1, Color = ProClubesTheme.BorderDefault, Margin = new Thickness(0, 6) },
+                new Label
+                {
+                    Text = "ENDEREÇO (OPCIONAL)",
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextMuted,
+                    CharacterSpacing = 1
+                },
+                CriarCampo("Logradouro", logradouroEntry),
+                CriarCampo("Número", numeroEntry),
+                CriarCampo("Bairro", bairroEntry),
+                CriarCampo("Cidade", cidadeEntry),
+                CriarCampo("UF (2 letras)", ufEntry),
                 btnEnviarCadastro,
                 btnVoltarLogin
             }
@@ -111,6 +172,25 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
                     ProClubesTheme.CreateStatusBanner(),
                     cadastroCard
                 }
+            }
+        };
+    }
+
+    private static VerticalStackLayout CriarCampo(string rotulo, View controle)
+    {
+        return new VerticalStackLayout
+        {
+            Spacing = 3,
+            Children =
+            {
+                new Label
+                {
+                    Text = rotulo,
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextPrimary
+                },
+                controle
             }
         };
     }

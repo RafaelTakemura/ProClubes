@@ -233,7 +233,7 @@ public sealed class LoginCadastroPage : ContentPage
 
         var unidadePicker = new Picker
         {
-            Title = "Unidade do Clube pretendida",
+            Title = "Selecione a unidade",
             TextColor = ProClubesTheme.TextPrimary,
             TitleColor = ProClubesTheme.TextMuted,
             ItemsSource = _vm.UnidadesPublicas,
@@ -241,14 +241,56 @@ public sealed class LoginCadastroPage : ContentPage
         };
         unidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.UnidadeSelecionada));
 
-        var nomeEntry = new Entry { Placeholder = "Nome completo corrigido", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
 
-        var emailEntry = new Entry { Placeholder = "E-mail corrigido", Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var sexoPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesSexo.ToList()
+        };
+        sexoPicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.Sexo));
+
+        var estadoCivilPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesEstadoCivil.ToList()
+        };
+        estadoCivilPicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.EstadoCivil));
+
+        var dataNascPicker = new DatePicker
+        {
+            Format = "dd/MM/yyyy",
+            MaximumDate = DateTime.Today,
+            MinimumDate = new DateTime(1920, 1, 1),
+            TextColor = ProClubesTheme.TextPrimary
+        };
+        dataNascPicker.SetBinding(DatePicker.DateProperty, nameof(LoginCadastroViewModel.DataNascimento));
+
+        var emailEntry = new Entry { Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         emailEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Email));
 
-        var telEntry = new Entry { Placeholder = "Telefone celular atualizado", Keyboard = Keyboard.Telephone, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        var telEntry = new Entry { Keyboard = Keyboard.Telephone, MaxLength = 15, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         telEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Telefone));
+
+        var logradouroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        logradouroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Logradouro));
+
+        var numeroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        numeroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Numero));
+
+        var bairroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        bairroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Bairro));
+
+        var cidadeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        cidadeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cidade));
+
+        var ufEntry = new Entry { MaxLength = 2, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        ufEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.UF));
 
         var btnConfirmarReenvio = new Button
         {
@@ -280,6 +322,16 @@ public sealed class LoginCadastroPage : ContentPage
             _popupHost.Close();
         };
 
+        static VerticalStackLayout CriarCampoReenvio(string rotulo, View controle) => new()
+        {
+            Spacing = 2,
+            Children =
+            {
+                new Label { Text = rotulo, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                controle
+            }
+        };
+
         var body = new VerticalStackLayout
         {
             Spacing = 10,
@@ -288,10 +340,18 @@ public sealed class LoginCadastroPage : ContentPage
                 ProClubesTheme.CreateStatusBanner(),
                 lblMotivo,
                 new Label { Text = "Atualize os dados solicitados abaixo para reenviar seu cadastro mantendo o mesmo CPF.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
-                unidadePicker,
-                nomeEntry,
-                emailEntry,
-                telEntry,
+                CriarCampoReenvio("Unidade do Clube *", unidadePicker),
+                CriarCampoReenvio("Nome Completo *", nomeEntry),
+                CriarCampoReenvio("Sexo *", sexoPicker),
+                CriarCampoReenvio("Estado Civil *", estadoCivilPicker),
+                CriarCampoReenvio("Data de Nascimento *", dataNascPicker),
+                CriarCampoReenvio("E-mail *", emailEntry),
+                CriarCampoReenvio("Telefone *", telEntry),
+                CriarCampoReenvio("Logradouro", logradouroEntry),
+                CriarCampoReenvio("Número", numeroEntry),
+                CriarCampoReenvio("Bairro", bairroEntry),
+                CriarCampoReenvio("Cidade", cidadeEntry),
+                CriarCampoReenvio("UF (2 letras)", ufEntry),
                 btnConfirmarReenvio,
                 btnCancelar
             }

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using ProClubesApp.Models;
 using ProClubesApp.Services;
@@ -13,12 +14,24 @@ public class LoginCadastroViewModel : BaseViewModel
     private bool _modoCadastro;
     private bool _exibirStatusRestrito;
     private StatusCadastroResponse? _statusCadastroAtual;
+
     private string _nomeCompleto = string.Empty;
     private string _cpf = string.Empty;
+    private string? _sexo;
+    private string? _estadoCivil;
+    private DateTime _dataNascimento = new(2000, 1, 1);
     private string _email = string.Empty;
     private string _telefone = string.Empty;
+    private string _logradouro = string.Empty;
+    private string _numero = string.Empty;
+    private string _bairro = string.Empty;
+    private string _cidade = string.Empty;
+    private string _uf = string.Empty;
     private string _senhaCadastro = string.Empty;
     private UnidadePublicaDto? _unidadeSelecionada;
+
+    public IReadOnlyList<string> OpcoesSexo { get; } = ["Masculino", "Feminino", "Outro"];
+    public IReadOnlyList<string> OpcoesEstadoCivil { get; } = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"];
 
     public ObservableCollection<EventoDto> EventosPublicos { get; } = new();
     public ObservableCollection<UnidadePublicaDto> UnidadesPublicas { get; } = new();
@@ -28,10 +41,19 @@ public class LoginCadastroViewModel : BaseViewModel
     public bool ModoCadastro { get => _modoCadastro; set => SetProperty(ref _modoCadastro, value); }
     public bool ExibirStatusRestrito { get => _exibirStatusRestrito; set => SetProperty(ref _exibirStatusRestrito, value); }
     public StatusCadastroResponse? StatusCadastroAtual { get => _statusCadastroAtual; set => SetProperty(ref _statusCadastroAtual, value); }
+
     public string NomeCompleto { get => _nomeCompleto; set => SetProperty(ref _nomeCompleto, value); }
     public string Cpf { get => _cpf; set => SetProperty(ref _cpf, value); }
+    public string? Sexo { get => _sexo; set => SetProperty(ref _sexo, value); }
+    public string? EstadoCivil { get => _estadoCivil; set => SetProperty(ref _estadoCivil, value); }
+    public DateTime DataNascimento { get => _dataNascimento; set => SetProperty(ref _dataNascimento, value); }
     public string Email { get => _email; set => SetProperty(ref _email, value); }
     public string Telefone { get => _telefone; set => SetProperty(ref _telefone, value); }
+    public string Logradouro { get => _logradouro; set => SetProperty(ref _logradouro, value); }
+    public string Numero { get => _numero; set => SetProperty(ref _numero, value); }
+    public string Bairro { get => _bairro; set => SetProperty(ref _bairro, value); }
+    public string Cidade { get => _cidade; set => SetProperty(ref _cidade, value); }
+    public string UF { get => _uf; set => SetProperty(ref _uf, value); }
     public string SenhaCadastro { get => _senhaCadastro; set => SetProperty(ref _senhaCadastro, value); }
     public UnidadePublicaDto? UnidadeSelecionada { get => _unidadeSelecionada; set => SetProperty(ref _unidadeSelecionada, value); }
 
@@ -91,6 +113,8 @@ public class LoginCadastroViewModel : BaseViewModel
 
         NomeCompleto = StatusCadastroAtual.NomeCompleto;
         Email = StatusCadastroAtual.Email;
+        Sexo ??= OpcoesSexo[0];
+        EstadoCivil ??= OpcoesEstadoCivil[0];
         UnidadeSelecionada = UnidadesPublicas.FirstOrDefault(u => u.Id == StatusCadastroAtual.UnidadePretendidaId)
                              ?? UnidadesPublicas.FirstOrDefault();
     }
@@ -129,21 +153,58 @@ public class LoginCadastroViewModel : BaseViewModel
     {
         ErrorMessage = null;
         SuccessMessage = null;
-        var unidadeId = UnidadeSelecionada?.Id ?? 1;
+
+        if (UnidadeSelecionada is null
+            || string.IsNullOrWhiteSpace(NomeCompleto)
+            || string.IsNullOrWhiteSpace(Cpf)
+            || string.IsNullOrWhiteSpace(Sexo)
+            || string.IsNullOrWhiteSpace(EstadoCivil)
+            || string.IsNullOrWhiteSpace(Telefone)
+            || string.IsNullOrWhiteSpace(Email)
+            || string.IsNullOrWhiteSpace(SenhaCadastro))
+        {
+            ErrorMessage = "Preencha todos os campos obrigatórios (*) antes de enviar.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(UF) && UF.Trim().Length != 2)
+        {
+            ErrorMessage = "Quando informada, a UF deve conter exatamente 2 letras (ex.: PR, SP).";
+            return;
+        }
+
+        if (!ValidarSintaxeCpf(Cpf))
+        {
+            ErrorMessage = "Sintaxe de CPF inválida. Informe 11 dígitos numéricos ou no formato 000.000.000-00.";
+            return;
+        }
+
+        if (!ValidarSintaxeTelefone(Telefone))
+        {
+            ErrorMessage = "Sintaxe de telefone inválida. Informe DDD + número (10 ou 11 dígitos).";
+            return;
+        }
+
+        if (!ValidarSintaxeEmail(Email))
+        {
+            ErrorMessage = "Sintaxe de e-mail inválida. Informe um endereço no formato usuario@dominio.com.";
+            return;
+        }
+
         var req = new SolicitarCadastroRequest(
-            NomeCompleto,
-            Cpf,
-            "NaoInformado",
-            "Solteiro",
-            new DateOnly(1995, 1, 1),
-            "Rua Principal",
-            "Centro",
-            "100",
-            "Belo Horizonte",
-            "MG",
-            Telefone,
-            Email,
-            unidadeId,
+            NomeCompleto.Trim(),
+            Cpf.Trim(),
+            Sexo,
+            EstadoCivil,
+            DateOnly.FromDateTime(DataNascimento),
+            Logradouro.Trim(),
+            Bairro.Trim(),
+            Numero.Trim(),
+            Cidade.Trim(),
+            UF.Trim().ToUpperInvariant(),
+            Telefone.Trim(),
+            Email.Trim(),
+            UnidadeSelecionada.Id,
             SenhaCadastro);
 
         var (res, err) = await _api.PostAsync<StatusCadastroResponse>("api/v1/cadastros/solicitacoes", req, anonymous: true);
@@ -167,19 +228,48 @@ public class LoginCadastroViewModel : BaseViewModel
         ErrorMessage = null;
         SuccessMessage = null;
 
+        if (UnidadeSelecionada is null
+            || string.IsNullOrWhiteSpace(NomeCompleto)
+            || string.IsNullOrWhiteSpace(Sexo)
+            || string.IsNullOrWhiteSpace(EstadoCivil)
+            || string.IsNullOrWhiteSpace(Telefone)
+            || string.IsNullOrWhiteSpace(Email))
+        {
+            ErrorMessage = "Preencha todos os campos obrigatórios (*) antes de reenviar.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(UF) && UF.Trim().Length != 2)
+        {
+            ErrorMessage = "Quando informada, a UF deve conter exatamente 2 letras (ex.: PR, SP).";
+            return false;
+        }
+
+        if (!ValidarSintaxeTelefone(Telefone))
+        {
+            ErrorMessage = "Sintaxe de telefone inválida. Informe DDD + número (10 ou 11 dígitos).";
+            return false;
+        }
+
+        if (!ValidarSintaxeEmail(Email))
+        {
+            ErrorMessage = "Sintaxe de e-mail inválida. Informe um endereço no formato usuario@dominio.com.";
+            return false;
+        }
+
         var req = new ReenviarSolicitacaoCadastroRequest(
-            string.IsNullOrWhiteSpace(NomeCompleto) ? StatusCadastroAtual.NomeCompleto : NomeCompleto,
-            "NaoInformado",
-            "Solteiro",
-            new DateOnly(1995, 1, 1),
-            "Rua Atualizada",
-            "Centro",
-            "100",
-            "Belo Horizonte",
-            "MG",
-            string.IsNullOrWhiteSpace(Telefone) ? "31999990000" : Telefone,
-            string.IsNullOrWhiteSpace(Email) ? StatusCadastroAtual.Email : Email,
-            UnidadeSelecionada?.Id ?? StatusCadastroAtual.UnidadePretendidaId);
+            NomeCompleto.Trim(),
+            Sexo,
+            EstadoCivil,
+            DateOnly.FromDateTime(DataNascimento),
+            Logradouro.Trim(),
+            Bairro.Trim(),
+            Numero.Trim(),
+            Cidade.Trim(),
+            UF.Trim().ToUpperInvariant(),
+            Telefone.Trim(),
+            Email.Trim(),
+            UnidadeSelecionada.Id);
 
         var (res, err) = await _api.PutAsync<StatusCadastroResponse>("api/v1/me/cadastro/reenvio", req);
         if (err is not null)
@@ -198,6 +288,29 @@ public class LoginCadastroViewModel : BaseViewModel
         await _api.LogoutAsync();
         ExibirStatusRestrito = false;
         StatusCadastroAtual = null;
-        SuccessMessage = "Sessão encerrada.";
+    }
+
+    private static bool ValidarSintaxeCpf(string? cpf)
+    {
+        if (string.IsNullOrWhiteSpace(cpf)) return false;
+        var s = cpf.Trim();
+        if (!Regex.IsMatch(s, @"^(\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$")) return false;
+        var digitos = new string(s.Where(char.IsDigit).ToArray());
+        return digitos.Length == 11 && digitos.Distinct().Count() > 1;
+    }
+
+    private static bool ValidarSintaxeTelefone(string? fone)
+    {
+        if (string.IsNullOrWhiteSpace(fone)) return false;
+        var s = fone.Trim();
+        if (!Regex.IsMatch(s, @"^(\(\d{2}\)\s?\d{4,5}-?\d{4}|\d{2}\s?\d{4,5}-?\d{4}|\d{10,11})$")) return false;
+        var digitos = new string(s.Where(char.IsDigit).ToArray());
+        return digitos.Length is 10 or 11;
+    }
+
+    private static bool ValidarSintaxeEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        return Regex.IsMatch(email.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$");
     }
 }
