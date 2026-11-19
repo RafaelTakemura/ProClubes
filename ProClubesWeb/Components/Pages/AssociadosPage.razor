@@ -102,8 +102,12 @@ else
                         </select>
                     </div>
                 }
-                <div class="pc-field"><label class="pc-label">Cidade / UF *</label><input class="pc-input" @bind="_cidade" /></div>
                 <div class="pc-field"><label class="pc-label">Senha Inicial *</label><input type="password" class="pc-input" @bind="_senhaNovo" /></div>
+                <div class="pc-field"><label class="pc-label">Logradouro</label><input class="pc-input" @bind="_logradouro" /></div>
+                <div class="pc-field"><label class="pc-label">Número</label><input class="pc-input" @bind="_numero" /></div>
+                <div class="pc-field"><label class="pc-label">Bairro</label><input class="pc-input" @bind="_bairro" /></div>
+                <div class="pc-field"><label class="pc-label">Cidade</label><input class="pc-input" @bind="_cidade" /></div>
+                <div class="pc-field"><label class="pc-label">UF (2 letras)</label><input class="pc-input" maxlength="2" @bind="_uf" /></div>
             </div>
         </ChildContent>
         <FooterContent>
@@ -236,8 +240,8 @@ else
                             <strong>@_associadoGerenciar.Fone</strong>
                         </div>
                         <div>
-                            <small style="color: var(--pc-text-secondary); display: block;">Cidade / UF</small>
-                            <strong>@_associadoGerenciar.Cidade / @_associadoGerenciar.UF</strong>
+                            <small style="color: var(--pc-text-secondary); display: block;">Endereço</small>
+                            <strong>@ObterEnderecoFormatado(_associadoGerenciar)</strong>
                         </div>
                         <div>
                             <small style="color: var(--pc-text-secondary); display: block;">Unidade Atual</small>
@@ -466,7 +470,11 @@ else
     private DateOnly? _nascimento;
     private string _fone = string.Empty;
     private string _email = string.Empty;
+    private string _logradouro = string.Empty;
+    private string _bairro = string.Empty;
+    private string _numero = string.Empty;
     private string _cidade = string.Empty;
+    private string _uf = string.Empty;
     private int _unidadeIdNovo = 1;
     private string _categoriaNovo = "ASSOCIADO";
     private RoleAdministrativa _roleInicialNovo = RoleAdministrativa.Nenhuma;
@@ -569,7 +577,11 @@ else
         _nascimento = null;
         _fone = string.Empty;
         _email = string.Empty;
+        _logradouro = string.Empty;
+        _bairro = string.Empty;
+        _numero = string.Empty;
         _cidade = string.Empty;
+        _uf = string.Empty;
         _senhaNovo = string.Empty;
         _categoriaNovo = "ASSOCIADO";
         _roleInicialNovo = RoleAdministrativa.Nenhuma;
@@ -588,10 +600,15 @@ else
             || !_nascimento.HasValue
             || string.IsNullOrWhiteSpace(_fone)
             || string.IsNullOrWhiteSpace(_email)
-            || string.IsNullOrWhiteSpace(_cidade)
             || string.IsNullOrWhiteSpace(_senhaNovo))
         {
             _erroModalNovo = "Preencha todos os campos obrigatórios (*) antes de salvar.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_uf) && _uf.Trim().Length != 2)
+        {
+            _erroModalNovo = "Quando informada, a UF deve conter exatamente 2 letras (ex.: PR, SP).";
             return;
         }
 
@@ -616,7 +633,7 @@ else
         var roleInicial = Session.IsSuperAdmin ? _roleInicialNovo : RoleAdministrativa.Nenhuma;
         var req = new CriarAssociadoAdminRequest(
             _nome, _cpf, _sexo, _estadoCivil, _nascimento.Value,
-            "Rua Principal", "Centro", "100", _cidade, "PR",
+            _logradouro, _bairro, _numero, _cidade, _uf,
             _fone, _email, _unidadeIdNovo, _categoriaNovo, _senhaNovo,
             null, roleInicial);
 
@@ -769,6 +786,35 @@ else
         var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_associadoDependentes.Id}");
         if (recarregado is not null) _associadoDependentes = recarregado;
         await CarregarAsync();
+    }
+
+    private static string ObterEnderecoFormatado(AssociadoDto a)
+    {
+        var partes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(a.Logradouro))
+        {
+            var ruaNum = !string.IsNullOrWhiteSpace(a.Numero) ? $"{a.Logradouro}, {a.Numero}" : a.Logradouro;
+            partes.Add(ruaNum);
+        }
+        else if (!string.IsNullOrWhiteSpace(a.Numero))
+        {
+            partes.Add($"Nº {a.Numero}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(a.Bairro))
+            partes.Add(a.Bairro);
+
+        var cidadeUf = (!string.IsNullOrWhiteSpace(a.Cidade), !string.IsNullOrWhiteSpace(a.UF)) switch
+        {
+            (true, true) => $"{a.Cidade}/{a.UF}",
+            (true, false) => a.Cidade,
+            (false, true) => a.UF,
+            _ => string.Empty
+        };
+        if (!string.IsNullOrWhiteSpace(cidadeUf))
+            partes.Add(cidadeUf);
+
+        return partes.Count > 0 ? string.Join(" — ", partes) : "Não informado";
     }
 
     private static string ObterIniciais(string nomeCompleto)
