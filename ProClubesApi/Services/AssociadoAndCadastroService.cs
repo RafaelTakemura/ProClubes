@@ -142,18 +142,21 @@ public class AssociadoAndCadastroService
 
         await AtualizarInteressesPessoaAsync(pessoa.Id, req.InteressesIds, ct);
 
+        var categoriaPretendida = await ResolverCategoriaPretendidaAsync(req.CodigoCategoriaPretendida, ct);
+
         var solicitacao = new SolicitacaoCadastro
         {
             PessoaId = pessoa.Id,
             UsuarioId = usuario.Id,
             UnidadePretendidaId = unidade.Id,
             Status = StatusSolicitacaoCadastro.Pendente,
+            CategoriaAprovadaId = categoriaPretendida?.Id,
             SolicitadaEmUtc = nowUtc
         };
         _db.SolicitacoesCadastro.Add(solicitacao);
         await _db.SaveChangesAsync(ct);
 
-        await NotificarDiretoriaNovaSolicitacaoAsync(solicitacao, unidade, ct);
+        await NotificarDiretoriaNovaSolicitacaoAsync(solicitacao, unidade, ct: ct);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -166,7 +169,7 @@ public class AssociadoAndCadastroService
             UnidadePretendidaNome: unidade.Nome,
             Status: solicitacao.Status,
             JustificativaRejeicao: null,
-            CategoriaAprovadaNome: null,
+            CategoriaAprovadaNome: categoriaPretendida?.Nome,
             SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(solicitacao.SolicitadaEmUtc),
             DecididaEm: null);
     }
@@ -182,6 +185,7 @@ public class AssociadoAndCadastroService
             throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.SolicitacaoJaPendente, "Você já possui uma solicitação pendente de análise.");
 
         var ultima = await _db.SolicitacoesCadastro
+            .Include(s => s.CategoriaAprovada)
             .Where(s => s.PessoaId == user.PessoaId)
             .OrderByDescending(s => s.SolicitadaEmUtc)
             .FirstOrDefaultAsync(ct);
@@ -212,18 +216,23 @@ public class AssociadoAndCadastroService
 
         await AtualizarInteressesPessoaAsync(pessoa.Id, req.InteressesIds, ct);
 
+        var categoriaPretendida = !string.IsNullOrWhiteSpace(req.CodigoCategoriaPretendida)
+            ? await ResolverCategoriaPretendidaAsync(req.CodigoCategoriaPretendida, ct)
+            : (ultima.CategoriaAprovada ?? await ResolverCategoriaPretendidaAsync(null, ct));
+
         var novaSolicitacao = new SolicitacaoCadastro
         {
             PessoaId = pessoa.Id,
             UsuarioId = user.UsuarioId,
             UnidadePretendidaId = unidade.Id,
             Status = StatusSolicitacaoCadastro.Pendente,
+            CategoriaAprovadaId = categoriaPretendida?.Id,
             SolicitadaEmUtc = nowUtc
         };
         _db.SolicitacoesCadastro.Add(novaSolicitacao);
         await _db.SaveChangesAsync(ct);
 
-        await NotificarDiretoriaNovaSolicitacaoAsync(novaSolicitacao, unidade, ct);
+        await NotificarDiretoriaNovaSolicitacaoAsync(novaSolicitacao, unidade, ct: ct);
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -236,7 +245,7 @@ public class AssociadoAndCadastroService
             UnidadePretendidaNome: unidade.Nome,
             Status: novaSolicitacao.Status,
             JustificativaRejeicao: null,
-            CategoriaAprovadaNome: null,
+            CategoriaAprovadaNome: categoriaPretendida?.Nome,
             SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(novaSolicitacao.SolicitadaEmUtc),
             DecididaEm: null);
     }
@@ -280,20 +289,41 @@ public class AssociadoAndCadastroService
             .Take(pagination.NormalizedPageSize)
             .ToListAsync(ct);
 
-        var dtos = items.Select(s => new SolicitacaoCadastroListItemDto(
-            Id: s.Id,
-            PessoaId: s.PessoaId,
-            NomeCompleto: s.Pessoa.NomeCompleto,
-            CpfMascarado: CpfHelper.Mask(s.Pessoa.Cpf),
-            Email: s.Pessoa.Email,
-            Fone: s.Pessoa.Fone,
-            UnidadePretendidaId: s.UnidadePretendidaId,
-            UnidadePretendidaNome: s.UnidadePretendida.Nome,
-            Status: s.Status,
-            JustificativaRejeicao: s.JustificativaRejeicao,
-            CategoriaAprovadaNome: s.CategoriaAprovada?.Nome,
-            SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(s.SolicitadaEmUtc),
-            DecididaEm: s.DecididaEmUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(s.DecididaEmUtc.Value) : null)).ToList();
+        var pessoaIds = items.Select(i => i.PessoaId).Distinct().ToList();
+        var depsAtivas = pessoaIds.Count == 0
+            ? new List<Dependencia>()
+            : await _db.Dependencias
+                .AsNoTracking()
+                .Include(d => d.AssociadoTitular)
+                    .ThenInclude(a => a.Pessoa)
+                .Where(d => pessoaIds.Contains(d.PessoaDependenteId) && d.DataFim == null)
+                .ToListAsync(ct);
+
+        var dependenciasPorPessoa = depsAtivas
+            .GroupBy(d => d.PessoaDependenteId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(d => d.Id).First());
+
+        var dtos = items.Select(s =>
+        {
+            var categoriaOuVinculo = dependenciasPorPessoa.TryGetValue(s.PessoaId, out var dep)
+                ? FormatarVinculoDependente(dep)
+                : (s.CategoriaAprovada?.Nome ?? (s.Status == StatusSolicitacaoCadastro.Aprovada ? "Dependente" : null));
+
+            return new SolicitacaoCadastroListItemDto(
+                Id: s.Id,
+                PessoaId: s.PessoaId,
+                NomeCompleto: s.Pessoa.NomeCompleto,
+                CpfMascarado: CpfHelper.Mask(s.Pessoa.Cpf),
+                Email: s.Pessoa.Email,
+                Fone: s.Pessoa.Fone,
+                UnidadePretendidaId: s.UnidadePretendidaId,
+                UnidadePretendidaNome: s.UnidadePretendida.Nome,
+                Status: s.Status,
+                JustificativaRejeicao: s.JustificativaRejeicao,
+                CategoriaAprovadaNome: categoriaOuVinculo,
+                SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(s.SolicitadaEmUtc),
+                DecididaEm: s.DecididaEmUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(s.DecididaEmUtc.Value) : null);
+        }).ToList();
 
         return new PagedResponse<SolicitacaoCadastroListItemDto>(dtos, total, pagination.NormalizedPage, pagination.NormalizedPageSize);
     }
@@ -308,6 +338,7 @@ public class AssociadoAndCadastroService
             .Include(s => s.Pessoa)
             .Include(s => s.Usuario)
             .Include(s => s.UnidadePretendida)
+            .Include(s => s.CategoriaAprovada)
             .FirstOrDefaultAsync(s => s.Id == solicitacaoId, ct);
 
         if (solicitacao is null)
@@ -318,9 +349,10 @@ public class AssociadoAndCadastroService
         if (solicitacao.Status != StatusSolicitacaoCadastro.Pendente)
             throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Esta solicitação já foi decidida.");
 
-        // Verifica se é conta individual de dependente previamente vinculado (D8)
+        // Verifica se é conta individual de dependente previamente vinculado (D8) ou solicitação enviada pelo titular
         var depAtivo = await _db.Dependencias
             .Include(d => d.AssociadoTitular)
+                .ThenInclude(a => a.Pessoa)
             .FirstOrDefaultAsync(d => d.PessoaDependenteId == solicitacao.PessoaId && d.DataFim == null, ct);
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -328,14 +360,20 @@ public class AssociadoAndCadastroService
         var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
 
         CategoriaAssociado? categoria = null;
-        if (depAtivo is not null && string.Equals(req.CodigoCategoria, "DEPENDENTE", StringComparison.OrdinalIgnoreCase))
+        var aprovarComoDependente = depAtivo is not null &&
+            (string.IsNullOrWhiteSpace(req.CodigoCategoria) ||
+             string.Equals(req.CodigoCategoria.Trim(), "DEPENDENTE", StringComparison.OrdinalIgnoreCase));
+
+        if (aprovarComoDependente)
         {
-            if (depAtivo.AssociadoTitular.UnidadeId != solicitacao.UnidadePretendidaId)
+            if (depAtivo!.AssociadoTitular.UnidadeId != solicitacao.UnidadePretendidaId)
                 throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "A unidade da solicitação do dependente deve corresponder à unidade do titular.");
         }
         else
         {
-            var cod = (req.CodigoCategoria ?? CodigosCategoriaAssociado.Associado).Trim().ToUpperInvariant();
+            var cod = string.IsNullOrWhiteSpace(req.CodigoCategoria)
+                ? (solicitacao.CategoriaAprovada?.Codigo ?? CodigosCategoriaAssociado.Associado)
+                : req.CodigoCategoria.Trim().ToUpperInvariant();
             categoria = await _db.CategoriasAssociado.FirstOrDefaultAsync(c => c.Codigo == cod && c.Ativa, ct);
             if (categoria is null)
                 throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Categoria associativa inválida.");
@@ -379,7 +417,9 @@ public class AssociadoAndCadastroService
             solicitacao.UsuarioId,
             TipoNotificacao.SolicitacaoCadastroAnalisada,
             "Cadastro aprovado!",
-            $"Sua solicitação de cadastro na unidade {solicitacao.UnidadePretendida.Nome} foi aprovada.",
+            aprovarComoDependente
+                ? $"Seu vínculo como dependente na unidade {solicitacao.UnidadePretendida.Nome} foi aprovado."
+                : $"Sua solicitação de cadastro na unidade {solicitacao.UnidadePretendida.Nome} foi aprovada.",
             "SolicitacaoCadastro",
             solicitacao.Id,
             $"CAD_APROV_{solicitacao.Id}",
@@ -400,7 +440,7 @@ public class AssociadoAndCadastroService
             UnidadePretendidaNome: solicitacao.UnidadePretendida.Nome,
             Status: solicitacao.Status,
             JustificativaRejeicao: null,
-            CategoriaAprovadaNome: categoria?.Nome ?? "Dependente",
+            CategoriaAprovadaNome: categoria?.Nome ?? (depAtivo is not null ? FormatarVinculoDependente(depAtivo) : "Dependente"),
             SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(solicitacao.SolicitadaEmUtc),
             DecididaEm: TimeZoneHelper.ToSaoPauloOffset(nowUtc));
     }
@@ -432,6 +472,14 @@ public class AssociadoAndCadastroService
         solicitacao.JustificativaRejeicao = req.Justificativa.Trim();
         solicitacao.AvaliadorUsuarioId = user.UsuarioId;
         solicitacao.DecididaEmUtc = nowUtc;
+
+        var depPendente = await _db.Dependencias
+            .FirstOrDefaultAsync(d => d.PessoaDependenteId == solicitacao.PessoaId && d.DataFim == null, ct);
+        if (depPendente is not null)
+        {
+            depPendente.DataFim = TimeZoneHelper.TodaySaoPaulo(nowUtc);
+            depPendente.MotivoFim = MotivoFimDependencia.Administrativo;
+        }
 
         await _notificacao.CriarNotificacaoAsync(
             solicitacao.UsuarioId,
@@ -840,10 +888,15 @@ public class AssociadoAndCadastroService
     {
         var titular = await _db.Associados
             .Include(a => a.Unidade)
+            .Include(a => a.Pessoa)
             .FirstOrDefaultAsync(a => a.Id == associadoTitularId, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado titular não encontrado.");
 
-        _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
+        var solicitadoPeloTitular = user.AssociadoId == titular.Id
+            && user.Role != RoleAdministrativa.Admin
+            && user.Role != RoleAdministrativa.SuperAdmin;
+        if (!solicitadoPeloTitular)
+            _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
 
         if (titular.Status != StatusAssociado.Ativo)
             throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido vincular dependentes a um associado titular inativo.");
@@ -854,6 +907,9 @@ public class AssociadoAndCadastroService
 
         if (string.IsNullOrWhiteSpace(req.NomeCompleto) || string.IsNullOrWhiteSpace(req.Sexo))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Nome completo, CPF e sexo do dependente são obrigatórios.");
+
+        if (!string.IsNullOrWhiteSpace(req.UF) && req.UF.Trim().Length != 2)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "UF deve conter 2 caracteres.");
 
         var nowUtc = DateTime.UtcNow;
         var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
@@ -873,6 +929,12 @@ public class AssociadoAndCadastroService
             .Include(p => p.Associado)
             .FirstOrDefaultAsync(p => p.Cpf == cpf, ct);
 
+        var logradouro = string.IsNullOrWhiteSpace(req.Logradouro) ? (titular.Pessoa?.Logradouro ?? string.Empty) : req.Logradouro.Trim();
+        var bairro = string.IsNullOrWhiteSpace(req.Bairro) ? (titular.Pessoa?.Bairro ?? string.Empty) : req.Bairro.Trim();
+        var numero = string.IsNullOrWhiteSpace(req.Numero) ? (titular.Pessoa?.Numero ?? string.Empty) : req.Numero.Trim();
+        var cidade = string.IsNullOrWhiteSpace(req.Cidade) ? (titular.Pessoa?.Cidade ?? string.Empty) : req.Cidade.Trim();
+        var uf = string.IsNullOrWhiteSpace(req.UF) ? (titular.Pessoa?.UF ?? string.Empty) : req.UF.Trim().ToUpperInvariant();
+
         if (pessoaDep is not null)
         {
             var jaDependenteAtivo = await _db.Dependencias
@@ -882,6 +944,24 @@ public class AssociadoAndCadastroService
 
             if (pessoaDep.Associado is not null && pessoaDep.Associado.Status == StatusAssociado.Ativo)
                 throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.CpfJaCadastrado, "Esta pessoa já possui vínculo ativo como associado titular/simpatizante.");
+
+            var temSolicitacaoPendente = await _db.SolicitacoesCadastro
+                .AnyAsync(s => s.PessoaId == pessoaDep.Id && s.Status == StatusSolicitacaoCadastro.Pendente, ct);
+            if (temSolicitacaoPendente)
+                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.SolicitacaoJaPendente, "Já existe uma solicitação de cadastro pendente para este CPF.");
+
+            pessoaDep.NomeCompleto = req.NomeCompleto.Trim();
+            pessoaDep.Sexo = req.Sexo.Trim();
+            pessoaDep.EstadoCivil = string.IsNullOrWhiteSpace(req.EstadoCivil) ? pessoaDep.EstadoCivil : req.EstadoCivil.Trim();
+            pessoaDep.DataNascimento = req.DataNascimento;
+            pessoaDep.Logradouro = logradouro;
+            pessoaDep.Bairro = bairro;
+            pessoaDep.Numero = numero;
+            pessoaDep.Cidade = cidade;
+            pessoaDep.UF = uf;
+            pessoaDep.Fone = string.IsNullOrWhiteSpace(req.Fone) ? pessoaDep.Fone : req.Fone.Trim();
+            pessoaDep.Email = string.IsNullOrWhiteSpace(req.Email) ? pessoaDep.Email : req.Email.Trim();
+            pessoaDep.AtualizadaEmUtc = nowUtc;
         }
         else
         {
@@ -890,15 +970,15 @@ public class AssociadoAndCadastroService
                 NomeCompleto = req.NomeCompleto.Trim(),
                 Cpf = cpf,
                 Sexo = req.Sexo.Trim(),
-                EstadoCivil = req.EstadoCivil.Trim(),
+                EstadoCivil = (req.EstadoCivil ?? string.Empty).Trim(),
                 DataNascimento = req.DataNascimento,
-                Logradouro = req.Logradouro.Trim(),
-                Bairro = req.Bairro.Trim(),
-                Numero = req.Numero.Trim(),
-                Cidade = req.Cidade.Trim(),
-                UF = req.UF.Trim().ToUpperInvariant(),
-                Fone = req.Fone.Trim(),
-                Email = req.Email.Trim(),
+                Logradouro = logradouro,
+                Bairro = bairro,
+                Numero = numero,
+                Cidade = cidade,
+                UF = uf,
+                Fone = (req.Fone ?? string.Empty).Trim(),
+                Email = (req.Email ?? string.Empty).Trim(),
                 CriadaEmUtc = nowUtc,
                 AtualizadaEmUtc = nowUtc
             };
@@ -908,16 +988,19 @@ public class AssociadoAndCadastroService
 
         await AtualizarInteressesPessoaAsync(pessoaDep.Id, req.InteressesIds, ct);
 
-        if (!string.IsNullOrWhiteSpace(req.SenhaContaPropria))
+        if (solicitadoPeloTitular || !string.IsNullOrWhiteSpace(req.SenhaContaPropria))
         {
+            var senhaRaw = string.IsNullOrWhiteSpace(req.SenhaContaPropria) ? "ProClubes@123" : req.SenhaContaPropria;
+            var estadoConta = solicitadoPeloTitular ? EstadoConta.RestritaCadastro : EstadoConta.Ativa;
+
             if (pessoaDep.Usuario is null)
             {
                 var usuarioDep = new Usuario
                 {
                     PessoaId = pessoaDep.Id,
-                    SenhaHash = PasswordHasherHelper.HashPassword(req.SenhaContaPropria),
+                    SenhaHash = PasswordHasherHelper.HashPassword(senhaRaw),
                     RoleAdministrativa = RoleAdministrativa.Nenhuma,
-                    EstadoConta = EstadoConta.Ativa,
+                    EstadoConta = estadoConta,
                     VersaoSeguranca = 1,
                     CriadoEmUtc = nowUtc
                 };
@@ -927,8 +1010,9 @@ public class AssociadoAndCadastroService
             }
             else
             {
-                pessoaDep.Usuario.SenhaHash = PasswordHasherHelper.HashPassword(req.SenhaContaPropria);
-                pessoaDep.Usuario.EstadoConta = EstadoConta.Ativa;
+                if (!string.IsNullOrWhiteSpace(req.SenhaContaPropria))
+                    pessoaDep.Usuario.SenhaHash = PasswordHasherHelper.HashPassword(req.SenhaContaPropria);
+                pessoaDep.Usuario.EstadoConta = estadoConta;
                 pessoaDep.Usuario.VersaoSeguranca++;
             }
         }
@@ -943,7 +1027,31 @@ public class AssociadoAndCadastroService
         _db.Dependencias.Add(dep);
         await _db.SaveChangesAsync(ct);
 
-        _auditoria.Registrar(user.UsuarioId, titular.UnidadeId, "VINCULAR_DEPENDENTE", nameof(Dependencia), dep.Id, $"Dependente vinculado ao titular #{titular.Id}.");
+        if (solicitadoPeloTitular)
+        {
+            var solicitacaoDep = new SolicitacaoCadastro
+            {
+                PessoaId = pessoaDep.Id,
+                UsuarioId = pessoaDep.Usuario!.Id,
+                UnidadePretendidaId = titular.UnidadeId,
+                Status = StatusSolicitacaoCadastro.Pendente,
+                CategoriaAprovadaId = null,
+                SolicitadaEmUtc = nowUtc
+            };
+            _db.SolicitacoesCadastro.Add(solicitacaoDep);
+            await _db.SaveChangesAsync(ct);
+            await NotificarDiretoriaNovaSolicitacaoAsync(solicitacaoDep, titular.Unidade, ehDependente: true, ct: ct);
+        }
+
+        _auditoria.Registrar(
+            user.UsuarioId,
+            titular.UnidadeId,
+            solicitadoPeloTitular ? "SOLICITAR_DEPENDENTE" : "VINCULAR_DEPENDENTE",
+            nameof(Dependencia),
+            dep.Id,
+            solicitadoPeloTitular
+                ? $"Solicitação de vínculo de dependente enviada pelo titular #{titular.Id}."
+                : $"Dependente vinculado ao titular #{titular.Id}.");
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -962,7 +1070,8 @@ public class AssociadoAndCadastroService
             DataInicio: dep.DataInicio,
             DataFim: dep.DataFim,
             MotivoFim: dep.MotivoFim,
-            Ativo: true);
+            Ativo: !solicitadoPeloTitular,
+            PendenteAprovacao: solicitadoPeloTitular);
     }
 
     public async Task<int> ProcessarTransicaoDependentes22AnosAsync(DateOnly? dataReferencia = null, CancellationToken ct = default)
@@ -1071,7 +1180,29 @@ public class AssociadoAndCadastroService
         }
     }
 
-    private async Task NotificarDiretoriaNovaSolicitacaoAsync(SolicitacaoCadastro solicitacao, Unidade unidade, CancellationToken ct)
+    private async Task<CategoriaAssociado?> ResolverCategoriaPretendidaAsync(string? codigoCategoria, CancellationToken ct)
+    {
+        var codigoCat = string.IsNullOrWhiteSpace(codigoCategoria)
+            ? CodigosCategoriaAssociado.Associado
+            : codigoCategoria.Trim().ToUpperInvariant();
+
+        return await _db.CategoriasAssociado
+            .FirstOrDefaultAsync(c => c.Codigo == codigoCat && c.Ativa, ct)
+            ?? await _db.CategoriasAssociado
+                .FirstOrDefaultAsync(c => c.Codigo == CodigosCategoriaAssociado.Associado, ct);
+    }
+
+    private static string FormatarVinculoDependente(Dependencia dep)
+    {
+        var vinculoLabel = dep.TipoVinculo == TipoVinculoDependente.Conjuge ? "Cônjuge" : "Filho(a)";
+        return $"Dependente — {vinculoLabel} (Titular: {dep.AssociadoTitular.Pessoa.NomeCompleto})";
+    }
+
+    private async Task NotificarDiretoriaNovaSolicitacaoAsync(
+        SolicitacaoCadastro solicitacao,
+        Unidade unidade,
+        bool ehDependente = false,
+        CancellationToken ct = default)
     {
         var destinatarios = await _db.Usuarios
             .AsNoTracking()
@@ -1081,13 +1212,18 @@ public class AssociadoAndCadastroService
             .Select(u => u.Id)
             .ToListAsync(ct);
 
+        var titulo = ehDependente ? "Nova solicitação de dependente" : "Nova solicitação de cadastro";
+        var mensagem = ehDependente
+            ? $"Há uma nova solicitação de vínculo de dependente pendente para a unidade {unidade.Nome}."
+            : $"Há uma nova solicitação de cadastro pendente para a unidade {unidade.Nome}.";
+
         foreach (var destId in destinatarios)
         {
             await _notificacao.CriarNotificacaoAsync(
                 destId,
                 TipoNotificacao.SolicitacaoCadastroRecebida,
-                "Nova solicitação de cadastro",
-                $"Há uma nova solicitação de cadastro pendente para a unidade {unidade.Nome}.",
+                titulo,
+                mensagem,
                 "SolicitacaoCadastro",
                 solicitacao.Id,
                 $"NOVA_SOL_{solicitacao.Id}_USR_{destId}",
@@ -1121,20 +1257,25 @@ public class AssociadoAndCadastroService
         DataInicioCobranca: a.DataInicioCobranca,
         RoleAdministrativa: a.Pessoa.Usuario?.RoleAdministrativa ?? RoleAdministrativa.Nenhuma,
         Interesses: a.Pessoa.Interesses.Select(i => i.Interesse.Nome).OrderBy(n => n).ToList(),
-        Dependentes: a.Dependentes.OrderByDescending(d => d.DataFim == null).ThenBy(d => d.PessoaDependente.NomeCompleto).Select(d => new DependenteDto(
-            DependenciaId: d.Id,
-            AssociadoTitularId: d.AssociadoTitularId,
-            PessoaDependenteId: d.PessoaDependenteId,
-            UsuarioDependenteId: d.PessoaDependente.Usuario?.Id,
-            NomeCompleto: d.PessoaDependente.NomeCompleto,
-            CpfMascarado: CpfHelper.Mask(d.PessoaDependente.Cpf),
-            Sexo: d.PessoaDependente.Sexo,
-            DataNascimento: d.PessoaDependente.DataNascimento,
-            Email: d.PessoaDependente.Email,
-            Fone: d.PessoaDependente.Fone,
-            TipoVinculo: d.TipoVinculo,
-            DataInicio: d.DataInicio,
-            DataFim: d.DataFim,
-            MotivoFim: d.MotivoFim,
-            Ativo: d.DataFim == null)).ToList());
+        Dependentes: a.Dependentes.OrderByDescending(d => d.DataFim == null).ThenBy(d => d.PessoaDependente.NomeCompleto).Select(d =>
+        {
+            var pendenteAprovacao = d.DataFim == null && d.PessoaDependente.Usuario?.EstadoConta == EstadoConta.RestritaCadastro;
+            return new DependenteDto(
+                DependenciaId: d.Id,
+                AssociadoTitularId: d.AssociadoTitularId,
+                PessoaDependenteId: d.PessoaDependenteId,
+                UsuarioDependenteId: d.PessoaDependente.Usuario?.Id,
+                NomeCompleto: d.PessoaDependente.NomeCompleto,
+                CpfMascarado: CpfHelper.Mask(d.PessoaDependente.Cpf),
+                Sexo: d.PessoaDependente.Sexo,
+                DataNascimento: d.PessoaDependente.DataNascimento,
+                Email: d.PessoaDependente.Email,
+                Fone: d.PessoaDependente.Fone,
+                TipoVinculo: d.TipoVinculo,
+                DataInicio: d.DataInicio,
+                DataFim: d.DataFim,
+                MotivoFim: d.MotivoFim,
+                Ativo: d.DataFim == null && !pendenteAprovacao,
+                PendenteAprovacao: pendenteAprovacao);
+        }).ToList());
 }

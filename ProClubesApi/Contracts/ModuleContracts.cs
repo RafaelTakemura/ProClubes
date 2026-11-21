@@ -102,7 +102,8 @@ public record SolicitarCadastroRequest(
     string Email,
     int UnidadePretendidaId,
     string Senha,
-    IReadOnlyList<int>? InteressesIds = null);
+    IReadOnlyList<int>? InteressesIds = null,
+    string? CodigoCategoriaPretendida = null);
 
 public record ReenviarSolicitacaoCadastroRequest(
     string NomeCompleto,
@@ -117,7 +118,8 @@ public record ReenviarSolicitacaoCadastroRequest(
     string Fone,
     string Email,
     int UnidadePretendidaId,
-    IReadOnlyList<int>? InteressesIds = null);
+    IReadOnlyList<int>? InteressesIds = null,
+    string? CodigoCategoriaPretendida = null);
 
 public record SolicitacaoCadastroListItemDto(
     int Id,
@@ -209,7 +211,8 @@ public record DependenteDto(
     DateOnly DataInicio,
     DateOnly? DataFim,
     MotivoFimDependencia? MotivoFim,
-    bool Ativo);
+    bool Ativo,
+    bool PendenteAprovacao = false);
 
 public record CadastrarDependenteRequest(
     string NomeCompleto,

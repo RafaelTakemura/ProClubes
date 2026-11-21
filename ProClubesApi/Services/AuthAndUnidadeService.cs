@@ -208,7 +208,7 @@ public class AuthService
             UnidadeAssociadoNome: associado?.Unidade.Nome,
             CategoriaCodigo: associado?.CategoriaAssociado.Codigo,
             CategoriaNome: associado?.CategoriaAssociado.Nome,
-            EhDependenteAtivo: dep is not null,
+            EhDependenteAtivo: dep is not null && usuario.EstadoConta == EstadoConta.Ativa,
             TitularAssociadoId: dep?.AssociadoTitularId,
             TitularNome: dep?.AssociadoTitular.Pessoa.NomeCompleto,
             UnidadeTitularId: dep?.AssociadoTitular.UnidadeId,
