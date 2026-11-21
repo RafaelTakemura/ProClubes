@@ -162,6 +162,18 @@ public class CadastrosEAssociadosController : ControllerBase
         var dep = await _service.CadastrarDependenteAsync(user, id, request, ct);
         return StatusCode(StatusCodes.Status201Created, dep);
     }
+
+    [Authorize]
+    [HttpPatch("admin/associados/{id:int}/dependentes/{dependenciaId:int}/status")]
+    public async Task<ActionResult<DependenteDto>> AlterarStatusDependente(
+        int id,
+        int dependenciaId,
+        [FromBody] AlterarStatusDependenteRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.AlterarStatusDependenteAsync(user, id, dependenciaId, request, ct));
+    }
 }
 
 [ApiController]

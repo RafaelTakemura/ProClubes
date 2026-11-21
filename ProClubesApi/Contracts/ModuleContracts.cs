@@ -134,7 +134,15 @@ public record SolicitacaoCadastroListItemDto(
     string? JustificativaRejeicao,
     string? CategoriaAprovadaNome,
     DateTimeOffset SolicitadaEm,
-    DateTimeOffset? DecididaEm);
+    DateTimeOffset? DecididaEm,
+    string Sexo = "",
+    string EstadoCivil = "",
+    DateOnly DataNascimento = default,
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "");
 
 public record AprovarSolicitacaoRequest(string CodigoCategoria);
 
@@ -230,6 +238,8 @@ public record CadastrarDependenteRequest(
     TipoVinculoDependente TipoVinculo,
     string? SenhaContaPropria = null,
     IReadOnlyList<int>? InteressesIds = null);
+
+public record AlterarStatusDependenteRequest(bool Ativo);
 
 public record TransferenciaHistoricoDto(
     int Id,

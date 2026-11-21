@@ -309,20 +309,7 @@ public class AssociadoAndCadastroService
                 ? FormatarVinculoDependente(dep)
                 : (s.CategoriaAprovada?.Nome ?? (s.Status == StatusSolicitacaoCadastro.Aprovada ? "Dependente" : null));
 
-            return new SolicitacaoCadastroListItemDto(
-                Id: s.Id,
-                PessoaId: s.PessoaId,
-                NomeCompleto: s.Pessoa.NomeCompleto,
-                CpfMascarado: CpfHelper.Mask(s.Pessoa.Cpf),
-                Email: s.Pessoa.Email,
-                Fone: s.Pessoa.Fone,
-                UnidadePretendidaId: s.UnidadePretendidaId,
-                UnidadePretendidaNome: s.UnidadePretendida.Nome,
-                Status: s.Status,
-                JustificativaRejeicao: s.JustificativaRejeicao,
-                CategoriaAprovadaNome: categoriaOuVinculo,
-                SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(s.SolicitadaEmUtc),
-                DecididaEm: s.DecididaEmUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(s.DecididaEmUtc.Value) : null);
+            return ToSolicitacaoListItemDto(s, categoriaOuVinculo);
         }).ToList();
 
         return new PagedResponse<SolicitacaoCadastroListItemDto>(dtos, total, pagination.NormalizedPage, pagination.NormalizedPageSize);
@@ -429,20 +416,10 @@ public class AssociadoAndCadastroService
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return new SolicitacaoCadastroListItemDto(
-            Id: solicitacao.Id,
-            PessoaId: solicitacao.PessoaId,
-            NomeCompleto: solicitacao.Pessoa.NomeCompleto,
-            CpfMascarado: CpfHelper.Mask(solicitacao.Pessoa.Cpf),
-            Email: solicitacao.Pessoa.Email,
-            Fone: solicitacao.Pessoa.Fone,
-            UnidadePretendidaId: solicitacao.UnidadePretendidaId,
-            UnidadePretendidaNome: solicitacao.UnidadePretendida.Nome,
-            Status: solicitacao.Status,
-            JustificativaRejeicao: null,
-            CategoriaAprovadaNome: categoria?.Nome ?? (depAtivo is not null ? FormatarVinculoDependente(depAtivo) : "Dependente"),
-            SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(solicitacao.SolicitadaEmUtc),
-            DecididaEm: TimeZoneHelper.ToSaoPauloOffset(nowUtc));
+        return ToSolicitacaoListItemDto(
+            solicitacao,
+            categoria?.Nome ?? (depAtivo is not null ? FormatarVinculoDependente(depAtivo) : "Dependente"),
+            nowUtc);
     }
 
     public async Task<SolicitacaoCadastroListItemDto> RejeitarSolicitacaoAsync(
@@ -494,20 +471,7 @@ public class AssociadoAndCadastroService
         _auditoria.Registrar(user.UsuarioId, solicitacao.UnidadePretendidaId, "REJEITAR_CADASTRO", nameof(SolicitacaoCadastro), solicitacao.Id, $"Solicitação #{solicitacao.Id} rejeitada.");
         await _db.SaveChangesAsync(ct);
 
-        return new SolicitacaoCadastroListItemDto(
-            Id: solicitacao.Id,
-            PessoaId: solicitacao.PessoaId,
-            NomeCompleto: solicitacao.Pessoa.NomeCompleto,
-            CpfMascarado: CpfHelper.Mask(solicitacao.Pessoa.Cpf),
-            Email: solicitacao.Pessoa.Email,
-            Fone: solicitacao.Pessoa.Fone,
-            UnidadePretendidaId: solicitacao.UnidadePretendidaId,
-            UnidadePretendidaNome: solicitacao.UnidadePretendida.Nome,
-            Status: solicitacao.Status,
-            JustificativaRejeicao: solicitacao.JustificativaRejeicao,
-            CategoriaAprovadaNome: null,
-            SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(solicitacao.SolicitadaEmUtc),
-            DecididaEm: TimeZoneHelper.ToSaoPauloOffset(nowUtc));
+        return ToSolicitacaoListItemDto(solicitacao, null, nowUtc);
     }
 
     public async Task<PagedResponse<AssociadoDto>> ListarAssociadosAsync(
@@ -1055,23 +1019,96 @@ public class AssociadoAndCadastroService
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return new DependenteDto(
-            DependenciaId: dep.Id,
-            AssociadoTitularId: titular.Id,
-            PessoaDependenteId: pessoaDep.Id,
-            UsuarioDependenteId: pessoaDep.Usuario?.Id,
-            NomeCompleto: pessoaDep.NomeCompleto,
-            CpfMascarado: CpfHelper.Mask(pessoaDep.Cpf),
-            Sexo: pessoaDep.Sexo,
-            DataNascimento: pessoaDep.DataNascimento,
-            Email: pessoaDep.Email,
-            Fone: pessoaDep.Fone,
-            TipoVinculo: dep.TipoVinculo,
-            DataInicio: dep.DataInicio,
-            DataFim: dep.DataFim,
-            MotivoFim: dep.MotivoFim,
-            Ativo: !solicitadoPeloTitular,
-            PendenteAprovacao: solicitadoPeloTitular);
+        return ToDependenteDto(dep, pessoaDep);
+    }
+
+    public async Task<DependenteDto> AlterarStatusDependenteAsync(
+        AuthenticatedUserInfo user,
+        int associadoTitularId,
+        int dependenciaId,
+        AlterarStatusDependenteRequest req,
+        CancellationToken ct = default)
+    {
+        var titular = await _db.Associados
+            .FirstOrDefaultAsync(a => a.Id == associadoTitularId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado titular não encontrado.");
+
+        var solicitadoPeloTitular = user.AssociadoId == titular.Id
+            && user.Role != RoleAdministrativa.Admin
+            && user.Role != RoleAdministrativa.SuperAdmin;
+        if (!solicitadoPeloTitular)
+            _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
+
+        var dep = await _db.Dependencias
+            .Include(d => d.PessoaDependente)
+                .ThenInclude(p => p.Usuario)
+            .Include(d => d.PessoaDependente)
+                .ThenInclude(p => p.Associado)
+            .FirstOrDefaultAsync(d => d.Id == dependenciaId && d.AssociadoTitularId == titular.Id, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Vínculo de dependente não encontrado para este associado.");
+
+        if (dep.PessoaDependente.Usuario?.EstadoConta == EstadoConta.RestritaCadastro)
+        {
+            if (dep.DataFim is null)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Este dependente ainda aguarda aprovação da diretoria.");
+
+            if (req.Ativo)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Este cadastro de dependente não foi aprovado pela diretoria. Envie uma nova solicitação para vinculá-lo.");
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
+
+        if (req.Ativo)
+        {
+            if (titular.Status != StatusAssociado.Ativo)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido reativar dependentes de um associado titular inativo.");
+
+            if (dep.TipoVinculo == TipoVinculoDependente.Filho)
+            {
+                var idade = TimeZoneHelper.CalculateAge(dep.PessoaDependente.DataNascimento, hoje);
+                if (idade < 0 || idade > 21)
+                    throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DependenteIdadeInvalida, "Filho(a) dependente deve ter até 21 anos, inclusive, para reativar o vínculo.");
+            }
+
+            var outroVinculoAtivo = await _db.Dependencias
+                .AnyAsync(d => d.PessoaDependenteId == dep.PessoaDependenteId && d.Id != dep.Id && d.DataFim == null, ct);
+            if (outroVinculoAtivo)
+                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.DependenteJaVinculado, "Esta pessoa já possui outro vínculo ativo como dependente.");
+
+            if (dep.PessoaDependente.Associado is not null && dep.PessoaDependente.Associado.Status == StatusAssociado.Ativo)
+                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.CpfJaCadastrado, "Esta pessoa já possui vínculo ativo como associado titular/simpatizante.");
+
+            dep.DataFim = null;
+            dep.MotivoFim = null;
+
+            if (dep.PessoaDependente.Usuario is not null)
+            {
+                dep.PessoaDependente.Usuario.EstadoConta = EstadoConta.Ativa;
+                dep.PessoaDependente.Usuario.VersaoSeguranca++;
+            }
+        }
+        else
+        {
+            dep.DataFim ??= hoje;
+            dep.MotivoFim = solicitadoPeloTitular
+                ? MotivoFimDependencia.SolicitacaoTitular
+                : MotivoFimDependencia.Administrativo;
+
+            if (dep.PessoaDependente.Usuario is not null)
+                dep.PessoaDependente.Usuario.VersaoSeguranca++;
+        }
+
+        _auditoria.Registrar(
+            user.UsuarioId,
+            titular.UnidadeId,
+            req.Ativo ? "REATIVAR_DEPENDENTE" : "DESATIVAR_DEPENDENTE",
+            nameof(Dependencia),
+            dep.Id,
+            $"Status do dependente #{dep.Id} alterado para {(req.Ativo ? "Ativo" : "Encerrado")}.");
+        await _db.SaveChangesAsync(ct);
+
+        return ToDependenteDto(dep);
     }
 
     public async Task<int> ProcessarTransicaoDependentes22AnosAsync(DateOnly? dataReferencia = null, CancellationToken ct = default)
@@ -1231,6 +1268,59 @@ public class AssociadoAndCadastroService
         }
     }
 
+    private static SolicitacaoCadastroListItemDto ToSolicitacaoListItemDto(
+        SolicitacaoCadastro s,
+        string? categoriaAprovadaNome,
+        DateTime? decididaEmUtcOverride = null)
+    {
+        var decididaUtc = decididaEmUtcOverride ?? s.DecididaEmUtc;
+        return new SolicitacaoCadastroListItemDto(
+            Id: s.Id,
+            PessoaId: s.PessoaId,
+            NomeCompleto: s.Pessoa.NomeCompleto,
+            CpfMascarado: CpfHelper.Mask(s.Pessoa.Cpf),
+            Email: s.Pessoa.Email,
+            Fone: s.Pessoa.Fone,
+            UnidadePretendidaId: s.UnidadePretendidaId,
+            UnidadePretendidaNome: s.UnidadePretendida.Nome,
+            Status: s.Status,
+            JustificativaRejeicao: s.Status == StatusSolicitacaoCadastro.Aprovada ? null : s.JustificativaRejeicao,
+            CategoriaAprovadaNome: categoriaAprovadaNome,
+            SolicitadaEm: TimeZoneHelper.ToSaoPauloOffset(s.SolicitadaEmUtc),
+            DecididaEm: decididaUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(decididaUtc.Value) : null,
+            Sexo: s.Pessoa.Sexo,
+            EstadoCivil: s.Pessoa.EstadoCivil,
+            DataNascimento: s.Pessoa.DataNascimento,
+            Logradouro: s.Pessoa.Logradouro,
+            Bairro: s.Pessoa.Bairro,
+            Numero: s.Pessoa.Numero,
+            Cidade: s.Pessoa.Cidade,
+            UF: s.Pessoa.UF);
+    }
+
+    private static DependenteDto ToDependenteDto(Dependencia d, Pessoa? pessoaOverride = null)
+    {
+        var pessoa = pessoaOverride ?? d.PessoaDependente;
+        var pendenteAprovacao = d.DataFim == null && pessoa.Usuario?.EstadoConta == EstadoConta.RestritaCadastro;
+        return new DependenteDto(
+            DependenciaId: d.Id,
+            AssociadoTitularId: d.AssociadoTitularId,
+            PessoaDependenteId: d.PessoaDependenteId,
+            UsuarioDependenteId: pessoa.Usuario?.Id,
+            NomeCompleto: pessoa.NomeCompleto,
+            CpfMascarado: CpfHelper.Mask(pessoa.Cpf),
+            Sexo: pessoa.Sexo,
+            DataNascimento: pessoa.DataNascimento,
+            Email: pessoa.Email,
+            Fone: pessoa.Fone,
+            TipoVinculo: d.TipoVinculo,
+            DataInicio: d.DataInicio,
+            DataFim: d.DataFim,
+            MotivoFim: d.MotivoFim,
+            Ativo: d.DataFim == null && !pendenteAprovacao,
+            PendenteAprovacao: pendenteAprovacao);
+    }
+
     public static AssociadoDto ToAssociadoDto(Associado a) => new(
         Id: a.Id,
         PessoaId: a.PessoaId,
@@ -1257,25 +1347,9 @@ public class AssociadoAndCadastroService
         DataInicioCobranca: a.DataInicioCobranca,
         RoleAdministrativa: a.Pessoa.Usuario?.RoleAdministrativa ?? RoleAdministrativa.Nenhuma,
         Interesses: a.Pessoa.Interesses.Select(i => i.Interesse.Nome).OrderBy(n => n).ToList(),
-        Dependentes: a.Dependentes.OrderByDescending(d => d.DataFim == null).ThenBy(d => d.PessoaDependente.NomeCompleto).Select(d =>
-        {
-            var pendenteAprovacao = d.DataFim == null && d.PessoaDependente.Usuario?.EstadoConta == EstadoConta.RestritaCadastro;
-            return new DependenteDto(
-                DependenciaId: d.Id,
-                AssociadoTitularId: d.AssociadoTitularId,
-                PessoaDependenteId: d.PessoaDependenteId,
-                UsuarioDependenteId: d.PessoaDependente.Usuario?.Id,
-                NomeCompleto: d.PessoaDependente.NomeCompleto,
-                CpfMascarado: CpfHelper.Mask(d.PessoaDependente.Cpf),
-                Sexo: d.PessoaDependente.Sexo,
-                DataNascimento: d.PessoaDependente.DataNascimento,
-                Email: d.PessoaDependente.Email,
-                Fone: d.PessoaDependente.Fone,
-                TipoVinculo: d.TipoVinculo,
-                DataInicio: d.DataInicio,
-                DataFim: d.DataFim,
-                MotivoFim: d.MotivoFim,
-                Ativo: d.DataFim == null && !pendenteAprovacao,
-                PendenteAprovacao: pendenteAprovacao);
-        }).ToList());
+        Dependentes: a.Dependentes
+            .OrderByDescending(d => d.DataFim == null)
+            .ThenBy(d => d.PessoaDependente.NomeCompleto)
+            .Select(d => ToDependenteDto(d))
+            .ToList());
 }
