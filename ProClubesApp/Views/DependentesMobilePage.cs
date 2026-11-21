@@ -181,7 +181,50 @@ public sealed class DependentesMobilePage : ContentPage
             }, 1, 0);
             topGrid.Add(statusPill, 2, 0);
 
-            return ProClubesTheme.CreateCard(topGrid);
+            var btnAlterarStatus = new Button
+            {
+                CornerRadius = 8,
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold,
+                HeightRequest = 38,
+                BorderColor = ProClubesTheme.BorderDefault,
+                BorderWidth = 1,
+                Command = _vm.AlterarStatusCommand
+            };
+            btnAlterarStatus.SetBinding(Button.CommandParameterProperty, ".");
+            btnAlterarStatus.SetBinding(Button.TextProperty, nameof(DependenteMobileDto.AcaoStatusTexto));
+            btnAlterarStatus.SetBinding(Button.TextColorProperty, nameof(DependenteMobileDto.AcaoStatusCorTexto));
+            btnAlterarStatus.SetBinding(VisualElement.BackgroundColorProperty, nameof(DependenteMobileDto.AcaoStatusCorFundo));
+            btnAlterarStatus.SetBinding(VisualElement.IsVisibleProperty, nameof(DependenteMobileDto.PodeAlterarStatus));
+            btnAlterarStatus.BindingContextChanged += (_, _) =>
+            {
+                if (btnAlterarStatus.BindingContext is DependenteMobileDto d)
+                {
+                    btnAlterarStatus.TextColor = d.AcaoStatusCorTexto;
+                    btnAlterarStatus.BackgroundColor = d.AcaoStatusCorFundo;
+                }
+            };
+
+            var lblAguardando = new Label
+            {
+                Text = "Aguardando avaliação da diretoria",
+                FontSize = 11,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = ProClubesTheme.StatusWarning
+            };
+            lblAguardando.SetBinding(VisualElement.IsVisibleProperty, nameof(DependenteMobileDto.PendenteAprovacao));
+
+            return ProClubesTheme.CreateCard(new VerticalStackLayout
+            {
+                Spacing = 10,
+                Children =
+                {
+                    topGrid,
+                    new BoxView { HeightRequest = 1, Color = ProClubesTheme.BorderDefault },
+                    btnAlterarStatus,
+                    lblAguardando
+                }
+            });
         }));
 
         var mainScroll = new ScrollView
@@ -264,7 +307,8 @@ public sealed class DependentesMobilePage : ContentPage
         var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.NomeCompleto));
 
-        var cpfEntry = new Entry { Keyboard = Keyboard.Numeric, MaxLength = 14, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
+        var cpfEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
+        ProClubesTheme.ApplyCpfCnpjMask(cpfEntry);
         cpfEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Cpf));
 
         var sexoPicker = new Picker

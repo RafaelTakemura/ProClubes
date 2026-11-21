@@ -44,7 +44,7 @@ public class DependentesViewModel : BaseViewModel
 
     public string TipoVinculoSelecionado { get => _tipoVinculoSelecionado; set => SetProperty(ref _tipoVinculoSelecionado, value); }
     public string NomeCompleto { get => _nomeCompleto; set => SetProperty(ref _nomeCompleto, value); }
-    public string Cpf { get => _cpf; set => SetProperty(ref _cpf, value); }
+    public string Cpf { get => _cpf; set => SetProperty(ref _cpf, LoginCadastroViewModel.FormatarCpfOuCnpj(value)); }
     public string? Sexo { get => _sexo; set => SetProperty(ref _sexo, value); }
     public string? EstadoCivil { get => _estadoCivil; set => SetProperty(ref _estadoCivil, value); }
     public DateTime DataNascimento { get => _dataNascimento; set => SetProperty(ref _dataNascimento, value); }
@@ -57,11 +57,13 @@ public class DependentesViewModel : BaseViewModel
     public string UF { get => _uf; set => SetProperty(ref _uf, value); }
 
     public ICommand AtualizarCommand { get; }
+    public ICommand AlterarStatusCommand { get; }
 
     public DependentesViewModel(MobileSessionAndApiService api)
     {
         _api = api;
         AtualizarCommand = new Command(async () => await CarregarAsync());
+        AlterarStatusCommand = new Command<DependenteMobileDto>(async dep => await AlterarStatusDependenteAsync(dep));
     }
 
     public async Task CarregarAsync()
@@ -208,6 +210,37 @@ public class DependentesViewModel : BaseViewModel
         await CarregarAsync();
         SuccessMessage = "Solicitação de dependente enviada para aprovação da diretoria!";
         return true;
+    }
+
+    public async Task AlterarStatusDependenteAsync(DependenteMobileDto? dep)
+    {
+        if (dep is null || dep.PendenteAprovacao)
+            return;
+
+        if (_api.UsuarioAtual?.AssociadoId is not int associadoId)
+        {
+            ErrorMessage = "Somente associados titulares ativos podem alterar o status de dependentes.";
+            return;
+        }
+
+        ErrorMessage = null;
+        SuccessMessage = null;
+
+        var novoStatus = !dep.Ativo;
+        var (_, err) = await _api.PatchAsync<DependenteMobileDto>(
+            $"api/v1/admin/associados/{associadoId}/dependentes/{dep.DependenciaId}/status",
+            new AlterarStatusDependenteMobileRequest(novoStatus));
+
+        if (err is not null)
+        {
+            ErrorMessage = err;
+            return;
+        }
+
+        await CarregarAsync();
+        SuccessMessage = novoStatus
+            ? $"Vínculo de {dep.NomeCompleto} reativado com sucesso!"
+            : $"Vínculo de {dep.NomeCompleto} desativado com sucesso!";
     }
 
     private void AtualizarContadores()

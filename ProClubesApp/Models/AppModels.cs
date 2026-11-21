@@ -328,6 +328,16 @@ public record DependenteMobileDto(
         PendenteAprovacao
             ? Microsoft.Maui.Graphics.Color.FromArgb("#FDE68A")
             : (Ativo ? Microsoft.Maui.Graphics.Color.FromArgb("#A7F3D0") : Microsoft.Maui.Graphics.Color.FromArgb("#CBD5E1"));
+
+    public bool PodeAlterarStatus => !PendenteAprovacao;
+
+    public string AcaoStatusTexto => Ativo ? "Desativar Vínculo" : "Reativar Vínculo";
+
+    public Microsoft.Maui.Graphics.Color AcaoStatusCorTexto =>
+        Ativo ? Microsoft.Maui.Graphics.Color.FromArgb("#B91C1C") : Microsoft.Maui.Graphics.Color.FromArgb("#0B192C");
+
+    public Microsoft.Maui.Graphics.Color AcaoStatusCorFundo =>
+        Ativo ? Microsoft.Maui.Graphics.Color.FromArgb("#FEF2F2") : Microsoft.Maui.Graphics.Color.FromArgb("#F1F5F9");
 }
 
 public record CadastrarDependenteMobileRequest(
@@ -344,6 +354,8 @@ public record CadastrarDependenteMobileRequest(
     string Fone,
     string Email,
     string TipoVinculo);
+
+public record AlterarStatusDependenteMobileRequest(bool Ativo);
 
 public record AssociadoDetalheMobileDto(
     int Id,

@@ -244,6 +244,28 @@ public static class ProClubesTheme
         return new Border { StrokeThickness = 0, BackgroundColor = Colors.Transparent, Content = stack };
     }
 
+    public static void ApplyCpfCnpjMask(Entry entry)
+    {
+        entry.Keyboard = Keyboard.Numeric;
+        entry.MaxLength = 18;
+        if (string.IsNullOrWhiteSpace(entry.Placeholder))
+            entry.Placeholder = "000.000.000-00";
+
+        var updating = false;
+        entry.TextChanged += (_, e) =>
+        {
+            if (updating) return;
+            var formatted = LoginCadastroViewModel.FormatarCpfOuCnpj(e.NewTextValue);
+            if (!string.Equals(e.NewTextValue ?? string.Empty, formatted, StringComparison.Ordinal))
+            {
+                updating = true;
+                entry.Text = formatted;
+                entry.CursorPosition = formatted.Length;
+                updating = false;
+            }
+        };
+    }
+
     public static Border CreateVectorIconTile(MobileVectorIconKind kind, Color? iconColor = null)
     {
         return new Border

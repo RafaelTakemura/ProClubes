@@ -44,7 +44,8 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
 
-        var cpfEntry = new Entry { Keyboard = Keyboard.Numeric, MaxLength = 14, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        var cpfEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        ProClubesTheme.ApplyCpfCnpjMask(cpfEntry);
         cpfEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cpf));
 
         var sexoPicker = new Picker

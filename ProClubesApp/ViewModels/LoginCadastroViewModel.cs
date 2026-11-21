@@ -48,7 +48,7 @@ public class LoginCadastroViewModel : BaseViewModel
     public StatusCadastroResponse? StatusCadastroAtual { get => _statusCadastroAtual; set => SetProperty(ref _statusCadastroAtual, value); }
 
     public string NomeCompleto { get => _nomeCompleto; set => SetProperty(ref _nomeCompleto, value); }
-    public string Cpf { get => _cpf; set => SetProperty(ref _cpf, value); }
+    public string Cpf { get => _cpf; set => SetProperty(ref _cpf, FormatarCpfOuCnpj(value)); }
     public string? Sexo { get => _sexo; set => SetProperty(ref _sexo, value); }
     public string? EstadoCivil { get => _estadoCivil; set => SetProperty(ref _estadoCivil, value); }
     public DateTime DataNascimento { get => _dataNascimento; set => SetProperty(ref _dataNascimento, value); }
@@ -310,6 +310,24 @@ public class LoginCadastroViewModel : BaseViewModel
         if (categoriaNome.Contains("Convidado", StringComparison.OrdinalIgnoreCase)) return "CONVIDADO";
         if (categoriaNome.Contains("Simpatizante", StringComparison.OrdinalIgnoreCase)) return "SIMPATIZANTE";
         return "ASSOCIADO";
+    }
+
+    internal static string FormatarCpfOuCnpj(string? valor)
+    {
+        var digitos = new string((valor ?? string.Empty).Where(char.IsDigit).Take(14).ToArray());
+        if (digitos.Length == 0)
+            return string.Empty;
+
+        if (digitos.Length <= 11)
+        {
+            if (digitos.Length <= 3) return digitos;
+            if (digitos.Length <= 6) return $"{digitos[..3]}.{digitos[3..]}";
+            if (digitos.Length <= 9) return $"{digitos[..3]}.{digitos[3..6]}.{digitos[6..]}";
+            return $"{digitos[..3]}.{digitos[3..6]}.{digitos[6..9]}-{digitos[9..]}";
+        }
+
+        if (digitos.Length <= 12) return $"{digitos[..2]}.{digitos[2..5]}.{digitos[5..8]}/{digitos[8..]}";
+        return $"{digitos[..2]}.{digitos[2..5]}.{digitos[5..8]}/{digitos[8..12]}-{digitos[12..]}";
     }
 
     internal static bool ValidarSintaxeCpf(string? cpf)

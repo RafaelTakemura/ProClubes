@@ -206,7 +206,7 @@ public class MobileSessionAndApiService
         }
     }
 
-    public async Task<(T? Data, string? Error)> PatchAsync<T>(string relativeUrl)
+    public async Task<(T? Data, string? Error)> PatchAsync<T>(string relativeUrl, object? body = null)
     {
         try
         {
@@ -214,6 +214,8 @@ public class MobileSessionAndApiService
             var token = await SecureStorage.Default.GetAsync(KeyAccessToken);
             if (!string.IsNullOrWhiteSpace(token))
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (body is not null)
+                req.Content = JsonContent.Create(body, options: JsonOptions);
 
             var resp = await _http.SendAsync(req);
             if (!resp.IsSuccessStatusCode)
