@@ -210,7 +210,15 @@ public record SolicitacaoCadastroListItemDto(
     string? JustificativaRejeicao,
     string? CategoriaAprovadaNome,
     DateTimeOffset SolicitadaEm,
-    DateTimeOffset? DecididaEm);
+    DateTimeOffset? DecididaEm,
+    string Sexo = "",
+    string EstadoCivil = "",
+    DateOnly DataNascimento = default,
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "");
 
 public record AprovarSolicitacaoRequest(string CodigoCategoria);
 public record RejeitarSolicitacaoRequest(string Justificativa);
@@ -300,6 +308,8 @@ public record CadastrarDependenteRequest(
     TipoVinculoDependente TipoVinculo,
     string? SenhaContaPropria = null,
     IReadOnlyList<int>? InteressesIds = null);
+
+public record AlterarStatusDependenteRequest(bool Ativo);
 
 public record ConfiguracaoFinanceiraDto(
     byte DiaGeracao,
@@ -591,3 +601,53 @@ public record DashboardAdminDto(
     int ReservasFuturasConfirmadas,
     int ManifestacoesPendentes,
     int VotacoesAbertas);
+
+public static class WebFormatHelpers
+{
+    public static string FormatarCpfOuCnpj(string? valor)
+    {
+        var digitos = new string((valor ?? string.Empty).Where(char.IsDigit).Take(14).ToArray());
+        if (digitos.Length == 0)
+            return string.Empty;
+
+        if (digitos.Length <= 11)
+        {
+            if (digitos.Length <= 3) return digitos;
+            if (digitos.Length <= 6) return $"{digitos[..3]}.{digitos[3..]}";
+            if (digitos.Length <= 9) return $"{digitos[..3]}.{digitos[3..6]}.{digitos[6..]}";
+            return $"{digitos[..3]}.{digitos[3..6]}.{digitos[6..9]}-{digitos[9..]}";
+        }
+
+        if (digitos.Length <= 12) return $"{digitos[..2]}.{digitos[2..5]}.{digitos[5..8]}/{digitos[8..]}";
+        return $"{digitos[..2]}.{digitos[2..5]}.{digitos[5..8]}/{digitos[8..12]}-{digitos[12..]}";
+    }
+
+    public static string FormatarEndereco(string? logradouro, string? numero, string? bairro, string? cidade, string? uf)
+    {
+        var partes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(logradouro))
+        {
+            var ruaNum = !string.IsNullOrWhiteSpace(numero) ? $"{logradouro}, {numero}" : logradouro;
+            partes.Add(ruaNum);
+        }
+        else if (!string.IsNullOrWhiteSpace(numero))
+        {
+            partes.Add($"Nº {numero}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(bairro))
+            partes.Add(bairro);
+
+        var cidadeUf = (!string.IsNullOrWhiteSpace(cidade), !string.IsNullOrWhiteSpace(uf)) switch
+        {
+            (true, true) => $"{cidade}/{uf}",
+            (true, false) => cidade!,
+            (false, true) => uf!,
+            _ => string.Empty
+        };
+        if (!string.IsNullOrWhiteSpace(cidadeUf))
+            partes.Add(cidadeUf);
+
+        return partes.Count > 0 ? string.Join(" — ", partes) : "Não informado";
+    }
+}

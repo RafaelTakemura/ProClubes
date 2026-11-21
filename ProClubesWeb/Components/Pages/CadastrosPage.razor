@@ -102,13 +102,14 @@ else
                                 }
                             </td>
                             <td>
-                                @if (s.Status == StatusSolicitacaoCadastro.Pendente)
-                                {
-                                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _solicitacaoDetalhes = s">Detalhes</button>
+                                    @if (s.Status == StatusSolicitacaoCadastro.Pendente)
+                                    {
                                         <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirModalAprovacao(s)">Aprovar</button>
                                         <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AbrirModalRejeicao(s)">Rejeitar</button>
-                                    </div>
-                                }
+                                    }
+                                </div>
                             </td>
                         </tr>
                     }
@@ -116,6 +117,89 @@ else
             </table>
         </div>
     </div>
+
+    <PcModal IsOpen="@(_solicitacaoDetalhes is not null)"
+             Title="@($"Detalhes da Solicitação #{_solicitacaoDetalhes?.Id}")"
+             Subtitle="@($"{_solicitacaoDetalhes?.NomeCompleto} ({_solicitacaoDetalhes?.CpfMascarado})")"
+             MaxWidth="640px"
+             OnClose="() => _solicitacaoDetalhes = null">
+        <ChildContent>
+            @if (_solicitacaoDetalhes is not null)
+            {
+                <div style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 16px;">
+                    <div class="pc-form-grid" style="gap: 12px;">
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Nome Completo</small>
+                            <strong>@_solicitacaoDetalhes.NomeCompleto</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">CPF</small>
+                            <strong>@_solicitacaoDetalhes.CpfMascarado</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Data de Nascimento</small>
+                            <strong>@(_solicitacaoDetalhes.DataNascimento != default ? _solicitacaoDetalhes.DataNascimento.ToString("dd/MM/yyyy") : "Não informada")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Sexo</small>
+                            <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.Sexo) ? "Não informado" : _solicitacaoDetalhes.Sexo)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Estado Civil</small>
+                            <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.EstadoCivil) ? "Não informado" : _solicitacaoDetalhes.EstadoCivil)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Telefone</small>
+                            <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.Fone) ? "Não informado" : _solicitacaoDetalhes.Fone)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">E-mail</small>
+                            <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.Email) ? "Não informado" : _solicitacaoDetalhes.Email)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Unidade Pretendida</small>
+                            <strong>@_solicitacaoDetalhes.UnidadePretendidaNome</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Tipo / Categoria Solicitada</small>
+                            <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.CategoriaAprovadaNome) ? "Sócio Associado" : _solicitacaoDetalhes.CategoriaAprovadaNome)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Status da Solicitação</small>
+                            <PcStatusBadge Text="@_solicitacaoDetalhes.Status.ToString()" Variant="@_solicitacaoDetalhes.Status.ToString()" />
+                        </div>
+                        <div style="grid-column: 1 / -1;">
+                            <small style="color: var(--pc-text-secondary); display: block;">Endereço Completo</small>
+                            <strong>@WebFormatHelpers.FormatarEndereco(_solicitacaoDetalhes.Logradouro, _solicitacaoDetalhes.Numero, _solicitacaoDetalhes.Bairro, _solicitacaoDetalhes.Cidade, _solicitacaoDetalhes.UF)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Data da Solicitação</small>
+                            <strong>@_solicitacaoDetalhes.SolicitadaEm.ToString("dd/MM/yyyy HH:mm")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Data da Decisão</small>
+                            <strong>@(_solicitacaoDetalhes.DecididaEm.HasValue ? _solicitacaoDetalhes.DecididaEm.Value.ToString("dd/MM/yyyy HH:mm") : "Aguardando análise")</strong>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_solicitacaoDetalhes.JustificativaRejeicao))
+                        {
+                            <div style="grid-column: 1 / -1;">
+                                <small style="color: var(--pc-danger); display: block;">Justificativa da Rejeição</small>
+                                <strong style="color: var(--pc-danger);">@_solicitacaoDetalhes.JustificativaRejeicao</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _solicitacaoDetalhes = null">Fechar</button>
+            @if (_solicitacaoDetalhes?.Status == StatusSolicitacaoCadastro.Pendente)
+            {
+                <button type="button" class="pc-btn pc-btn-danger" @onclick="() => { var s = _solicitacaoDetalhes; _solicitacaoDetalhes = null; if (s is not null) AbrirModalRejeicao(s); }">Rejeitar</button>
+                <button type="button" class="pc-btn pc-btn-primary" @onclick="() => { var s = _solicitacaoDetalhes; _solicitacaoDetalhes = null; if (s is not null) AbrirModalAprovacao(s); }">Aprovar</button>
+            }
+        </FooterContent>
+    </PcModal>
 
     <PcModal IsOpen="@(_solicitacaoParaAprovar is not null)"
              Title="@($"Aprovar Solicitação #{_solicitacaoParaAprovar?.Id}")"
@@ -178,6 +262,7 @@ else
     private IReadOnlyList<SolicitacaoCadastroListItemDto> _solicitacoes = Array.Empty<SolicitacaoCadastroListItemDto>();
     private string _filtroStatus = "Pendente";
     private string _categoriaAprovacao = "ASSOCIADO";
+    private SolicitacaoCadastroListItemDto? _solicitacaoDetalhes;
     private SolicitacaoCadastroListItemDto? _solicitacaoParaAprovar;
     private SolicitacaoCadastroListItemDto? _solicitacaoParaRejeitar;
     private string _justificativaRejeicao = string.Empty;

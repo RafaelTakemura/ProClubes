@@ -49,7 +49,7 @@ else
             }
             <div class="pc-form-grid">
                 <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_nome" /></div>
-                <div class="pc-field"><label class="pc-label">CPF (11 dígitos) *</label><input class="pc-input" maxlength="14" @bind="_cpf" /></div>
+                <div class="pc-field"><label class="pc-label">CPF (11 dígitos) *</label><input class="pc-input" inputmode="numeric" maxlength="18" placeholder="000.000.000-00" oninput="@MascaraCpfCnpjJs" @bind="CpfNovoFormatado" /></div>
                 <div class="pc-field">
                     <label class="pc-label">Sexo *</label>
                     <select class="pc-select" @bind="_sexo">
@@ -365,6 +365,11 @@ else
                  MaxWidth="820px"
                  OnClose="() => { _associadoDependentes = null; _exibirModalNovoDependente = false; }">
             <ChildContent>
+                @if (!string.IsNullOrWhiteSpace(_erroDependentes))
+                {
+                    <div class="pc-alert pc-alert-danger">@_erroDependentes</div>
+                }
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
                     <h4 style="margin: 0;">Dependentes Vinculados</h4>
                     @if (_associadoDependentes.Status == StatusAssociado.Ativo)
@@ -381,12 +386,13 @@ else
                             <th>Vínculo</th>
                             <th>Nascimento</th>
                             <th>Status</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (_associadoDependentes.Dependentes.Count == 0)
                         {
-                            <tr><td colspan="5">Nenhum dependente registrado.</td></tr>
+                            <tr><td colspan="6">Nenhum dependente registrado.</td></tr>
                         }
                         @foreach (var d in _associadoDependentes.Dependentes)
                         {
@@ -403,6 +409,20 @@ else
                                     else
                                     {
                                         <PcStatusBadge Text="@(d.Ativo ? "Ativo" : $"Encerrado ({d.MotivoFim})")" Variant="@(d.Ativo ? "ativo" : "neutral")" />
+                                    }
+                                </td>
+                                <td>
+                                    @if (d.PendenteAprovacao)
+                                    {
+                                        <small style="color: var(--pc-text-muted);">Aguardando aprovação</small>
+                                    }
+                                    else if (d.Ativo)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AlterarStatusDependenteAsync(d, false)">Desativar</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AlterarStatusDependenteAsync(d, true)">Reativar</button>
                                     }
                                 </td>
                             </tr>
@@ -427,7 +447,7 @@ else
                 }
                 <div class="pc-form-grid">
                     <div class="pc-field"><label class="pc-label">Nome Completo *</label><input class="pc-input" @bind="_depNome" /></div>
-                    <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" maxlength="14" @bind="_depCpf" /></div>
+                    <div class="pc-field"><label class="pc-label">CPF *</label><input class="pc-input" inputmode="numeric" maxlength="18" placeholder="000.000.000-00" oninput="@MascaraCpfCnpjJs" @bind="DepCpfFormatado" /></div>
                     <div class="pc-field">
                         <label class="pc-label">Sexo *</label>
                         <select class="pc-select" @bind="_depSexo">
@@ -464,6 +484,7 @@ else
     private AssociadoDto? _associadoDependentes;
     private bool _exibirModalNovoDependente;
     private string? _erroModalGerenciar;
+    private string? _erroDependentes;
     private string? _erroModalDependente;
     private string _busca = string.Empty;
     private string _filtroCategoria = string.Empty;
@@ -500,6 +521,21 @@ else
     private TipoVinculoDependente _depVinculo = TipoVinculoDependente.Filho;
     private string _depEmail = string.Empty;
     private string _depSenha = string.Empty;
+
+    private const string MascaraCpfCnpjJs =
+        "let d=this.value.replace(/\\D/g,'').slice(0,14);if(d.length<=11){d=d.replace(/(\\d{3})(\\d)/,'$1.$2').replace(/(\\d{3})(\\d)/,'$1.$2').replace(/(\\d{3})(\\d{1,2})$/,'$1-$2');}else{d=d.replace(/^(\\d{2})(\\d)/,'$1.$2').replace(/^(\\d{2})\\.(\\d{3})(\\d)/,'$1.$2.$3').replace(/^(\\d{2})\\.(\\d{3})\\.(\\d{3})(\\d)/,'$1.$2.$3/$4').replace(/(\\d{4})(\\d{1,2})$/,'$1-$2');}this.value=d;";
+
+    private string CpfNovoFormatado
+    {
+        get => _cpf;
+        set => _cpf = WebFormatHelpers.FormatarCpfOuCnpj(value);
+    }
+
+    private string DepCpfFormatado
+    {
+        get => _depCpf;
+        set => _depCpf = WebFormatHelpers.FormatarCpfOuCnpj(value);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -557,6 +593,7 @@ else
 
     private void AbrirModalDependentes(AssociadoDto a)
     {
+        _erroDependentes = null;
         _erroModalDependente = null;
         _associadoGerenciar = null;
         _exibirModalNovoDependente = false;
@@ -797,34 +834,24 @@ else
         await CarregarAsync();
     }
 
-    private static string ObterEnderecoFormatado(AssociadoDto a)
+    private async Task AlterarStatusDependenteAsync(DependenteDto dep, bool ativo)
     {
-        var partes = new List<string>();
-        if (!string.IsNullOrWhiteSpace(a.Logradouro))
-        {
-            var ruaNum = !string.IsNullOrWhiteSpace(a.Numero) ? $"{a.Logradouro}, {a.Numero}" : a.Logradouro;
-            partes.Add(ruaNum);
-        }
-        else if (!string.IsNullOrWhiteSpace(a.Numero))
-        {
-            partes.Add($"Nº {a.Numero}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(a.Bairro))
-            partes.Add(a.Bairro);
-
-        var cidadeUf = (!string.IsNullOrWhiteSpace(a.Cidade), !string.IsNullOrWhiteSpace(a.UF)) switch
-        {
-            (true, true) => $"{a.Cidade}/{a.UF}",
-            (true, false) => a.Cidade,
-            (false, true) => a.UF,
-            _ => string.Empty
-        };
-        if (!string.IsNullOrWhiteSpace(cidadeUf))
-            partes.Add(cidadeUf);
-
-        return partes.Count > 0 ? string.Join(" — ", partes) : "Não informado";
+        if (_associadoDependentes is null) return;
+        _erro = _mensagem = _erroDependentes = null;
+        var (_, err) = await Api.PatchAsync<DependenteDto>(
+            $"api/v1/admin/associados/{_associadoDependentes.Id}/dependentes/{dep.DependenciaId}/status",
+            new AlterarStatusDependenteRequest(ativo));
+        if (err is not null) { _erroDependentes = err; return; }
+        _mensagem = ativo
+            ? $"Dependente {dep.NomeCompleto} reativado com sucesso."
+            : $"Vínculo do dependente {dep.NomeCompleto} encerrado com sucesso.";
+        var (recarregado, _) = await Api.GetAsync<AssociadoDto>($"api/v1/admin/associados/{_associadoDependentes.Id}");
+        if (recarregado is not null) _associadoDependentes = recarregado;
+        await CarregarAsync();
     }
+
+    private static string ObterEnderecoFormatado(AssociadoDto a) =>
+        WebFormatHelpers.FormatarEndereco(a.Logradouro, a.Numero, a.Bairro, a.Cidade, a.UF);
 
     private static string ObterIniciais(string nomeCompleto)
     {
