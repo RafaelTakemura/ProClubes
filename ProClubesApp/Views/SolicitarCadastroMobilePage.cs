@@ -32,6 +32,15 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         };
         unidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.UnidadeSelecionada));
 
+        var categoriaPicker = new Picker
+        {
+            Title = "Selecione o tipo de associado",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesCategoria.ToList()
+        };
+        categoriaPicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.CategoriaSelecionada));
+
         var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
 
@@ -133,6 +142,7 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
                     TextColor = ProClubesTheme.TextSecondary
                 },
                 CriarCampo("Unidade do Clube *", unidadePicker),
+                CriarCampo("Tipo de Associado *", categoriaPicker),
                 CriarCampo("Nome Completo *", nomeEntry),
                 CriarCampo("CPF (11 dígitos) *", cpfEntry),
                 CriarCampo("Sexo *", sexoPicker),

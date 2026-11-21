@@ -187,12 +187,16 @@ public class InicioViewModel : BaseViewModel
             var (assocDetalhe, _) = await _api.GetAsync<AssociadoDetalheMobileDto>($"api/v1/admin/associados/{resumo.Perfil.AssociadoId.Value}");
             if (assocDetalhe?.Dependentes is not null)
             {
-                foreach (var d in assocDetalhe.Dependentes.Where(x => x.Ativo))
+                foreach (var d in assocDetalhe.Dependentes.Where(x => x.Ativo || x.PendenteAprovacao))
                     DependentesAtivos.Add(d);
             }
         }
         TemDependentes = DependentesAtivos.Count > 0;
-        DependentesContagemTexto = DependentesAtivos.Count == 1 ? "1 ativo" : $"{DependentesAtivos.Count} ativos";
+        var depAtivosCount = DependentesAtivos.Count(x => x.Ativo);
+        var depPendentesCount = DependentesAtivos.Count(x => x.PendenteAprovacao);
+        DependentesContagemTexto = depPendentesCount > 0
+            ? $"{depAtivosCount} ativo(s), {depPendentesCount} pendente(s)"
+            : (depAtivosCount == 1 ? "1 ativo" : $"{depAtivosCount} ativos");
 
         NotificacoesRecentes.Clear();
         foreach (var n in resumo.NotificacoesRecentes) NotificacoesRecentes.Add(n);

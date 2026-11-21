@@ -55,6 +55,12 @@
             Route="Ouvidoria" />
 
         <ShellContent
+            x:Name="TabDependentes"
+            Title="Dependentes"
+            ContentTemplate="{DataTemplate views:DependentesMobilePage}"
+            Route="Dependentes" />
+
+        <ShellContent
             x:Name="TabMais"
             Title="Votações"
             ContentTemplate="{DataTemplate views:MaisGovernancaMobilePage}"

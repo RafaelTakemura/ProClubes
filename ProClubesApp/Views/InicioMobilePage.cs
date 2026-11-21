@@ -429,8 +429,24 @@ public sealed class InicioMobilePage : ContentPage
         };
 
         // 5. Dependentes Cadastrados
-        var lblDepCount = new Label { FontSize = 12, TextColor = ProClubesTheme.TextMuted };
-        lblDepCount.SetBinding(Label.TextProperty, nameof(InicioViewModel.DependentesContagemTexto));
+        var lblDepCount = new Label { FontSize = 11, TextColor = ProClubesTheme.TextMuted, VerticalOptions = LayoutOptions.Center };
+        lblDepCount.SetBinding(Label.TextProperty, nameof(InicioViewModel.DependentesContagemTexto), stringFormat: "({0})");
+
+        var lblGerenciarDeps = new Label
+        {
+            Text = "Gerenciar ›",
+            FontSize = 12,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Color.FromArgb("#2563EB"),
+            VerticalOptions = LayoutOptions.Center
+        };
+        var tapGerenciarDeps = new TapGestureRecognizer();
+        tapGerenciarDeps.Tapped += async (_, _) =>
+        {
+            if (Shell.Current is not null)
+                await Shell.Current.GoToAsync("//Dependentes");
+        };
+        lblGerenciarDeps.GestureRecognizers.Add(tapGerenciarDeps);
 
         var headerDependentes = new Grid
         {
@@ -440,15 +456,25 @@ public sealed class InicioMobilePage : ContentPage
                 new ColumnDefinition { Width = GridLength.Auto }
             }
         };
-        headerDependentes.Add(new Label
+        headerDependentes.Add(new HorizontalStackLayout
         {
-            Text = "DEPENDENTES CADASTRADOS",
-            FontSize = 11,
-            FontAttributes = FontAttributes.Bold,
-            TextColor = ProClubesTheme.TextMuted,
-            CharacterSpacing = 1
+            Spacing = 6,
+            VerticalOptions = LayoutOptions.Center,
+            Children =
+            {
+                new Label
+                {
+                    Text = "DEPENDENTES CADASTRADOS",
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextMuted,
+                    CharacterSpacing = 1,
+                    VerticalOptions = LayoutOptions.Center
+                },
+                lblDepCount
+            }
         }, 0, 0);
-        headerDependentes.Add(lblDepCount, 1, 0);
+        headerDependentes.Add(lblGerenciarDeps, 1, 0);
 
         var depStack = new VerticalStackLayout { Spacing = 12 };
         BindableLayout.SetItemsSource(depStack, _vm.DependentesAtivos);
@@ -493,17 +519,7 @@ public sealed class InicioMobilePage : ContentPage
             };
             rowGrid.Add(avatarBorder, 0, 0);
             rowGrid.Add(new VerticalStackLayout { Children = { lblDepNome, lblDepVinculo } }, 1, 0);
-            rowGrid.Add(ProClubesTheme.CreateSoftTag(
-                new Label
-                {
-                    Text = "Ativo",
-                    FontSize = 10,
-                    TextColor = ProClubesTheme.StatusSuccess,
-                    FontAttributes = FontAttributes.Bold
-                },
-                ProClubesTheme.StatusSuccessBg,
-                ProClubesTheme.StatusSuccessBorder,
-                new Thickness(9, 2)), 2, 0);
+            rowGrid.Add(DependentesMobilePage.CreateStatusPill(new Thickness(9, 2), 10), 2, 0);
 
             return rowGrid;
         }));

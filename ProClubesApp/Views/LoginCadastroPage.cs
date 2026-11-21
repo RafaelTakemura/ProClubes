@@ -175,6 +175,8 @@ public sealed class LoginCadastroPage : ContentPage
         var lblStatusTit = new Label { Text = "Acompanhamento de Solicitação de Cadastro", FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusWarning };
         var lblStatusVal = new Label { FontSize = 14, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary };
         lblStatusVal.SetBinding(Label.TextProperty, "StatusCadastroAtual.Status", stringFormat: "Status atual: {0}");
+        var lblCategoriaPretendida = new Label { FontSize = 13, TextColor = ProClubesTheme.TextSecondary };
+        lblCategoriaPretendida.SetBinding(Label.TextProperty, new Binding("StatusCadastroAtual.CategoriaAprovadaNome", stringFormat: "Tipo / Categoria: {0}") { TargetNullValue = string.Empty });
         var lblMotivoRej = new Label { FontSize = 13, TextColor = ProClubesTheme.StatusDanger };
         lblMotivoRej.SetBinding(Label.TextProperty, "StatusCadastroAtual.JustificativaRejeicao", stringFormat: "Justificativa: {0}");
 
@@ -200,7 +202,7 @@ public sealed class LoginCadastroPage : ContentPage
         statusCard.Content = new VerticalStackLayout
         {
             Spacing = 8,
-            Children = { lblStatusTit, lblStatusVal, lblMotivoRej, btnAbrirPopupReenvio, btnSairRestrito }
+            Children = { lblStatusTit, lblStatusVal, lblCategoriaPretendida, lblMotivoRej, btnAbrirPopupReenvio, btnSairRestrito }
         };
         statusCard.SetBinding(VisualElement.IsVisibleProperty, nameof(LoginCadastroViewModel.ExibirStatusRestrito));
 
@@ -240,6 +242,15 @@ public sealed class LoginCadastroPage : ContentPage
             ItemDisplayBinding = new Binding(nameof(UnidadePublicaDto.Nome))
         };
         unidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.UnidadeSelecionada));
+
+        var categoriaPicker = new Picker
+        {
+            Title = "Selecione o tipo de associado",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesCategoria.ToList()
+        };
+        categoriaPicker.SetBinding(Picker.SelectedItemProperty, nameof(LoginCadastroViewModel.CategoriaSelecionada));
 
         var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.NomeCompleto));
@@ -341,6 +352,7 @@ public sealed class LoginCadastroPage : ContentPage
                 lblMotivo,
                 new Label { Text = "Atualize os dados solicitados abaixo para reenviar seu cadastro mantendo o mesmo CPF.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
                 CriarCampoReenvio("Unidade do Clube *", unidadePicker),
+                CriarCampoReenvio("Tipo de Associado *", categoriaPicker),
                 CriarCampoReenvio("Nome Completo *", nomeEntry),
                 CriarCampoReenvio("Sexo *", sexoPicker),
                 CriarCampoReenvio("Estado Civil *", estadoCivilPicker),

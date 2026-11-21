@@ -27,6 +27,7 @@ public partial class AppShell : Shell
             TabReservas.IsVisible = titularPagante;
             TabFinanceiro.IsVisible = titularPagante;
             TabOuvidoria.IsVisible = titularPagante;
+            TabDependentes.IsVisible = titularPagante;
             TabMais.IsVisible = _session.TemDireitoVoto;
 
             if (currentContent == TabLogin || currentContent == TabCadastro)
@@ -52,6 +53,7 @@ public partial class AppShell : Shell
             TabReservas.IsVisible = false;
             TabFinanceiro.IsVisible = false;
             TabOuvidoria.IsVisible = false;
+            TabDependentes.IsVisible = false;
             TabMais.IsVisible = false;
         }
     }

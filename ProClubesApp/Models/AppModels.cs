@@ -65,7 +65,9 @@ public record SolicitarCadastroRequest(
     string Fone,
     string Email,
     int UnidadePretendidaId,
-    string Senha);
+    string Senha,
+    IReadOnlyList<int>? InteressesIds = null,
+    string? CodigoCategoriaPretendida = null);
 
 public record ReenviarSolicitacaoCadastroRequest(
     string NomeCompleto,
@@ -79,7 +81,9 @@ public record ReenviarSolicitacaoCadastroRequest(
     string UF,
     string Fone,
     string Email,
-    int UnidadePretendidaId);
+    int UnidadePretendidaId,
+    IReadOnlyList<int>? InteressesIds = null,
+    string? CodigoCategoriaPretendida = null);
 
 public record UnidadePublicaDto(
     int Id,
@@ -283,7 +287,11 @@ public record DependenteMobileDto(
     string NomeCompleto,
     string CpfMascarado,
     string TipoVinculo,
-    bool Ativo)
+    bool Ativo,
+    DateOnly DataNascimento = default,
+    string Email = "",
+    string Fone = "",
+    bool PendenteAprovacao = false)
 {
     public string Iniciais
     {
@@ -297,7 +305,45 @@ public record DependenteMobileDto(
     }
 
     public string VinculoFormatado => TipoVinculo == "Conjuge" ? "Cônjuge" : "Filho(a)";
+
+    public string SubtituloFormatado =>
+        DataNascimento != default
+            ? $"{VinculoFormatado} • {CpfMascarado} • Nasc.: {DataNascimento:dd/MM/yyyy}"
+            : $"{VinculoFormatado} • {CpfMascarado}";
+
+    public string StatusTexto =>
+        PendenteAprovacao ? "Pendente de Aprovação" : (Ativo ? "Ativo" : "Encerrado");
+
+    public Microsoft.Maui.Graphics.Color StatusCorTexto =>
+        PendenteAprovacao
+            ? Microsoft.Maui.Graphics.Color.FromArgb("#B45309")
+            : (Ativo ? Microsoft.Maui.Graphics.Color.FromArgb("#047857") : Microsoft.Maui.Graphics.Color.FromArgb("#475569"));
+
+    public Microsoft.Maui.Graphics.Color StatusCorFundo =>
+        PendenteAprovacao
+            ? Microsoft.Maui.Graphics.Color.FromArgb("#FFFBEB")
+            : (Ativo ? Microsoft.Maui.Graphics.Color.FromArgb("#ECFDF5") : Microsoft.Maui.Graphics.Color.FromArgb("#F1F5F9"));
+
+    public Microsoft.Maui.Graphics.Color StatusCorBorda =>
+        PendenteAprovacao
+            ? Microsoft.Maui.Graphics.Color.FromArgb("#FDE68A")
+            : (Ativo ? Microsoft.Maui.Graphics.Color.FromArgb("#A7F3D0") : Microsoft.Maui.Graphics.Color.FromArgb("#CBD5E1"));
 }
+
+public record CadastrarDependenteMobileRequest(
+    string NomeCompleto,
+    string Cpf,
+    string Sexo,
+    string EstadoCivil,
+    DateOnly DataNascimento,
+    string Logradouro,
+    string Bairro,
+    string Numero,
+    string Cidade,
+    string UF,
+    string Fone,
+    string Email,
+    string TipoVinculo);
 
 public record AssociadoDetalheMobileDto(
     int Id,

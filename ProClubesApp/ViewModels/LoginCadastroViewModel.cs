@@ -28,10 +28,15 @@ public class LoginCadastroViewModel : BaseViewModel
     private string _cidade = string.Empty;
     private string _uf = string.Empty;
     private string _senhaCadastro = string.Empty;
+    private string _categoriaSelecionada = "Sócio Associado";
     private UnidadePublicaDto? _unidadeSelecionada;
 
-    public IReadOnlyList<string> OpcoesSexo { get; } = ["Masculino", "Feminino", "Outro"];
-    public IReadOnlyList<string> OpcoesEstadoCivil { get; } = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"];
+    internal static readonly IReadOnlyList<string> OpcoesSexoPadrao = ["Masculino", "Feminino", "Outro"];
+    internal static readonly IReadOnlyList<string> OpcoesEstadoCivilPadrao = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"];
+
+    public IReadOnlyList<string> OpcoesSexo => OpcoesSexoPadrao;
+    public IReadOnlyList<string> OpcoesEstadoCivil => OpcoesEstadoCivilPadrao;
+    public IReadOnlyList<string> OpcoesCategoria { get; } = ["Sócio Associado", "Sócio Fundador", "Sócio Convidado", "Simpatizante"];
 
     public ObservableCollection<EventoDto> EventosPublicos { get; } = new();
     public ObservableCollection<UnidadePublicaDto> UnidadesPublicas { get; } = new();
@@ -55,6 +60,7 @@ public class LoginCadastroViewModel : BaseViewModel
     public string Cidade { get => _cidade; set => SetProperty(ref _cidade, value); }
     public string UF { get => _uf; set => SetProperty(ref _uf, value); }
     public string SenhaCadastro { get => _senhaCadastro; set => SetProperty(ref _senhaCadastro, value); }
+    public string CategoriaSelecionada { get => _categoriaSelecionada; set => SetProperty(ref _categoriaSelecionada, value); }
     public UnidadePublicaDto? UnidadeSelecionada { get => _unidadeSelecionada; set => SetProperty(ref _unidadeSelecionada, value); }
 
     public ICommand EntrarCommand { get; }
@@ -115,6 +121,9 @@ public class LoginCadastroViewModel : BaseViewModel
         Email = StatusCadastroAtual.Email;
         Sexo ??= OpcoesSexo[0];
         EstadoCivil ??= OpcoesEstadoCivil[0];
+        CategoriaSelecionada = OpcoesCategoria.FirstOrDefault(c =>
+            string.Equals(c, StatusCadastroAtual.CategoriaAprovadaNome, StringComparison.OrdinalIgnoreCase))
+            ?? "Sócio Associado";
         UnidadeSelecionada = UnidadesPublicas.FirstOrDefault(u => u.Id == StatusCadastroAtual.UnidadePretendidaId)
                              ?? UnidadesPublicas.FirstOrDefault();
     }
@@ -155,6 +164,7 @@ public class LoginCadastroViewModel : BaseViewModel
         SuccessMessage = null;
 
         if (UnidadeSelecionada is null
+            || string.IsNullOrWhiteSpace(CategoriaSelecionada)
             || string.IsNullOrWhiteSpace(NomeCompleto)
             || string.IsNullOrWhiteSpace(Cpf)
             || string.IsNullOrWhiteSpace(Sexo)
@@ -205,7 +215,8 @@ public class LoginCadastroViewModel : BaseViewModel
             Telefone.Trim(),
             Email.Trim(),
             UnidadeSelecionada.Id,
-            SenhaCadastro);
+            SenhaCadastro,
+            CodigoCategoriaPretendida: MapearCategoriaParaCodigo(CategoriaSelecionada));
 
         var (res, err) = await _api.PostAsync<StatusCadastroResponse>("api/v1/cadastros/solicitacoes", req, anonymous: true);
         if (err is not null)
@@ -229,6 +240,7 @@ public class LoginCadastroViewModel : BaseViewModel
         SuccessMessage = null;
 
         if (UnidadeSelecionada is null
+            || string.IsNullOrWhiteSpace(CategoriaSelecionada)
             || string.IsNullOrWhiteSpace(NomeCompleto)
             || string.IsNullOrWhiteSpace(Sexo)
             || string.IsNullOrWhiteSpace(EstadoCivil)
@@ -269,7 +281,8 @@ public class LoginCadastroViewModel : BaseViewModel
             UF.Trim().ToUpperInvariant(),
             Telefone.Trim(),
             Email.Trim(),
-            UnidadeSelecionada.Id);
+            UnidadeSelecionada.Id,
+            CodigoCategoriaPretendida: MapearCategoriaParaCodigo(CategoriaSelecionada));
 
         var (res, err) = await _api.PutAsync<StatusCadastroResponse>("api/v1/me/cadastro/reenvio", req);
         if (err is not null)
@@ -290,7 +303,16 @@ public class LoginCadastroViewModel : BaseViewModel
         StatusCadastroAtual = null;
     }
 
-    private static bool ValidarSintaxeCpf(string? cpf)
+    private static string MapearCategoriaParaCodigo(string? categoriaNome)
+    {
+        if (string.IsNullOrWhiteSpace(categoriaNome)) return "ASSOCIADO";
+        if (categoriaNome.Contains("Fundador", StringComparison.OrdinalIgnoreCase)) return "FUNDADOR";
+        if (categoriaNome.Contains("Convidado", StringComparison.OrdinalIgnoreCase)) return "CONVIDADO";
+        if (categoriaNome.Contains("Simpatizante", StringComparison.OrdinalIgnoreCase)) return "SIMPATIZANTE";
+        return "ASSOCIADO";
+    }
+
+    internal static bool ValidarSintaxeCpf(string? cpf)
     {
         if (string.IsNullOrWhiteSpace(cpf)) return false;
         var s = cpf.Trim();
@@ -299,7 +321,7 @@ public class LoginCadastroViewModel : BaseViewModel
         return digitos.Length == 11 && digitos.Distinct().Count() > 1;
     }
 
-    private static bool ValidarSintaxeTelefone(string? fone)
+    internal static bool ValidarSintaxeTelefone(string? fone)
     {
         if (string.IsNullOrWhiteSpace(fone)) return false;
         var s = fone.Trim();
@@ -308,7 +330,7 @@ public class LoginCadastroViewModel : BaseViewModel
         return digitos.Length is 10 or 11;
     }
 
-    private static bool ValidarSintaxeEmail(string? email)
+    internal static bool ValidarSintaxeEmail(string? email)
     {
         if (string.IsNullOrWhiteSpace(email)) return false;
         return Regex.IsMatch(email.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]{2,}$");

@@ -57,6 +57,7 @@ public static class MauiProgram
         builder.Services.AddTransient<ReservasViewModel>();
         builder.Services.AddTransient<FinanceiroViewModel>();
         builder.Services.AddTransient<OuvidoriaViewModel>();
+        builder.Services.AddTransient<DependentesViewModel>();
         builder.Services.AddTransient<MaisGovernancaViewModel>();
 
         builder.Services.AddTransient<LoginCadastroPage>();
@@ -66,6 +67,7 @@ public static class MauiProgram
         builder.Services.AddTransient<ReservasMobilePage>();
         builder.Services.AddTransient<FinanceiroMobilePage>();
         builder.Services.AddTransient<OuvidoriaMobilePage>();
+        builder.Services.AddTransient<DependentesMobilePage>();
         builder.Services.AddTransient<MaisGovernancaMobilePage>();
 
 #if DEBUG
