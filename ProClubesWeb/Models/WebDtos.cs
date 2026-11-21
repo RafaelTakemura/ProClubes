@@ -281,7 +281,8 @@ public record DependenteDto(
     DateOnly DataInicio,
     DateOnly? DataFim,
     MotivoFimDependencia? MotivoFim,
-    bool Ativo);
+    bool Ativo,
+    bool PendenteAprovacao = false);
 
 public record CadastrarDependenteRequest(
     string NomeCompleto,

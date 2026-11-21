@@ -395,7 +395,16 @@ else
                                 <td>@d.CpfMascarado</td>
                                 <td>@d.TipoVinculo</td>
                                 <td>@d.DataNascimento.ToString("dd/MM/yyyy")</td>
-                                <td><PcStatusBadge Text="@(d.Ativo ? "Ativo" : $"Encerrado ({d.MotivoFim})")" Variant="@(d.Ativo ? "ativo" : "neutral")" /></td>
+                                <td>
+                                    @if (d.PendenteAprovacao)
+                                    {
+                                        <PcStatusBadge Text="Pendente de Aprovação" Variant="pendente" />
+                                    }
+                                    else
+                                    {
+                                        <PcStatusBadge Text="@(d.Ativo ? "Ativo" : $"Encerrado ({d.MotivoFim})")" Variant="@(d.Ativo ? "ativo" : "neutral")" />
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>

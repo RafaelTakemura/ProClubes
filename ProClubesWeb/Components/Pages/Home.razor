@@ -216,16 +216,17 @@ else
                                 {
                                     @foreach (var item in _solicitacoesPendentes.Take(4))
                                     {
+                                        var ehDep = item.CategoriaAprovadaNome?.StartsWith("Dependente", StringComparison.OrdinalIgnoreCase) == true;
                                         <div class="pc-list-row">
                                             <div class="pc-user-info">
                                                 <div class="pc-avatar">@ObterIniciais(item.NomeCompleto)</div>
                                                 <div>
                                                     <div class="pc-user-name">@item.NomeCompleto</div>
-                                                    <div class="pc-user-meta">@item.UnidadePretendidaNome • Solicitado em @item.SolicitadaEm.ToString("dd/MM/yyyy")</div>
+                                                    <div class="pc-user-meta">@item.UnidadePretendidaNome@(ehDep ? $" • {item.CategoriaAprovadaNome}" : string.Empty) • Solicitado em @item.SolicitadaEm.ToString("dd/MM/yyyy")</div>
                                                 </div>
                                             </div>
                                             <div class="pc-row-actions">
-                                                <span class="pc-badge-category">Candidato</span>
+                                                <span class="pc-badge-category">@(ehDep ? "Dependente" : (string.IsNullOrWhiteSpace(item.CategoriaAprovadaNome) ? "Candidato" : item.CategoriaAprovadaNome))</span>
                                                 <button type="button" class="pc-btn-sm" @onclick='() => Nav.NavigateTo("/cadastros")'>Avaliar</button>
                                             </div>
                                         </div>

@@ -51,6 +51,7 @@ else
                         <th>Solicitante</th>
                         <th>Contato</th>
                         <th>Unidade Pretendida</th>
+                        <th>Tipo / Categoria</th>
                         <th>Data Solicitação</th>
                         <th>Status</th>
                         <th>Ações</th>
@@ -59,7 +60,7 @@ else
                 <tbody>
                     @if (_solicitacoes.Count == 0)
                     {
-                        <tr><td colspan="7">Nenhuma solicitação encontrada para os filtros atuais.</td></tr>
+                        <tr><td colspan="8">Nenhuma solicitação encontrada para os filtros atuais.</td></tr>
                     }
                     @foreach (var s in _solicitacoes)
                     {
@@ -76,13 +77,25 @@ else
                             </td>
                             <td>@s.Email<br /><small style="color: var(--pc-text-muted);">@s.Fone</small></td>
                             <td>@s.UnidadePretendidaNome</td>
+                            <td>
+                                @if (EhSolicitacaoDependente(s))
+                                {
+                                    <PcStatusBadge Text="Dependente" Variant="info" />
+                                    <div style="margin-top: 4px;"><small style="color: var(--pc-text-muted);">@s.CategoriaAprovadaNome</small></div>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(s.CategoriaAprovadaNome))
+                                {
+                                    <span class="pc-badge-category">@s.CategoriaAprovadaNome</span>
+                                    <div style="margin-top: 4px;"><small style="color: var(--pc-text-muted);">@(s.Status == StatusSolicitacaoCadastro.Pendente ? "Categoria pretendida" : "Categoria aprovada")</small></div>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--pc-text-muted);">—</span>
+                                }
+                            </td>
                             <td>@s.SolicitadaEm.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>
                                 <PcStatusBadge Text="@s.Status.ToString()" Variant="@s.Status.ToString()" />
-                                @if (!string.IsNullOrWhiteSpace(s.CategoriaAprovadaNome))
-                                {
-                                    <div><small>Categoria: <strong>@s.CategoriaAprovadaNome</strong></small></div>
-                                }
                                 @if (!string.IsNullOrWhiteSpace(s.JustificativaRejeicao))
                                 {
                                     <div><small style="color: var(--pc-danger);">Motivo: @s.JustificativaRejeicao</small></div>
@@ -110,15 +123,32 @@ else
              MaxWidth="520px"
              OnClose="() => _solicitacaoParaAprovar = null">
         <ChildContent>
-            <div class="pc-field">
-                <label class="pc-label">Categoria Associativa a Conceder *</label>
-                <select class="pc-select" @bind="_categoriaAprovacao">
-                    <option value="ASSOCIADO">Sócio Associado</option>
-                    <option value="FUNDADOR">Sócio Fundador</option>
-                    <option value="CONVIDADO">Sócio Convidado</option>
-                    <option value="SIMPATIZANTE">Simpatizante</option>
-                </select>
-            </div>
+            @if (EhSolicitacaoDependente(_solicitacaoParaAprovar))
+            {
+                <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 0;">
+                    <label class="pc-label">Vínculo Solicitado</label>
+                    <div style="font-weight: 600; color: var(--pc-text-main); margin-bottom: 4px;">@_solicitacaoParaAprovar?.CategoriaAprovadaNome</div>
+                    <small style="color: var(--pc-text-muted);">A aprovação ativará o vínculo de dependente junto ao associado titular na unidade @_solicitacaoParaAprovar?.UnidadePretendidaNome.</small>
+                </div>
+            }
+            else
+            {
+                <div class="pc-field">
+                    <label class="pc-label">Categoria Associativa a Conceder *</label>
+                    <select class="pc-select" @bind="_categoriaAprovacao">
+                        <option value="ASSOCIADO">Sócio Associado</option>
+                        <option value="FUNDADOR">Sócio Fundador</option>
+                        <option value="CONVIDADO">Sócio Convidado</option>
+                        <option value="SIMPATIZANTE">Simpatizante</option>
+                    </select>
+                    @if (!string.IsNullOrWhiteSpace(_solicitacaoParaAprovar?.CategoriaAprovadaNome))
+                    {
+                        <div style="margin-top: 6px;">
+                            <small style="color: var(--pc-text-muted);">Categoria pretendida no cadastro: <strong>@_solicitacaoParaAprovar.CategoriaAprovadaNome</strong></small>
+                        </div>
+                    }
+                </div>
+            }
         </ChildContent>
         <FooterContent>
             <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _solicitacaoParaAprovar = null">Cancelar</button>
@@ -181,7 +211,9 @@ else
     private void AbrirModalAprovacao(SolicitacaoCadastroListItemDto s)
     {
         _solicitacaoParaAprovar = s;
-        _categoriaAprovacao = "ASSOCIADO";
+        _categoriaAprovacao = EhSolicitacaoDependente(s)
+            ? "DEPENDENTE"
+            : MapearNomeParaCodigoCategoria(s.CategoriaAprovadaNome);
     }
 
     private void AbrirModalRejeicao(SolicitacaoCadastroListItemDto s)
@@ -198,8 +230,22 @@ else
         var (_, err) = await Api.PostAsync<SolicitacaoCadastroListItemDto>($"api/v1/admin/cadastros/solicitacoes/{id}/aprovar", new AprovarSolicitacaoRequest(_categoriaAprovacao));
         if (err is not null) { _erro = err; return; }
         _solicitacaoParaAprovar = null;
-        _mensagem = $"Solicitação #{id} aprovada na categoria {_categoriaAprovacao}.";
+        _mensagem = _categoriaAprovacao == "DEPENDENTE"
+            ? $"Solicitação #{id} aprovada como Dependente."
+            : $"Solicitação #{id} aprovada na categoria {_categoriaAprovacao}.";
         await CarregarAsync();
+    }
+
+    private static bool EhSolicitacaoDependente(SolicitacaoCadastroListItemDto? s) =>
+        s?.CategoriaAprovadaNome?.StartsWith("Dependente", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string MapearNomeParaCodigoCategoria(string? nomeCategoria)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCategoria)) return "ASSOCIADO";
+        if (nomeCategoria.Contains("Fundador", StringComparison.OrdinalIgnoreCase)) return "FUNDADOR";
+        if (nomeCategoria.Contains("Convidado", StringComparison.OrdinalIgnoreCase)) return "CONVIDADO";
+        if (nomeCategoria.Contains("Simpatizante", StringComparison.OrdinalIgnoreCase)) return "SIMPATIZANTE";
+        return "ASSOCIADO";
     }
 
     private async Task ConfirmarRejeicaoAsync()
