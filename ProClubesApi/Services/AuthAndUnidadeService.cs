@@ -181,11 +181,28 @@ public class AuthService
         if (usuario is null)
             throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Usuário não encontrado.");
 
-        var associado = await _db.Associados
+        var associadoRegistro = await _db.Associados
             .AsNoTracking()
             .Include(a => a.Unidade)
             .Include(a => a.CategoriaAssociado)
-            .FirstOrDefaultAsync(a => a.PessoaId == usuario.PessoaId && a.Status == StatusAssociado.Ativo, ct);
+            .Where(a => a.PessoaId == usuario.PessoaId
+                        && (a.Status == StatusAssociado.Ativo || a.Status == StatusAssociado.AguardandoAceiteContrato))
+            .OrderByDescending(a => a.Id)
+            .FirstOrDefaultAsync(ct);
+
+        var associado = associadoRegistro is not null && associadoRegistro.Status == StatusAssociado.Ativo
+            ? associadoRegistro
+            : null;
+
+        ContratoAssociado? contratoPendente = null;
+        if (associadoRegistro is not null && associadoRegistro.Status == StatusAssociado.AguardandoAceiteContrato)
+        {
+            contratoPendente = await _db.ContratosAssociado
+                .AsNoTracking()
+                .Where(c => c.AssociadoId == associadoRegistro.Id && c.Status == StatusContrato.PendenteAceite)
+                .OrderByDescending(c => c.Id)
+                .FirstOrDefaultAsync(ct);
+        }
 
         var dep = await _db.Dependencias
             .AsNoTracking()
@@ -228,7 +245,11 @@ public class AuthService
             UF: usuario.Pessoa.UF,
             CriadoEm: TimeZoneHelper.ToSaoPauloOffset(usuario.Pessoa.CriadaEmUtc),
             AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(usuario.Pessoa.AtualizadaEmUtc),
-            UltimaAlteracaoPorNome: usuario.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
+            UltimaAlteracaoPorNome: usuario.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto,
+            StatusAssociado: associadoRegistro?.Status,
+            PossuiContratoPendente: contratoPendente is not null,
+            ContratoPendenteId: contratoPendente?.Id,
+            ContratoPendenteNumero: contratoPendente?.NumeroContrato);
     }
 
     public async Task<StatusCadastroResponse> ObterStatusCadastroAsync(int usuarioId, CancellationToken ct = default)

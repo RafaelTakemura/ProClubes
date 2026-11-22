@@ -81,6 +81,7 @@ public class ProClubesDbContext : DbContext
     public DbSet<ExecucaoRotina> ExecucoesRotina => Set<ExecucaoRotina>();
     public DbSet<Estado> Estados => Set<Estado>();
     public DbSet<Cidade> Cidades => Set<Cidade>();
+    public DbSet<ContratoAssociado> ContratosAssociado => Set<ContratoAssociado>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -899,6 +900,58 @@ public class ProClubesDbContext : DbContext
             e.HasOne(x => x.UltimaAlteracaoPorUsuario)
                 .WithMany()
                 .HasForeignKey(x => x.UltimaAlteracaoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // 35. ContratoAssociado
+        modelBuilder.Entity<ContratoAssociado>(e =>
+        {
+            e.ToTable("ContratoAssociado");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.NumeroContrato).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Titulo).HasMaxLength(200).IsRequired();
+            e.Property(x => x.Conteudo).IsRequired();
+            e.Property(x => x.VersaoTermos).HasMaxLength(30).IsRequired();
+            e.Property(x => x.ValorMensalidadeReferencia).HasPrecision(10, 2).IsRequired();
+            e.Property(x => x.Status).HasConversion<byte>().IsRequired();
+            e.Property(x => x.JustificativaRecusa).HasMaxLength(500);
+            e.Property(x => x.ObservacoesAdmin).HasMaxLength(500);
+
+            e.HasIndex(x => x.NumeroContrato).IsUnique();
+
+            e.HasOne(x => x.Associado)
+                .WithMany(a => a.Contratos)
+                .HasForeignKey(x => x.AssociadoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.SolicitacaoCadastro)
+                .WithMany()
+                .HasForeignKey(x => x.SolicitacaoCadastroId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(x => x.Unidade)
+                .WithMany()
+                .HasForeignKey(x => x.UnidadeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.CategoriaAssociado)
+                .WithMany()
+                .HasForeignKey(x => x.CategoriaAssociadoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.GeradoPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.GeradoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(x => x.UltimaAlteracaoPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.UltimaAlteracaoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            e.HasOne(x => x.RespondidoPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.RespondidoPorUsuarioId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }

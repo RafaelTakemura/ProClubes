@@ -197,6 +197,60 @@ public class CadastrosEAssociadosController : ControllerBase
         var user = await _currentUser.GetRequiredUserAsync(ct: ct);
         return Ok(await _service.AlterarStatusDependenteAsync(user, id, dependenciaId, request, ct));
     }
+
+    [Authorize]
+    [HttpGet("admin/contratos")]
+    public async Task<ActionResult<PagedResponse<ContratoAssociadoDto>>> ListarContratos(
+        [FromQuery] int? unidadeId,
+        [FromQuery] StatusContrato? status,
+        [FromQuery] string? busca,
+        [FromQuery] PaginationQuery pagination,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.ListarContratosAsync(user, unidadeId, status, busca, pagination, ct));
+    }
+
+    [Authorize]
+    [HttpGet("admin/contratos/{id:int}")]
+    public async Task<ActionResult<ContratoAssociadoDto>> ObterContrato(int id, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.ObterContratoPorIdAsync(user, id, ct));
+    }
+
+    [Authorize]
+    [HttpPut("admin/contratos/{id:int}")]
+    public async Task<ActionResult<ContratoAssociadoDto>> AtualizarContrato(
+        int id,
+        [FromBody] AtualizarContratoRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.AtualizarContratoAsync(user, id, request, ct));
+    }
+
+    [Authorize]
+    [HttpPost("admin/contratos/{id:int}/cancelar")]
+    public async Task<ActionResult<ContratoAssociadoDto>> CancelarContrato(
+        int id,
+        [FromBody] ResponderContratoRequest? request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.CancelarContratoAsync(user, id, request, ct));
+    }
+
+    [Authorize]
+    [HttpPost("admin/associados/{id:int}/contratos/regerar")]
+    public async Task<ActionResult<ContratoAssociadoDto>> RegerarContrato(
+        int id,
+        [FromBody] RegerarContratoRequest? request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.RegerarContratoAssociadoAsync(user, id, request, ct));
+    }
 }
 
 [ApiController]

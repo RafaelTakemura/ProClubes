@@ -48,7 +48,11 @@ public record PerfilUsuarioDto(
     string UF = "",
     DateTimeOffset? CriadoEm = null,
     DateTimeOffset? AtualizadoEm = null,
-    string? UltimaAlteracaoPorNome = null);
+    string? UltimaAlteracaoPorNome = null,
+    StatusAssociado? StatusAssociado = null,
+    bool PossuiContratoPendente = false,
+    int? ContratoPendenteId = null,
+    string? ContratoPendenteNumero = null);
 
 public record StatusCadastroResponse(
     int SolicitacaoId,
@@ -228,7 +232,9 @@ public record AssociadoDto(
     string Profissao = "",
     DateTimeOffset? CriadoEm = null,
     DateTimeOffset? AtualizadoEm = null,
-    string? UltimaAlteracaoPorNome = null);
+    string? UltimaAlteracaoPorNome = null,
+    string? NumeroContratoAtual = null,
+    StatusContrato? StatusContratoAtual = null);
 
 public record CriarAssociadoAdminRequest(
     string NomeCompleto,
@@ -659,3 +665,42 @@ public record ResumoSincronizacaoAppDto(
     IReadOnlyList<ReservaEspacoDto> ReservasFuturas,
     IReadOnlyList<NotificacaoDto> NotificacoesRecentes,
     int NotificacoesNaoLidas);
+
+// ==================== CONTRATOS DE ASSOCIADO ====================
+public record ContratoAssociadoDto(
+    int Id,
+    string NumeroContrato,
+    int AssociadoId,
+    int PessoaId,
+    string AssociadoNome,
+    string AssociadoCpfMascarado,
+    string AssociadoEmail,
+    int? SolicitacaoCadastroId,
+    int UnidadeId,
+    string UnidadeNome,
+    int CategoriaAssociadoId,
+    string CategoriaCodigo,
+    string CategoriaNome,
+    string Titulo,
+    string Conteudo,
+    string VersaoTermos,
+    decimal ValorMensalidadeReferencia,
+    StatusContrato Status,
+    DateTimeOffset GeradoEm,
+    DateTimeOffset AtualizadoEm,
+    DateTimeOffset? RespondidoEm,
+    string? JustificativaRecusa,
+    string? ObservacoesAdmin,
+    string? GeradoPorNome,
+    string? UltimaAlteracaoPorNome,
+    string? RespondidoPorNome);
+
+public record AtualizarContratoRequest(
+    string Titulo,
+    string Conteudo,
+    string? VersaoTermos = null,
+    string? ObservacoesAdmin = null);
+
+public record ResponderContratoRequest(string? Motivo = null);
+
+public record RegerarContratoRequest(string? ObservacoesAdmin = null);

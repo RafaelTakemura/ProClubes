@@ -119,6 +119,7 @@ public class Associado
     public DateTime? DesativadoEmUtc { get; set; }
 
     public ICollection<Dependencia> Dependentes { get; set; } = new List<Dependencia>();
+    public ICollection<ContratoAssociado> Contratos { get; set; } = new List<ContratoAssociado>();
 }
 
 // 9. HistoricoCategoriaAssociado — Associação
@@ -537,4 +538,35 @@ public class Cidade
     public DateTime AtualizadaEmUtc { get; set; }
     public int? UltimaAlteracaoPorUsuarioId { get; set; }
     public Usuario? UltimaAlteracaoPorUsuario { get; set; }
+}
+
+// 35. ContratoAssociado — Associação & Termos
+public class ContratoAssociado
+{
+    public int Id { get; set; }
+    public string NumeroContrato { get; set; } = string.Empty;
+    public int AssociadoId { get; set; }
+    public Associado Associado { get; set; } = null!;
+    public int? SolicitacaoCadastroId { get; set; }
+    public SolicitacaoCadastro? SolicitacaoCadastro { get; set; }
+    public int UnidadeId { get; set; }
+    public Unidade Unidade { get; set; } = null!;
+    public int CategoriaAssociadoId { get; set; }
+    public CategoriaAssociado CategoriaAssociado { get; set; } = null!;
+    public string Titulo { get; set; } = string.Empty;
+    public string Conteudo { get; set; } = string.Empty;
+    public string VersaoTermos { get; set; } = "1.0";
+    public decimal ValorMensalidadeReferencia { get; set; }
+    public StatusContrato Status { get; set; } = StatusContrato.PendenteAceite;
+    public DateTime GeradoEmUtc { get; set; }
+    public DateTime AtualizadoEmUtc { get; set; }
+    public DateTime? RespondidoEmUtc { get; set; }
+    public string? JustificativaRecusa { get; set; }
+    public string? ObservacoesAdmin { get; set; }
+    public int? GeradoPorUsuarioId { get; set; }
+    public Usuario? GeradoPorUsuario { get; set; }
+    public int? UltimaAlteracaoPorUsuarioId { get; set; }
+    public Usuario? UltimaAlteracaoPorUsuario { get; set; }
+    public int? RespondidoPorUsuarioId { get; set; }
+    public Usuario? RespondidoPorUsuario { get; set; }
 }

@@ -60,8 +60,11 @@ public class AssociadoAndCadastroService
             if (temPendente)
                 throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.SolicitacaoJaPendente, "Já existe uma solicitação de cadastro pendente para este CPF.");
 
-            if (pessoaExistente.Associado is not null && pessoaExistente.Associado.Status == StatusAssociado.Ativo && pessoaExistente.Usuario?.EstadoConta == EstadoConta.Ativa)
-                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.CpfJaCadastrado, "Este CPF já possui cadastro ativo no clube.");
+            if (pessoaExistente.Associado is not null
+                && (pessoaExistente.Associado.Status == StatusAssociado.Ativo
+                    || pessoaExistente.Associado.Status == StatusAssociado.AguardandoAceiteContrato)
+                && pessoaExistente.Usuario?.EstadoConta == EstadoConta.Ativa)
+                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.CpfJaCadastrado, "Este CPF já possui cadastro ativo ou contrato pendente de aceite no clube.");
 
             // Atualiza dados pessoais preservando identidade única (Regra 6.2 item 6 e D8)
             pessoa = pessoaExistente;
@@ -368,6 +371,7 @@ public class AssociadoAndCadastroService
             (string.IsNullOrWhiteSpace(req.CodigoCategoria) ||
              string.Equals(req.CodigoCategoria.Trim(), "DEPENDENTE", StringComparison.OrdinalIgnoreCase));
 
+        ContratoAssociado? contratoGerado = null;
         if (aprovarComoDependente)
         {
             if (depAtivo!.AssociadoTitular.UnidadeId != solicitacao.UnidadePretendidaId)
@@ -383,7 +387,6 @@ public class AssociadoAndCadastroService
                 throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Categoria associativa inválida.");
 
             var associado = await _db.Associados.FirstOrDefaultAsync(a => a.PessoaId == solicitacao.PessoaId, ct);
-            var inicioCobranca = categoria.IsentoMensalidade ? (DateOnly?)null : TimeZoneHelper.FirstDayOfNextMonth(hoje);
 
             if (associado is null)
             {
@@ -392,21 +395,34 @@ public class AssociadoAndCadastroService
                     PessoaId = solicitacao.PessoaId,
                     UnidadeId = solicitacao.UnidadePretendidaId,
                     CategoriaAssociadoId = categoria.Id,
-                    Status = StatusAssociado.Ativo,
+                    Status = StatusAssociado.AguardandoAceiteContrato,
                     DataIngresso = hoje,
-                    DataInicioCobranca = inicioCobranca
+                    DataInicioCobranca = null
                 };
                 _db.Associados.Add(associado);
+                await _db.SaveChangesAsync(ct);
             }
             else
             {
                 associado.UnidadeId = solicitacao.UnidadePretendidaId;
                 associado.CategoriaAssociadoId = categoria.Id;
-                associado.Status = StatusAssociado.Ativo;
+                associado.Status = StatusAssociado.AguardandoAceiteContrato;
                 associado.DataIngresso = hoje;
-                associado.DataInicioCobranca = inicioCobranca;
+                associado.DataInicioCobranca = null;
                 associado.DesativadoEmUtc = null;
             }
+
+            contratoGerado = await GerarContratoFiliacaoInternoAsync(
+                associado,
+                solicitacao.UnidadePretendida,
+                categoria,
+                solicitacao.Pessoa,
+                solicitacao.Id,
+                user.UsuarioId,
+                observacoesAdmin: null,
+                nowUtc,
+                hoje,
+                ct);
         }
 
         solicitacao.Status = StatusSolicitacaoCadastro.Aprovada;
@@ -420,16 +436,24 @@ public class AssociadoAndCadastroService
         await _notificacao.CriarNotificacaoAsync(
             solicitacao.UsuarioId,
             TipoNotificacao.SolicitacaoCadastroAnalisada,
-            "Cadastro aprovado!",
+            aprovarComoDependente ? "Cadastro aprovado!" : "Cadastro aprovado — contrato disponível!",
             aprovarComoDependente
                 ? $"Seu vínculo como dependente na unidade {solicitacao.UnidadePretendida.Nome} foi aprovado."
-                : $"Sua solicitação de cadastro na unidade {solicitacao.UnidadePretendida.Nome} foi aprovada.",
+                : $"Sua solicitação de cadastro na unidade {solicitacao.UnidadePretendida.Nome} foi aprovada. O contrato {contratoGerado!.NumeroContrato} foi gerado e aguarda seu aceite no aplicativo para liberar suas permissões.",
             "SolicitacaoCadastro",
             solicitacao.Id,
             $"CAD_APROV_{solicitacao.Id}",
             ct);
 
-        _auditoria.Registrar(user.UsuarioId, solicitacao.UnidadePretendidaId, "APROVAR_CADASTRO", nameof(SolicitacaoCadastro), solicitacao.Id, $"Solicitação #{solicitacao.Id} aprovada.");
+        _auditoria.Registrar(
+            user.UsuarioId,
+            solicitacao.UnidadePretendidaId,
+            "APROVAR_CADASTRO",
+            nameof(SolicitacaoCadastro),
+            solicitacao.Id,
+            aprovarComoDependente
+                ? $"Solicitação #{solicitacao.Id} aprovada como dependente."
+                : $"Solicitação #{solicitacao.Id} aprovada. Contrato {contratoGerado!.NumeroContrato} gerado aguardando aceite.");
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
@@ -524,6 +548,7 @@ public class AssociadoAndCadastroService
                 .ThenInclude(d => d.PessoaDependente)
                     .ThenInclude(pd => pd.UltimaAlteracaoPorUsuario)
                         .ThenInclude(ua => ua!.Pessoa)
+            .Include(a => a.Contratos)
             .AsQueryable();
 
         if (user.Role == RoleAdministrativa.Admin)
@@ -589,6 +614,7 @@ public class AssociadoAndCadastroService
                 .ThenInclude(d => d.PessoaDependente)
                     .ThenInclude(pd => pd.UltimaAlteracaoPorUsuario)
                         .ThenInclude(ua => ua!.Pessoa)
+            .Include(a => a.Contratos)
             .FirstOrDefaultAsync(a => a.Id == associadoId, ct);
 
         if (associado is null)
@@ -782,6 +808,9 @@ public class AssociadoAndCadastroService
         var nowUtc = DateTime.UtcNow;
         if (req.Ativo)
         {
+            if (associado.Status == StatusAssociado.AguardandoAceiteContrato)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Este associado aguarda o aceite do contrato para se tornar ativo. Utilize a gestão de contratos.");
+
             associado.Status = StatusAssociado.Ativo;
             associado.DesativadoEmUtc = null;
             if (associado.Pessoa.Usuario is not null && associado.Pessoa.Usuario.EstadoConta == EstadoConta.Desativada)
@@ -1541,6 +1570,536 @@ public class AssociadoAndCadastroService
             pessoa.UltimaAlteracaoPorUsuarioId = alteradoPorUsuarioId.Value;
     }
 
+    // ==================== CONTRATOS DE ASSOCIADO ====================
+
+    public async Task<PagedResponse<ContratoAssociadoDto>> ListarContratosAsync(
+        AuthenticatedUserInfo user,
+        int? unidadeId,
+        StatusContrato? status,
+        string? busca,
+        PaginationQuery pagination,
+        CancellationToken ct = default)
+    {
+        if (user.Role != RoleAdministrativa.SuperAdmin && user.Role != RoleAdministrativa.Admin)
+            throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.RecursoSemPermissao, "Sem permissão para listar contratos.");
+
+        var query = QueryContratosDetalhados(asNoTracking: true);
+
+        if (user.Role == RoleAdministrativa.Admin)
+        {
+            if (unidadeId.HasValue && unidadeId.Value != user.UnidadeAdministrativaId)
+                throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.UnidadeSemPermissao, "Acesso restrito aos contratos da sua unidade.");
+
+            query = query.Where(c => c.UnidadeId == user.UnidadeAdministrativaId);
+        }
+        else if (unidadeId.HasValue)
+        {
+            query = query.Where(c => c.UnidadeId == unidadeId.Value);
+        }
+
+        if (status.HasValue)
+            query = query.Where(c => c.Status == status.Value);
+
+        if (!string.IsNullOrWhiteSpace(busca))
+        {
+            var b = busca.Trim().ToLower();
+            var cpfBusca = CpfHelper.Normalize(busca);
+            query = query.Where(c =>
+                c.NumeroContrato.ToLower().Contains(b)
+                || c.Associado.Pessoa.NomeCompleto.ToLower().Contains(b)
+                || c.Associado.Pessoa.Email.ToLower().Contains(b)
+                || (cpfBusca.Length > 0 && c.Associado.Pessoa.Cpf.Contains(cpfBusca)));
+        }
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(c => c.GeradoEmUtc)
+            .ThenByDescending(c => c.Id)
+            .Skip(pagination.Skip)
+            .Take(pagination.NormalizedPageSize)
+            .ToListAsync(ct);
+
+        return new PagedResponse<ContratoAssociadoDto>(
+            items.Select(ToContratoDto).ToList(),
+            total,
+            pagination.NormalizedPage,
+            pagination.NormalizedPageSize);
+    }
+
+    public async Task<ContratoAssociadoDto> ObterContratoPorIdAsync(
+        AuthenticatedUserInfo user,
+        int contratoId,
+        CancellationToken ct = default)
+    {
+        var contrato = await QueryContratosDetalhados(asNoTracking: true)
+            .FirstOrDefaultAsync(c => c.Id == contratoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Contrato não encontrado.");
+
+        if (contrato.Associado.PessoaId != user.PessoaId)
+            _currentUser.EnsureAdminOrSuperAdminForUnit(user, contrato.UnidadeId);
+
+        return ToContratoDto(contrato);
+    }
+
+    public async Task<ContratoAssociadoDto> ObterMeuContratoAtualAsync(
+        AuthenticatedUserInfo user,
+        CancellationToken ct = default)
+    {
+        var contrato = await QueryContratosDetalhados(asNoTracking: true)
+            .Where(c => c.Associado.PessoaId == user.PessoaId)
+            .OrderByDescending(c => c.Status == StatusContrato.PendenteAceite)
+            .ThenByDescending(c => c.GeradoEmUtc)
+            .ThenByDescending(c => c.Id)
+            .FirstOrDefaultAsync(ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Nenhum contrato encontrado para este usuário.");
+
+        return ToContratoDto(contrato);
+    }
+
+    public async Task<ContratoAssociadoDto> AtualizarContratoAsync(
+        AuthenticatedUserInfo user,
+        int contratoId,
+        AtualizarContratoRequest req,
+        CancellationToken ct = default)
+    {
+        var contrato = await QueryContratosDetalhados(asNoTracking: false)
+            .FirstOrDefaultAsync(c => c.Id == contratoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Contrato não encontrado.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, contrato.UnidadeId);
+
+        if (contrato.Status != StatusContrato.PendenteAceite)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Somente contratos pendentes de aceite podem ser editados.");
+
+        if (string.IsNullOrWhiteSpace(req.Titulo) || string.IsNullOrWhiteSpace(req.Conteudo))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Título e conteúdo do contrato são obrigatórios.");
+
+        var nowUtc = DateTime.UtcNow;
+        contrato.Titulo = req.Titulo.Trim();
+        contrato.Conteudo = req.Conteudo.Trim();
+        if (!string.IsNullOrWhiteSpace(req.VersaoTermos))
+            contrato.VersaoTermos = req.VersaoTermos.Trim();
+        contrato.ObservacoesAdmin = string.IsNullOrWhiteSpace(req.ObservacoesAdmin) ? null : req.ObservacoesAdmin.Trim();
+        contrato.AtualizadoEmUtc = nowUtc;
+        contrato.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+
+        _auditoria.Registrar(user.UsuarioId, contrato.UnidadeId, "ATUALIZAR_CONTRATO", nameof(ContratoAssociado), contrato.Id, $"Contrato {contrato.NumeroContrato} atualizado.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterContratoPorIdAsync(user, contrato.Id, ct);
+    }
+
+    public async Task<ContratoAssociadoDto> CancelarContratoAsync(
+        AuthenticatedUserInfo user,
+        int contratoId,
+        ResponderContratoRequest? req,
+        CancellationToken ct = default)
+    {
+        var contrato = await QueryContratosDetalhados(asNoTracking: false)
+            .FirstOrDefaultAsync(c => c.Id == contratoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Contrato não encontrado.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, contrato.UnidadeId);
+
+        if (contrato.Status != StatusContrato.PendenteAceite)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Apenas contratos pendentes de aceite podem ser cancelados.");
+
+        var nowUtc = DateTime.UtcNow;
+        contrato.Status = StatusContrato.Cancelado;
+        contrato.AtualizadoEmUtc = nowUtc;
+        contrato.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+        if (!string.IsNullOrWhiteSpace(req?.Motivo))
+            contrato.ObservacoesAdmin = req!.Motivo.Trim();
+
+        _auditoria.Registrar(user.UsuarioId, contrato.UnidadeId, "CANCELAR_CONTRATO", nameof(ContratoAssociado), contrato.Id, $"Contrato {contrato.NumeroContrato} cancelado.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterContratoPorIdAsync(user, contrato.Id, ct);
+    }
+
+    public async Task<ContratoAssociadoDto> RegerarContratoAssociadoAsync(
+        AuthenticatedUserInfo user,
+        int associadoId,
+        RegerarContratoRequest? req,
+        CancellationToken ct = default)
+    {
+        var associado = await _db.Associados
+            .Include(a => a.Pessoa)
+                .ThenInclude(p => p.Usuario)
+            .Include(a => a.Unidade)
+            .Include(a => a.CategoriaAssociado)
+            .FirstOrDefaultAsync(a => a.Id == associadoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado não encontrado.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, associado.UnidadeId);
+
+        if (associado.Status == StatusAssociado.Ativo)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Este associado já está ativo com contrato vigente.");
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var nowUtc = DateTime.UtcNow;
+        var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
+
+        associado.Status = StatusAssociado.AguardandoAceiteContrato;
+        associado.DesativadoEmUtc = null;
+        associado.DataInicioCobranca = null;
+
+        if (associado.Pessoa.Usuario is not null && associado.Pessoa.Usuario.EstadoConta != EstadoConta.Ativa)
+        {
+            associado.Pessoa.Usuario.EstadoConta = EstadoConta.Ativa;
+            associado.Pessoa.Usuario.VersaoSeguranca++;
+        }
+
+        var ultimaSolicitacaoId = await _db.SolicitacoesCadastro
+            .Where(s => s.PessoaId == associado.PessoaId && s.Status == StatusSolicitacaoCadastro.Aprovada)
+            .OrderByDescending(s => s.Id)
+            .Select(s => (int?)s.Id)
+            .FirstOrDefaultAsync(ct);
+
+        var contrato = await GerarContratoFiliacaoInternoAsync(
+            associado,
+            associado.Unidade,
+            associado.CategoriaAssociado,
+            associado.Pessoa,
+            ultimaSolicitacaoId,
+            user.UsuarioId,
+            req?.ObservacoesAdmin,
+            nowUtc,
+            hoje,
+            ct);
+
+        await _db.SaveChangesAsync(ct);
+
+        if (associado.Pessoa.Usuario is not null)
+        {
+            await _notificacao.CriarNotificacaoAsync(
+                associado.Pessoa.Usuario.Id,
+                TipoNotificacao.Sistema,
+                "Novo contrato disponível para aceite",
+                $"O contrato {contrato.NumeroContrato} da unidade {associado.Unidade.Nome} foi gerado e aguarda sua leitura e aceite no aplicativo.",
+                nameof(ContratoAssociado),
+                contrato.Id,
+                $"CONTRATO_REGERADO_{contrato.Id}",
+                ct);
+        }
+
+        _auditoria.Registrar(user.UsuarioId, associado.UnidadeId, "REGERAR_CONTRATO", nameof(ContratoAssociado), contrato.Id, $"Novo contrato {contrato.NumeroContrato} gerado para o associado #{associado.Id}.");
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return await ObterContratoPorIdAsync(user, contrato.Id, ct);
+    }
+
+    public async Task<ContratoAssociadoDto> AceitarMeuContratoAsync(
+        AuthenticatedUserInfo user,
+        int contratoId,
+        CancellationToken ct = default)
+    {
+        var contrato = await QueryContratosDetalhados(asNoTracking: false)
+            .Include(c => c.Associado)
+                .ThenInclude(a => a.Pessoa)
+                    .ThenInclude(p => p.Usuario)
+            .FirstOrDefaultAsync(c => c.Id == contratoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Contrato não encontrado.");
+
+        if (contrato.Associado.PessoaId != user.PessoaId)
+            throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.RecursoSemPermissao, "Você não possui permissão para responder a este contrato.");
+
+        if (contrato.Status != StatusContrato.PendenteAceite)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Este contrato não está mais pendente de aceite.");
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var nowUtc = DateTime.UtcNow;
+        var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
+        var competenciaAtual = TimeZoneHelper.FirstDayOfMonth(hoje);
+
+        contrato.Status = StatusContrato.Aceito;
+        contrato.RespondidoEmUtc = nowUtc;
+        contrato.AtualizadoEmUtc = nowUtc;
+        contrato.RespondidoPorUsuarioId = user.UsuarioId;
+        contrato.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+
+        var associado = contrato.Associado;
+        associado.Status = StatusAssociado.Ativo;
+        associado.DesativadoEmUtc = null;
+        if (associado.Pessoa.Usuario is not null && associado.Pessoa.Usuario.EstadoConta != EstadoConta.Ativa)
+            associado.Pessoa.Usuario.EstadoConta = EstadoConta.Ativa;
+
+        if (!associado.CategoriaAssociado.IsentoMensalidade)
+        {
+            associado.DataInicioCobranca = competenciaAtual;
+
+            var jaExisteMensalidade = await _db.Mensalidades
+                .AnyAsync(m => m.AssociadoId == associado.Id && m.Competencia == competenciaAtual, ct);
+
+            if (!jaExisteMensalidade)
+            {
+                var config = await _db.ConfiguracoesFinanceiras.AsNoTracking().FirstOrDefaultAsync(ct);
+                var valor = await ObterValorMensalidadeVigenteAsync(associado.UnidadeId, associado.CategoriaAssociadoId, competenciaAtual, ct);
+                if (valor <= 0 && contrato.ValorMensalidadeReferencia > 0)
+                    valor = contrato.ValorMensalidadeReferencia;
+
+                if (valor > 0)
+                {
+                    var diaVenc = config?.DiaVencimento ?? 10;
+                    var dataVencimento = TimeZoneHelper.ResolveDayInMonth(competenciaAtual.Year, competenciaAtual.Month, diaVenc);
+                    if (dataVencimento < hoje)
+                        dataVencimento = hoje;
+
+                    var mensalidade = new Mensalidade
+                    {
+                        AssociadoId = associado.Id,
+                        UnidadeEmissoraId = associado.UnidadeId,
+                        CategoriaNaEmissaoId = associado.CategoriaAssociadoId,
+                        Competencia = competenciaAtual,
+                        DataGeracao = hoje,
+                        DataVencimento = dataVencimento,
+                        ValorPrincipal = valor,
+                        MultaPercentualEmissao = config?.PercentualMulta ?? 2.0000m,
+                        JuroMensalPercentualEmissao = config?.PercentualJuroMensal ?? 1.0000m,
+                        Status = StatusMensalidade.Aberta,
+                        GeradaEmUtc = nowUtc
+                    };
+                    _db.Mensalidades.Add(mensalidade);
+                    await _db.SaveChangesAsync(ct);
+
+                    await _notificacao.CriarNotificacaoAsync(
+                        user.UsuarioId,
+                        TipoNotificacao.MensalidadeGerada,
+                        $"Mensalidade {competenciaAtual:MM/yyyy} disponível",
+                        $"Contrato {contrato.NumeroContrato} aceito! Sua mensalidade inicial no valor de R$ {valor:N2} (vencimento {dataVencimento:dd/MM/yyyy}) foi gerada.",
+                        nameof(Mensalidade),
+                        mensalidade.Id,
+                        $"MENSALIDADE_ACEITE_{contrato.Id}",
+                        ct);
+                }
+            }
+        }
+        else
+        {
+            associado.DataInicioCobranca = null;
+        }
+
+        _auditoria.Registrar(user.UsuarioId, associado.UnidadeId, "ACEITAR_CONTRATO", nameof(ContratoAssociado), contrato.Id, $"Contrato {contrato.NumeroContrato} aceito pelo associado #{associado.Id}.");
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return await ObterContratoPorIdAsync(user, contrato.Id, ct);
+    }
+
+    public async Task<ContratoAssociadoDto> RecusarMeuContratoAsync(
+        AuthenticatedUserInfo user,
+        int contratoId,
+        ResponderContratoRequest? req,
+        CancellationToken ct = default)
+    {
+        var contrato = await QueryContratosDetalhados(asNoTracking: false)
+            .FirstOrDefaultAsync(c => c.Id == contratoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Contrato não encontrado.");
+
+        if (contrato.Associado.PessoaId != user.PessoaId)
+            throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.RecursoSemPermissao, "Você não possui permissão para responder a este contrato.");
+
+        if (contrato.Status != StatusContrato.PendenteAceite)
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Este contrato não está mais pendente de aceite.");
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var nowUtc = DateTime.UtcNow;
+
+        contrato.Status = StatusContrato.Recusado;
+        contrato.RespondidoEmUtc = nowUtc;
+        contrato.AtualizadoEmUtc = nowUtc;
+        contrato.RespondidoPorUsuarioId = user.UsuarioId;
+        contrato.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+        contrato.JustificativaRecusa = string.IsNullOrWhiteSpace(req?.Motivo)
+            ? "Contrato recusado pelo solicitante."
+            : req!.Motivo.Trim();
+
+        contrato.Associado.Status = StatusAssociado.Inativo;
+        contrato.Associado.DesativadoEmUtc = nowUtc;
+        contrato.Associado.DataInicioCobranca = null;
+
+        _auditoria.Registrar(user.UsuarioId, contrato.UnidadeId, "RECUSAR_CONTRATO", nameof(ContratoAssociado), contrato.Id, $"Contrato {contrato.NumeroContrato} recusado pelo solicitante.");
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return await ObterContratoPorIdAsync(user, contrato.Id, ct);
+    }
+
+    private IQueryable<ContratoAssociado> QueryContratosDetalhados(bool asNoTracking)
+    {
+        var baseQuery = asNoTracking ? _db.ContratosAssociado.AsNoTracking() : _db.ContratosAssociado;
+        return baseQuery
+            .Include(c => c.Associado)
+                .ThenInclude(a => a.Pessoa)
+            .Include(c => c.Unidade)
+            .Include(c => c.CategoriaAssociado)
+            .Include(c => c.GeradoPorUsuario)
+                .ThenInclude(u => u!.Pessoa)
+            .Include(c => c.UltimaAlteracaoPorUsuario)
+                .ThenInclude(u => u!.Pessoa)
+            .Include(c => c.RespondidoPorUsuario)
+                .ThenInclude(u => u!.Pessoa);
+    }
+
+    private async Task<decimal> ObterValorMensalidadeVigenteAsync(
+        int unidadeId,
+        int categoriaAssociadoId,
+        DateOnly referencia,
+        CancellationToken ct)
+    {
+        var competencia = TimeZoneHelper.FirstDayOfMonth(referencia);
+        var valorVigente = await _db.ValoresMensalidade
+            .AsNoTracking()
+            .Where(v => v.UnidadeId == unidadeId
+                        && v.CategoriaAssociadoId == categoriaAssociadoId
+                        && v.CompetenciaInicio <= competencia
+                        && (v.CompetenciaFim == null || v.CompetenciaFim >= competencia))
+            .OrderByDescending(v => v.CompetenciaInicio)
+            .Select(v => (decimal?)v.Valor)
+            .FirstOrDefaultAsync(ct);
+
+        return valorVigente ?? 0m;
+    }
+
+    private async Task<ContratoAssociado> GerarContratoFiliacaoInternoAsync(
+        Associado associado,
+        Unidade unidade,
+        CategoriaAssociado categoria,
+        Pessoa pessoa,
+        int? solicitacaoCadastroId,
+        int? geradoPorUsuarioId,
+        string? observacoesAdmin,
+        DateTime nowUtc,
+        DateOnly hoje,
+        CancellationToken ct)
+    {
+        var pendentesAnteriores = await _db.ContratosAssociado
+            .Where(c => c.AssociadoId == associado.Id && c.Status == StatusContrato.PendenteAceite)
+            .ToListAsync(ct);
+
+        foreach (var antigo in pendentesAnteriores)
+        {
+            antigo.Status = StatusContrato.Cancelado;
+            antigo.AtualizadoEmUtc = nowUtc;
+            antigo.UltimaAlteracaoPorUsuarioId = geradoPorUsuarioId;
+        }
+
+        var seq = await _db.ContratosAssociado.CountAsync(c => c.AssociadoId == associado.Id, ct) + 1;
+        string numeroContrato;
+        do
+        {
+            numeroContrato = $"CTR-{hoje.Year}-{associado.Id:D4}-{seq:D3}";
+            seq++;
+        }
+        while (await _db.ContratosAssociado.AnyAsync(c => c.NumeroContrato == numeroContrato, ct));
+
+        var valorReferencia = categoria.IsentoMensalidade
+            ? 0m
+            : await ObterValorMensalidadeVigenteAsync(unidade.Id, categoria.Id, hoje, ct);
+
+        var contrato = new ContratoAssociado
+        {
+            NumeroContrato = numeroContrato,
+            AssociadoId = associado.Id,
+            SolicitacaoCadastroId = solicitacaoCadastroId,
+            UnidadeId = unidade.Id,
+            CategoriaAssociadoId = categoria.Id,
+            Titulo = $"Termo de Adesão e Contrato de Associação - {unidade.Nome}",
+            Conteudo = MontarConteudoContrato(numeroContrato, unidade, categoria, pessoa, valorReferencia, hoje),
+            VersaoTermos = "1.0",
+            ValorMensalidadeReferencia = valorReferencia,
+            Status = StatusContrato.PendenteAceite,
+            GeradoEmUtc = nowUtc,
+            AtualizadoEmUtc = nowUtc,
+            ObservacoesAdmin = string.IsNullOrWhiteSpace(observacoesAdmin) ? null : observacoesAdmin.Trim(),
+            GeradoPorUsuarioId = geradoPorUsuarioId,
+            UltimaAlteracaoPorUsuarioId = geradoPorUsuarioId
+        };
+
+        _db.ContratosAssociado.Add(contrato);
+        return contrato;
+    }
+
+    private static string MontarConteudoContrato(
+        string numeroContrato,
+        Unidade unidade,
+        CategoriaAssociado categoria,
+        Pessoa pessoa,
+        decimal valorMensalidade,
+        DateOnly dataEmissao)
+    {
+        var valorTexto = categoria.IsentoMensalidade
+            ? "Categoria isenta de contribuição mensal."
+            : (valorMensalidade > 0
+                ? $"R$ {valorMensalidade:N2} mensais, conforme tabela vigente da unidade."
+                : "Conforme tabela financeira vigente da unidade.");
+
+        var cidadeUf = string.IsNullOrWhiteSpace(pessoa.Cidade)
+            ? "Não informada"
+            : (string.IsNullOrWhiteSpace(pessoa.UF) ? pessoa.Cidade : $"{pessoa.Cidade}/{pessoa.UF}");
+
+        return
+$@"CONTRATO DE ADESÃO E POLÍTICA DE ASSOCIADO — Nº {numeroContrato}
+Data de Emissão: {dataEmissao:dd/MM/yyyy}
+
+1. IDENTIFICAÇÃO DAS PARTES
+Clube/Unidade: {unidade.Nome} ({unidade.Sigla})
+Associado Proponente: {pessoa.NomeCompleto}
+CPF: {CpfHelper.Mask(pessoa.Cpf)} | Profissão: {pessoa.Profissao}
+E-mail: {pessoa.Email} | Telefone: {pessoa.Fone}
+Cidade/UF: {cidadeUf}
+Categoria Associativa: {categoria.Nome} ({categoria.Codigo})
+
+2. OBJETO E CONDIÇÃO DE EFICÁCIA
+O presente instrumento regula a filiação do associado proponente à unidade {unidade.Nome}, estabelecendo direitos, deveres, normas de convivência e condições financeiras aplicáveis. A associação somente produzirá efeitos plenos e liberará as permissões do associado (reservas de espaços, gestão de dependentes, participação em votações e envio de manifestações) após o aceite formal deste contrato no aplicativo oficial.
+
+3. CONTRIBUIÇÃO MENSAL E GERAÇÃO DE COBRANÇA
+Valor de referência na emissão: {valorTexto}
+Fica expressamente estabelecido que nenhuma mensalidade será gerada enquanto este contrato estiver aguardando aceite. A partir da confirmação do aceite eletrônico pelo associado, a cobrança inicial será ativada conforme o calendário e regras financeiras da unidade.
+
+4. DIREITOS, DEPENDENTES E USO DAS DEPENDÊNCIAS
+4.1. O associado ativo poderá usufruir dos espaços sociais e esportivos mediante agendamento prévio e observância das regras de ocupação de cada ambiente.
+4.2. A inclusão e manutenção de dependentes seguirá os critérios estatutários (cônjuge ou filhos até 22 anos), responsabilizando-se o titular pelo cumprimento das normas por seus dependentes.
+4.3. Eventuais manifestações, sugestões ou ocorrências deverão ser registradas pelos canais oficiais do ProClubes.
+
+5. CONDUTA, PRIVACIDADE E POLÍTICAS INTERNAS
+5.1. O associado compromete-se a manter seus dados cadastrais atualizados, respeitar colaboradores, demais associados e preservar o patrimônio do clube.
+5.2. Os dados cadastrais serão tratados em conformidade com a legislação de proteção de dados vigente exclusivamente para finalidades associativas, financeiras e de segurança de acesso.
+5.3. O descumprimento das normas estatutárias ou inadimplência prolongada sujeita o associado às penalidades regimentais e eventual desligamento.
+
+6. ACEITE ELETRÔNICO E RECUSA
+Ao selecionar ACEITAR no aplicativo ProClubes, o proponente declara ter lido integralmente todas as cláusulas acima, concordando com os termos e autorizando a ativação de seu vínculo e respectiva cobrança mensal. Em caso de RECUSA, o vínculo permanecerá inativo sem geração de mensalidades.";
+    }
+
+    private static ContratoAssociadoDto ToContratoDto(ContratoAssociado c) => new(
+        Id: c.Id,
+        NumeroContrato: c.NumeroContrato,
+        AssociadoId: c.AssociadoId,
+        PessoaId: c.Associado.PessoaId,
+        AssociadoNome: c.Associado.Pessoa.NomeCompleto,
+        AssociadoCpfMascarado: CpfHelper.Mask(c.Associado.Pessoa.Cpf),
+        AssociadoEmail: c.Associado.Pessoa.Email,
+        SolicitacaoCadastroId: c.SolicitacaoCadastroId,
+        UnidadeId: c.UnidadeId,
+        UnidadeNome: c.Unidade.Nome,
+        CategoriaAssociadoId: c.CategoriaAssociadoId,
+        CategoriaCodigo: c.CategoriaAssociado.Codigo,
+        CategoriaNome: c.CategoriaAssociado.Nome,
+        Titulo: c.Titulo,
+        Conteudo: c.Conteudo,
+        VersaoTermos: c.VersaoTermos,
+        ValorMensalidadeReferencia: c.ValorMensalidadeReferencia,
+        Status: c.Status,
+        GeradoEm: TimeZoneHelper.ToSaoPauloOffset(c.GeradoEmUtc),
+        AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(c.AtualizadoEmUtc),
+        RespondidoEm: c.RespondidoEmUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(c.RespondidoEmUtc.Value) : null,
+        JustificativaRecusa: c.JustificativaRecusa,
+        ObservacoesAdmin: c.ObservacoesAdmin,
+        GeradoPorNome: c.GeradoPorUsuario?.Pessoa.NomeCompleto,
+        UltimaAlteracaoPorNome: c.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto,
+        RespondidoPorNome: c.RespondidoPorUsuario?.Pessoa.NomeCompleto);
+
     private static SolicitacaoCadastroListItemDto ToSolicitacaoListItemDto(
         SolicitacaoCadastro s,
         string? categoriaAprovadaNome,
@@ -1608,39 +2167,49 @@ public class AssociadoAndCadastroService
             UltimaAlteracaoPorNome: alteradoPorNomeOverride ?? pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
     }
 
-    public static AssociadoDto ToAssociadoDto(Associado a) => new(
-        Id: a.Id,
-        PessoaId: a.PessoaId,
-        UsuarioId: a.Pessoa.Usuario?.Id,
-        NomeCompleto: a.Pessoa.NomeCompleto,
-        CpfMascarado: CpfHelper.Mask(a.Pessoa.Cpf),
-        Sexo: a.Pessoa.Sexo,
-        EstadoCivil: a.Pessoa.EstadoCivil,
-        DataNascimento: a.Pessoa.DataNascimento,
-        Email: a.Pessoa.Email,
-        Fone: a.Pessoa.Fone,
-        Logradouro: a.Pessoa.Logradouro,
-        Bairro: a.Pessoa.Bairro,
-        Numero: a.Pessoa.Numero,
-        Cidade: a.Pessoa.Cidade,
-        UF: a.Pessoa.UF,
-        UnidadeId: a.UnidadeId,
-        UnidadeNome: a.Unidade.Nome,
-        CategoriaAssociadoId: a.CategoriaAssociadoId,
-        CategoriaCodigo: a.CategoriaAssociado.Codigo,
-        CategoriaNome: a.CategoriaAssociado.Nome,
-        Status: a.Status,
-        DataIngresso: a.DataIngresso,
-        DataInicioCobranca: a.DataInicioCobranca,
-        RoleAdministrativa: a.Pessoa.Usuario?.RoleAdministrativa ?? RoleAdministrativa.Nenhuma,
-        Interesses: a.Pessoa.Interesses.Select(i => i.Interesse.Nome).OrderBy(n => n).ToList(),
-        Dependentes: a.Dependentes
-            .OrderByDescending(d => d.DataFim == null)
-            .ThenBy(d => d.PessoaDependente.NomeCompleto)
-            .Select(d => ToDependenteDto(d))
-            .ToList(),
-        Profissao: a.Pessoa.Profissao,
-        CriadoEm: TimeZoneHelper.ToSaoPauloOffset(a.Pessoa.CriadaEmUtc),
-        AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(a.Pessoa.AtualizadaEmUtc),
-        UltimaAlteracaoPorNome: a.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
+    public static AssociadoDto ToAssociadoDto(Associado a)
+    {
+        var contratoAtual = a.Contratos
+            .OrderByDescending(c => c.GeradoEmUtc)
+            .ThenByDescending(c => c.Id)
+            .FirstOrDefault();
+
+        return new AssociadoDto(
+            Id: a.Id,
+            PessoaId: a.PessoaId,
+            UsuarioId: a.Pessoa.Usuario?.Id,
+            NomeCompleto: a.Pessoa.NomeCompleto,
+            CpfMascarado: CpfHelper.Mask(a.Pessoa.Cpf),
+            Sexo: a.Pessoa.Sexo,
+            EstadoCivil: a.Pessoa.EstadoCivil,
+            DataNascimento: a.Pessoa.DataNascimento,
+            Email: a.Pessoa.Email,
+            Fone: a.Pessoa.Fone,
+            Logradouro: a.Pessoa.Logradouro,
+            Bairro: a.Pessoa.Bairro,
+            Numero: a.Pessoa.Numero,
+            Cidade: a.Pessoa.Cidade,
+            UF: a.Pessoa.UF,
+            UnidadeId: a.UnidadeId,
+            UnidadeNome: a.Unidade.Nome,
+            CategoriaAssociadoId: a.CategoriaAssociadoId,
+            CategoriaCodigo: a.CategoriaAssociado.Codigo,
+            CategoriaNome: a.CategoriaAssociado.Nome,
+            Status: a.Status,
+            DataIngresso: a.DataIngresso,
+            DataInicioCobranca: a.DataInicioCobranca,
+            RoleAdministrativa: a.Pessoa.Usuario?.RoleAdministrativa ?? RoleAdministrativa.Nenhuma,
+            Interesses: a.Pessoa.Interesses.Select(i => i.Interesse.Nome).OrderBy(n => n).ToList(),
+            Dependentes: a.Dependentes
+                .OrderByDescending(d => d.DataFim == null)
+                .ThenBy(d => d.PessoaDependente.NomeCompleto)
+                .Select(d => ToDependenteDto(d))
+                .ToList(),
+            Profissao: a.Pessoa.Profissao,
+            CriadoEm: TimeZoneHelper.ToSaoPauloOffset(a.Pessoa.CriadaEmUtc),
+            AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(a.Pessoa.AtualizadaEmUtc),
+            UltimaAlteracaoPorNome: a.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto,
+            NumeroContratoAtual: contratoAtual?.NumeroContrato,
+            StatusContratoAtual: contratoAtual?.Status);
+    }
 }

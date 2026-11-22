@@ -115,6 +115,33 @@ public class AuthAndMeController : ControllerBase
         var resumo = await _syncService.ObterResumoSincronizacaoAppAsync(user, ct);
         return Ok(resumo);
     }
+
+    [Authorize]
+    [HttpGet("me/contrato")]
+    public async Task<ActionResult<ContratoAssociadoDto>> GetMeuContrato(CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(allowRestritaCadastro: false, ct);
+        return Ok(await _cadastroService.ObterMeuContratoAtualAsync(user, ct));
+    }
+
+    [Authorize]
+    [HttpPost("me/contratos/{id:int}/aceitar")]
+    public async Task<ActionResult<ContratoAssociadoDto>> AceitarMeuContrato(int id, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(allowRestritaCadastro: false, ct);
+        return Ok(await _cadastroService.AceitarMeuContratoAsync(user, id, ct));
+    }
+
+    [Authorize]
+    [HttpPost("me/contratos/{id:int}/recusar")]
+    public async Task<ActionResult<ContratoAssociadoDto>> RecusarMeuContrato(
+        int id,
+        [FromBody] ResponderContratoRequest? request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(allowRestritaCadastro: false, ct);
+        return Ok(await _cadastroService.RecusarMeuContratoAsync(user, id, request, ct));
+    }
 }
 
 [ApiController]

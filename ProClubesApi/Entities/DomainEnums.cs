@@ -19,7 +19,8 @@ public enum EstadoConta : byte
 public enum StatusAssociado : byte
 {
     Ativo = 1,
-    Inativo = 2
+    Inativo = 2,
+    AguardandoAceiteContrato = 3
 }
 
 public enum TipoVinculoDependente : byte
@@ -116,6 +117,14 @@ public enum EscopoVotacao : byte
 {
     Unidade = 1,
     Global = 2
+}
+
+public enum StatusContrato : byte
+{
+    PendenteAceite = 1,
+    Aceito = 2,
+    Recusado = 3,
+    Cancelado = 4
 }
 
 public enum EstadoVotacao : byte
