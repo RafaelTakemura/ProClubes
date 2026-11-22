@@ -79,6 +79,8 @@ public class ProClubesDbContext : DbContext
     public DbSet<Voto> Votos => Set<Voto>();
     public DbSet<RegistroAuditoria> RegistrosAuditoria => Set<RegistroAuditoria>();
     public DbSet<ExecucaoRotina> ExecucoesRotina => Set<ExecucaoRotina>();
+    public DbSet<Estado> Estados => Set<Estado>();
+    public DbSet<Cidade> Cidades => Set<Cidade>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -113,6 +115,7 @@ public class ProClubesDbContext : DbContext
             e.Property(x => x.Cpf).HasMaxLength(11).IsFixedLength().IsRequired();
             e.Property(x => x.Sexo).HasMaxLength(30).IsRequired();
             e.Property(x => x.EstadoCivil).HasMaxLength(40).IsRequired();
+            e.Property(x => x.Profissao).HasMaxLength(120).HasDefaultValue(string.Empty).IsRequired();
             e.Property(x => x.Logradouro).HasMaxLength(150).IsRequired();
             e.Property(x => x.Bairro).HasMaxLength(100).IsRequired();
             e.Property(x => x.Numero).HasMaxLength(20).IsRequired();
@@ -123,6 +126,11 @@ public class ProClubesDbContext : DbContext
             e.HasIndex(x => x.Cpf).IsUnique();
             e.HasIndex(x => x.NomeCompleto);
             e.HasIndex(x => x.Email);
+
+            e.HasOne(x => x.UltimaAlteracaoPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.UltimaAlteracaoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // 3. Interesse
@@ -854,6 +862,44 @@ public class ProClubesDbContext : DbContext
             e.Property(x => x.ErroResumo).HasMaxLength(500);
 
             e.HasIndex(x => new { x.NomeRotina, x.ChaveCompetencia }).IsUnique();
+        });
+
+        // 33. Estado
+        modelBuilder.Entity<Estado>(e =>
+        {
+            e.ToTable("Estado");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Nome).HasMaxLength(100).IsRequired();
+            e.Property(x => x.UF).HasMaxLength(2).IsFixedLength().IsRequired();
+            e.Property(x => x.Ativo).HasDefaultValue(true).IsRequired();
+
+            e.HasIndex(x => x.UF).IsUnique();
+
+            e.HasOne(x => x.UltimaAlteracaoPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.UltimaAlteracaoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // 34. Cidade
+        modelBuilder.Entity<Cidade>(e =>
+        {
+            e.ToTable("Cidade");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Nome).HasMaxLength(120).IsRequired();
+            e.Property(x => x.Ativa).HasDefaultValue(true).IsRequired();
+
+            e.HasIndex(x => new { x.EstadoId, x.Nome }).IsUnique();
+
+            e.HasOne(x => x.Estado)
+                .WithMany(es => es.Cidades)
+                .HasForeignKey(x => x.EstadoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.UltimaAlteracaoPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.UltimaAlteracaoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

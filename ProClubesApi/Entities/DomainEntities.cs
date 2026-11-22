@@ -26,6 +26,7 @@ public class Pessoa
     public string Sexo { get; set; } = string.Empty;
     public string EstadoCivil { get; set; } = string.Empty;
     public DateOnly DataNascimento { get; set; }
+    public string Profissao { get; set; } = string.Empty;
     public string Logradouro { get; set; } = string.Empty;
     public string Bairro { get; set; } = string.Empty;
     public string Numero { get; set; } = string.Empty;
@@ -35,6 +36,8 @@ public class Pessoa
     public string Email { get; set; } = string.Empty;
     public DateTime CriadaEmUtc { get; set; }
     public DateTime AtualizadaEmUtc { get; set; }
+    public int? UltimaAlteracaoPorUsuarioId { get; set; }
+    public Usuario? UltimaAlteracaoPorUsuario { get; set; }
 
     public Usuario? Usuario { get; set; }
     public Associado? Associado { get; set; }
@@ -505,4 +508,33 @@ public class ExecucaoRotina
     public DateTime IniciadaEmUtc { get; set; }
     public DateTime? ConcluidaEmUtc { get; set; }
     public string? ErroResumo { get; set; }
+}
+
+// 33. Estado — Localidades
+public class Estado
+{
+    public int Id { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public string UF { get; set; } = string.Empty;
+    public bool Ativo { get; set; } = true;
+    public DateTime CriadoEmUtc { get; set; }
+    public DateTime AtualizadoEmUtc { get; set; }
+    public int? UltimaAlteracaoPorUsuarioId { get; set; }
+    public Usuario? UltimaAlteracaoPorUsuario { get; set; }
+
+    public ICollection<Cidade> Cidades { get; set; } = new List<Cidade>();
+}
+
+// 34. Cidade — Localidades
+public class Cidade
+{
+    public int Id { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public int EstadoId { get; set; }
+    public Estado Estado { get; set; } = null!;
+    public bool Ativa { get; set; } = true;
+    public DateTime CriadaEmUtc { get; set; }
+    public DateTime AtualizadaEmUtc { get; set; }
+    public int? UltimaAlteracaoPorUsuarioId { get; set; }
+    public Usuario? UltimaAlteracaoPorUsuario { get; set; }
 }

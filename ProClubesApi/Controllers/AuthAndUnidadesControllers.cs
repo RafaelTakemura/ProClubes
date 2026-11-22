@@ -68,6 +68,17 @@ public class AuthAndMeController : ControllerBase
     }
 
     [Authorize]
+    [HttpPut("me/dados-cadastrais")]
+    public async Task<ActionResult<PerfilUsuarioDto>> AtualizarMeusDadosCadastrais(
+        [FromBody] AtualizarDadosCadastraisRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(allowRestritaCadastro: false, ct);
+        await _cadastroService.AtualizarMeusDadosCadastraisAsync(user, request, ct);
+        return Ok(await _authService.ObterPerfilAsync(user.UsuarioId, ct));
+    }
+
+    [Authorize]
     [HttpGet("me/cadastro/status")]
     public async Task<ActionResult<StatusCadastroResponse>> GetStatusCadastro(CancellationToken ct)
     {
@@ -183,5 +194,59 @@ public class UnidadesController : ControllerBase
     {
         var user = await _currentUser.GetRequiredUserAsync(ct: ct);
         return Ok(await _dashboardService.ObterDashboardAdminAsync(user, unidadeId, ct));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("localidades/estados")]
+    public async Task<ActionResult<IReadOnlyList<EstadoDto>>> ListarEstados(
+        [FromQuery] bool apenasAtivos = true,
+        CancellationToken ct = default)
+    {
+        return Ok(await _unidadeService.ListarEstadosAsync(apenasAtivos, ct));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("localidades/cidades")]
+    public async Task<ActionResult<IReadOnlyList<CidadeDto>>> ListarCidades(
+        [FromQuery] int? estadoId = null,
+        [FromQuery] string? uf = null,
+        [FromQuery] bool apenasAtivas = true,
+        CancellationToken ct = default)
+    {
+        return Ok(await _unidadeService.ListarCidadesAsync(estadoId, uf, apenasAtivas, ct));
+    }
+
+    [Authorize]
+    [HttpPost("admin/localidades/estados")]
+    public async Task<ActionResult<EstadoDto>> CriarEstado([FromBody] CriarOuAtualizarEstadoRequest request, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        var criado = await _unidadeService.CriarEstadoAsync(user, request, ct);
+        return StatusCode(StatusCodes.Status201Created, criado);
+    }
+
+    [Authorize]
+    [HttpPut("admin/localidades/estados/{id:int}")]
+    public async Task<ActionResult<EstadoDto>> AtualizarEstado(int id, [FromBody] CriarOuAtualizarEstadoRequest request, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _unidadeService.AtualizarEstadoAsync(user, id, request, ct));
+    }
+
+    [Authorize]
+    [HttpPost("admin/localidades/cidades")]
+    public async Task<ActionResult<CidadeDto>> CriarCidade([FromBody] CriarOuAtualizarCidadeRequest request, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        var criada = await _unidadeService.CriarCidadeAsync(user, request, ct);
+        return StatusCode(StatusCodes.Status201Created, criada);
+    }
+
+    [Authorize]
+    [HttpPut("admin/localidades/cidades/{id:int}")]
+    public async Task<ActionResult<CidadeDto>> AtualizarCidade(int id, [FromBody] CriarOuAtualizarCidadeRequest request, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _unidadeService.AtualizarCidadeAsync(user, id, request, ct));
     }
 }

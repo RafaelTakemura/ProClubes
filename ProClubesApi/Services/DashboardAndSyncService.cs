@@ -176,9 +176,47 @@ public static class DatabaseSeeder
             await db.Database.MigrateAsync(ct);
         }
 
+        await EnsureSchemaUpgradedAsync(db, ct);
+
         var nowUtc = DateTime.UtcNow;
         var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
         var competenciaAtual = TimeZoneHelper.FirstDayOfMonth(hoje);
+
+        // 0. Estados e Cidades iniciais para seletores bidirecionais no Web e no App
+        if (!await db.Estados.AnyAsync(ct))
+        {
+            var mapaLocalidades = new (string UF, string Nome, string[] Cidades)[]
+            {
+                ("PR", "Paraná", ["Foz do Iguaçu", "Maringá", "Curitiba", "Cascavel", "Londrina"]),
+                ("SP", "São Paulo", ["São Paulo", "Campinas", "Santos"]),
+                ("SC", "Santa Catarina", ["Florianópolis", "Joinville", "Blumenau"]),
+                ("RS", "Rio Grande do Sul", ["Porto Alegre", "Caxias do Sul"]),
+                ("RJ", "Rio de Janeiro", ["Rio de Janeiro", "Niterói"]),
+                ("MG", "Minas Gerais", ["Belo Horizonte", "Uberlândia"])
+            };
+
+            foreach (var item in mapaLocalidades)
+            {
+                var estado = new Estado
+                {
+                    UF = item.UF,
+                    Nome = item.Nome,
+                    Ativo = true,
+                    CriadoEmUtc = nowUtc,
+                    AtualizadoEmUtc = nowUtc,
+                    Cidades = item.Cidades.Select(c => new Cidade
+                    {
+                        Nome = c,
+                        Ativa = true,
+                        CriadaEmUtc = nowUtc,
+                        AtualizadaEmUtc = nowUtc
+                    }).ToList()
+                };
+                db.Estados.Add(estado);
+            }
+
+            await db.SaveChangesAsync(ct);
+        }
 
         // 1. Provisionar Super Admin inicial sem credencial fixa chumbada no código (lê de IConfiguration / variáveis de ambiente)
         var superAdminEmail = configuration["BootstrapSuperAdmin:Email"]
@@ -353,6 +391,41 @@ public static class DatabaseSeeder
                 });
 
             await db.SaveChangesAsync(ct);
+        }
+    }
+
+    private static async Task EnsureSchemaUpgradedAsync(ProClubesDbContext db, CancellationToken ct)
+    {
+        var isSqlite = db.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
+        var comandos = isSqlite
+            ? new[]
+            {
+                "ALTER TABLE Pessoa ADD COLUMN Profissao TEXT NOT NULL DEFAULT '';",
+                "ALTER TABLE Pessoa ADD COLUMN UltimaAlteracaoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL;",
+                "CREATE TABLE IF NOT EXISTS Estado (Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, Nome TEXT NOT NULL, UF TEXT NOT NULL, Ativo INTEGER NOT NULL DEFAULT 1, CriadoEmUtc TEXT NOT NULL, AtualizadoEmUtc TEXT NOT NULL, UltimaAlteracaoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL);",
+                "CREATE UNIQUE INDEX IF NOT EXISTS IX_Estado_UF ON Estado (UF);",
+                "CREATE TABLE IF NOT EXISTS Cidade (Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, Nome TEXT NOT NULL, EstadoId INTEGER NOT NULL REFERENCES Estado(Id) ON DELETE RESTRICT, Ativa INTEGER NOT NULL DEFAULT 1, CriadaEmUtc TEXT NOT NULL, AtualizadaEmUtc TEXT NOT NULL, UltimaAlteracaoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL);",
+                "CREATE UNIQUE INDEX IF NOT EXISTS IX_Cidade_EstadoId_Nome ON Cidade (EstadoId, Nome);"
+            }
+            : new[]
+            {
+                "ALTER TABLE Pessoa ADD COLUMN Profissao VARCHAR(120) NOT NULL DEFAULT '';",
+                "ALTER TABLE Pessoa ADD COLUMN UltimaAlteracaoPorUsuarioId INT NULL;",
+                "ALTER TABLE Pessoa ADD CONSTRAINT FK_Pessoa_Usuario_UltimaAlteracao FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL;",
+                "CREATE TABLE IF NOT EXISTS Estado (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, Nome VARCHAR(100) NOT NULL, UF CHAR(2) NOT NULL, Ativo TINYINT(1) NOT NULL DEFAULT 1, CriadoEmUtc DATETIME(6) NOT NULL, AtualizadoEmUtc DATETIME(6) NOT NULL, UltimaAlteracaoPorUsuarioId INT NULL, UNIQUE KEY IX_Estado_UF (UF), CONSTRAINT FK_Estado_Usuario_UltAlt FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;",
+                "CREATE TABLE IF NOT EXISTS Cidade (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, Nome VARCHAR(120) NOT NULL, EstadoId INT NOT NULL, Ativa TINYINT(1) NOT NULL DEFAULT 1, CriadaEmUtc DATETIME(6) NOT NULL, AtualizadaEmUtc DATETIME(6) NOT NULL, UltimaAlteracaoPorUsuarioId INT NULL, UNIQUE KEY IX_Cidade_EstadoId_Nome (EstadoId, Nome), CONSTRAINT FK_Cidade_Estado_EstadoId FOREIGN KEY (EstadoId) REFERENCES Estado(Id) ON DELETE RESTRICT, CONSTRAINT FK_Cidade_Usuario_UltAlt FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;"
+            };
+
+        foreach (var sql in comandos)
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(sql, ct);
+            }
+            catch
+            {
+                // Coluna ou índice já existente em bases já atualizadas.
+            }
         }
     }
 }

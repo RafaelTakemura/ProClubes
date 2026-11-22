@@ -152,6 +152,17 @@ public class CadastrosEAssociadosController : ControllerBase
     }
 
     [Authorize]
+    [HttpPut("admin/associados/{id:int}/dados-cadastrais")]
+    public async Task<ActionResult<AssociadoDto>> AtualizarDadosAssociado(
+        int id,
+        [FromBody] AtualizarDadosCadastraisRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.AtualizarDadosAssociadoAsync(user, id, request, ct));
+    }
+
+    [Authorize]
     [HttpPost("admin/associados/{id:int}/dependentes")]
     public async Task<ActionResult<DependenteDto>> CadastrarDependente(
         int id,
@@ -161,6 +172,18 @@ public class CadastrosEAssociadosController : ControllerBase
         var user = await _currentUser.GetRequiredUserAsync(ct: ct);
         var dep = await _service.CadastrarDependenteAsync(user, id, request, ct);
         return StatusCode(StatusCodes.Status201Created, dep);
+    }
+
+    [Authorize]
+    [HttpPut("admin/associados/{id:int}/dependentes/{dependenciaId:int}/dados-cadastrais")]
+    public async Task<ActionResult<DependenteDto>> AtualizarDadosDependente(
+        int id,
+        int dependenciaId,
+        [FromBody] AtualizarDadosCadastraisRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.AtualizarDadosDependenteAsync(user, id, dependenciaId, request, ct));
     }
 
     [Authorize]

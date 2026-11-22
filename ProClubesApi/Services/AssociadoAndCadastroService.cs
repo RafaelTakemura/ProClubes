@@ -31,17 +31,12 @@ public class AssociadoAndCadastroService
         if (!CpfHelper.IsValidFormat(cpf))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.CpfInvalido, "CPF inválido; informe 11 dígitos numéricos.");
 
-        if (string.IsNullOrWhiteSpace(req.NomeCompleto)
-            || string.IsNullOrWhiteSpace(req.Sexo)
-            || string.IsNullOrWhiteSpace(req.EstadoCivil)
-            || (!string.IsNullOrWhiteSpace(req.UF) && req.UF.Trim().Length != 2)
-            || string.IsNullOrWhiteSpace(req.Fone)
-            || string.IsNullOrWhiteSpace(req.Email)
-            || string.IsNullOrWhiteSpace(req.Senha)
-            || req.Senha.Length < 6)
-        {
-            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Todos os dados cadastrais obrigatórios devem ser informados e a senha deve ter no mínimo 6 caracteres.");
-        }
+        ValidarCamposCadastraisObrigatorios(req.NomeCompleto, req.Sexo, req.EstadoCivil, req.Profissao, req.Fone, req.Email);
+
+        if (string.IsNullOrWhiteSpace(req.Senha) || req.Senha.Length < 6)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A senha deve ter no mínimo 6 caracteres.");
+
+        var (cidade, uf) = await ValidarLocalidadeOpcionalAsync(req.Cidade, req.UF, ct);
 
         var unidade = await _db.Unidades.FirstOrDefaultAsync(u => u.Id == req.UnidadePretendidaId && u.Ativa, ct);
         if (unidade is null)
@@ -70,18 +65,6 @@ public class AssociadoAndCadastroService
 
             // Atualiza dados pessoais preservando identidade única (Regra 6.2 item 6 e D8)
             pessoa = pessoaExistente;
-            pessoa.NomeCompleto = req.NomeCompleto.Trim();
-            pessoa.Sexo = req.Sexo.Trim();
-            pessoa.EstadoCivil = req.EstadoCivil.Trim();
-            pessoa.DataNascimento = req.DataNascimento;
-            pessoa.Logradouro = (req.Logradouro ?? string.Empty).Trim();
-            pessoa.Bairro = (req.Bairro ?? string.Empty).Trim();
-            pessoa.Numero = (req.Numero ?? string.Empty).Trim();
-            pessoa.Cidade = (req.Cidade ?? string.Empty).Trim();
-            pessoa.UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant();
-            pessoa.Fone = req.Fone.Trim();
-            pessoa.Email = req.Email.Trim();
-            pessoa.AtualizadaEmUtc = nowUtc;
 
             if (pessoa.Usuario is not null)
             {
@@ -104,26 +87,47 @@ public class AssociadoAndCadastroService
                 _db.Usuarios.Add(usuario);
                 await _db.SaveChangesAsync(ct);
             }
+
+            AplicarDadosCadastraisPessoa(
+                pessoa,
+                req.NomeCompleto,
+                req.Sexo,
+                req.EstadoCivil,
+                req.DataNascimento,
+                req.Profissao,
+                (req.Logradouro ?? string.Empty).Trim(),
+                (req.Bairro ?? string.Empty).Trim(),
+                (req.Numero ?? string.Empty).Trim(),
+                cidade,
+                uf,
+                req.Fone,
+                req.Email,
+                nowUtc,
+                usuario.Id);
         }
         else
         {
             pessoa = new Pessoa
             {
-                NomeCompleto = req.NomeCompleto.Trim(),
                 Cpf = cpf,
-                Sexo = req.Sexo.Trim(),
-                EstadoCivil = req.EstadoCivil.Trim(),
-                DataNascimento = req.DataNascimento,
-                Logradouro = (req.Logradouro ?? string.Empty).Trim(),
-                Bairro = (req.Bairro ?? string.Empty).Trim(),
-                Numero = (req.Numero ?? string.Empty).Trim(),
-                Cidade = (req.Cidade ?? string.Empty).Trim(),
-                UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant(),
-                Fone = req.Fone.Trim(),
-                Email = req.Email.Trim(),
-                CriadaEmUtc = nowUtc,
-                AtualizadaEmUtc = nowUtc
+                CriadaEmUtc = nowUtc
             };
+            AplicarDadosCadastraisPessoa(
+                pessoa,
+                req.NomeCompleto,
+                req.Sexo,
+                req.EstadoCivil,
+                req.DataNascimento,
+                req.Profissao,
+                (req.Logradouro ?? string.Empty).Trim(),
+                (req.Bairro ?? string.Empty).Trim(),
+                (req.Numero ?? string.Empty).Trim(),
+                cidade,
+                uf,
+                req.Fone,
+                req.Email,
+                nowUtc,
+                null);
             _db.Pessoas.Add(pessoa);
             await _db.SaveChangesAsync(ct);
 
@@ -138,6 +142,8 @@ public class AssociadoAndCadastroService
             };
             _db.Usuarios.Add(usuario);
             await _db.SaveChangesAsync(ct);
+
+            pessoa.UltimaAlteracaoPorUsuarioId = usuario.Id;
         }
 
         await AtualizarInteressesPessoaAsync(pessoa.Id, req.InteressesIds, ct);
@@ -179,6 +185,9 @@ public class AssociadoAndCadastroService
         ReenviarSolicitacaoCadastroRequest req,
         CancellationToken ct = default)
     {
+        ValidarCamposCadastraisObrigatorios(req.NomeCompleto, req.Sexo, req.EstadoCivil, req.Profissao, req.Fone, req.Email);
+        var (cidade, uf) = await ValidarLocalidadeOpcionalAsync(req.Cidade, req.UF, ct);
+
         var temPendente = await _db.SolicitacoesCadastro
             .AnyAsync(s => s.PessoaId == user.PessoaId && s.Status == StatusSolicitacaoCadastro.Pendente, ct);
         if (temPendente)
@@ -201,18 +210,22 @@ public class AssociadoAndCadastroService
         var nowUtc = DateTime.UtcNow;
 
         var pessoa = await _db.Pessoas.FirstAsync(p => p.Id == user.PessoaId, ct);
-        pessoa.NomeCompleto = req.NomeCompleto.Trim();
-        pessoa.Sexo = req.Sexo.Trim();
-        pessoa.EstadoCivil = req.EstadoCivil.Trim();
-        pessoa.DataNascimento = req.DataNascimento;
-        pessoa.Logradouro = (req.Logradouro ?? string.Empty).Trim();
-        pessoa.Bairro = (req.Bairro ?? string.Empty).Trim();
-        pessoa.Numero = (req.Numero ?? string.Empty).Trim();
-        pessoa.Cidade = (req.Cidade ?? string.Empty).Trim();
-        pessoa.UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant();
-        pessoa.Fone = req.Fone.Trim();
-        pessoa.Email = req.Email.Trim();
-        pessoa.AtualizadaEmUtc = nowUtc;
+        AplicarDadosCadastraisPessoa(
+            pessoa,
+            req.NomeCompleto,
+            req.Sexo,
+            req.EstadoCivil,
+            req.DataNascimento,
+            req.Profissao,
+            (req.Logradouro ?? string.Empty).Trim(),
+            (req.Bairro ?? string.Empty).Trim(),
+            (req.Numero ?? string.Empty).Trim(),
+            cidade,
+            uf,
+            req.Fone,
+            req.Email,
+            nowUtc,
+            user.UsuarioId);
 
         await AtualizarInteressesPessoaAsync(pessoa.Id, req.InteressesIds, ct);
 
@@ -263,6 +276,8 @@ public class AssociadoAndCadastroService
         var query = _db.SolicitacoesCadastro
             .AsNoTracking()
             .Include(s => s.Pessoa)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
             .Include(s => s.UnidadePretendida)
             .Include(s => s.CategoriaAprovada)
             .AsQueryable();
@@ -323,6 +338,8 @@ public class AssociadoAndCadastroService
     {
         var solicitacao = await _db.SolicitacoesCadastro
             .Include(s => s.Pessoa)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
             .Include(s => s.Usuario)
             .Include(s => s.UnidadePretendida)
             .Include(s => s.CategoriaAprovada)
@@ -433,6 +450,8 @@ public class AssociadoAndCadastroService
 
         var solicitacao = await _db.SolicitacoesCadastro
             .Include(s => s.Pessoa)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
             .Include(s => s.UnidadePretendida)
             .FirstOrDefaultAsync(s => s.Id == solicitacaoId, ct);
 
@@ -491,6 +510,9 @@ public class AssociadoAndCadastroService
             .Include(a => a.Pessoa)
                 .ThenInclude(p => p.Usuario)
             .Include(a => a.Pessoa)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
+            .Include(a => a.Pessoa)
                 .ThenInclude(p => p.Interesses)
                     .ThenInclude(pi => pi.Interesse)
             .Include(a => a.Unidade)
@@ -498,6 +520,10 @@ public class AssociadoAndCadastroService
             .Include(a => a.Dependentes)
                 .ThenInclude(d => d.PessoaDependente)
                     .ThenInclude(pd => pd.Usuario)
+            .Include(a => a.Dependentes)
+                .ThenInclude(d => d.PessoaDependente)
+                    .ThenInclude(pd => pd.UltimaAlteracaoPorUsuario)
+                        .ThenInclude(ua => ua!.Pessoa)
             .AsQueryable();
 
         if (user.Role == RoleAdministrativa.Admin)
@@ -549,6 +575,9 @@ public class AssociadoAndCadastroService
             .Include(a => a.Pessoa)
                 .ThenInclude(p => p.Usuario)
             .Include(a => a.Pessoa)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
+            .Include(a => a.Pessoa)
                 .ThenInclude(p => p.Interesses)
                     .ThenInclude(pi => pi.Interesse)
             .Include(a => a.Unidade)
@@ -556,6 +585,10 @@ public class AssociadoAndCadastroService
             .Include(a => a.Dependentes)
                 .ThenInclude(d => d.PessoaDependente)
                     .ThenInclude(pd => pd.Usuario)
+            .Include(a => a.Dependentes)
+                .ThenInclude(d => d.PessoaDependente)
+                    .ThenInclude(pd => pd.UltimaAlteracaoPorUsuario)
+                        .ThenInclude(ua => ua!.Pessoa)
             .FirstOrDefaultAsync(a => a.Id == associadoId, ct);
 
         if (associado is null)
@@ -586,6 +619,9 @@ public class AssociadoAndCadastroService
         if (!CpfHelper.IsValidFormat(cpf))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.CpfInvalido, "CPF inválido.");
 
+        ValidarCamposCadastraisObrigatorios(req.NomeCompleto, req.Sexo, req.EstadoCivil, req.Profissao, req.Fone, req.Email);
+        var (cidade, uf) = await ValidarLocalidadeOpcionalAsync(req.Cidade, req.UF, ct);
+
         if (await _db.Pessoas.AnyAsync(p => p.Cpf == cpf, ct))
             throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.CpfJaCadastrado, "CPF já cadastrado.");
 
@@ -610,26 +646,27 @@ public class AssociadoAndCadastroService
         var nowUtc = DateTime.UtcNow;
         var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
 
-        if (!string.IsNullOrWhiteSpace(req.UF) && req.UF.Trim().Length != 2)
-            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Quando informada, a UF deve conter 2 caracteres.");
-
         var pessoa = new Pessoa
         {
-            NomeCompleto = req.NomeCompleto.Trim(),
             Cpf = cpf,
-            Sexo = req.Sexo.Trim(),
-            EstadoCivil = req.EstadoCivil.Trim(),
-            DataNascimento = req.DataNascimento,
-            Logradouro = (req.Logradouro ?? string.Empty).Trim(),
-            Bairro = (req.Bairro ?? string.Empty).Trim(),
-            Numero = (req.Numero ?? string.Empty).Trim(),
-            Cidade = (req.Cidade ?? string.Empty).Trim(),
-            UF = (req.UF ?? string.Empty).Trim().ToUpperInvariant(),
-            Fone = req.Fone.Trim(),
-            Email = req.Email.Trim(),
-            CriadaEmUtc = nowUtc,
-            AtualizadaEmUtc = nowUtc
+            CriadaEmUtc = nowUtc
         };
+        AplicarDadosCadastraisPessoa(
+            pessoa,
+            req.NomeCompleto,
+            req.Sexo,
+            req.EstadoCivil,
+            req.DataNascimento,
+            req.Profissao,
+            (req.Logradouro ?? string.Empty).Trim(),
+            (req.Bairro ?? string.Empty).Trim(),
+            (req.Numero ?? string.Empty).Trim(),
+            cidade,
+            uf,
+            req.Fone,
+            req.Email,
+            nowUtc,
+            user.UsuarioId);
         _db.Pessoas.Add(pessoa);
         await _db.SaveChangesAsync(ct);
 
@@ -856,11 +893,7 @@ public class AssociadoAndCadastroService
             .FirstOrDefaultAsync(a => a.Id == associadoTitularId, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado titular não encontrado.");
 
-        var solicitadoPeloTitular = user.AssociadoId == titular.Id
-            && user.Role != RoleAdministrativa.Admin
-            && user.Role != RoleAdministrativa.SuperAdmin;
-        if (!solicitadoPeloTitular)
-            _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
+        var solicitadoPeloTitular = EnsurePodeGerenciarDependente(user, titular);
 
         if (titular.Status != StatusAssociado.Ativo)
             throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Não é permitido vincular dependentes a um associado titular inativo.");
@@ -869,11 +902,7 @@ public class AssociadoAndCadastroService
         if (!CpfHelper.IsValidFormat(cpf))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.CpfInvalido, "CPF do dependente inválido.");
 
-        if (string.IsNullOrWhiteSpace(req.NomeCompleto) || string.IsNullOrWhiteSpace(req.Sexo))
-            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Nome completo, CPF e sexo do dependente são obrigatórios.");
-
-        if (!string.IsNullOrWhiteSpace(req.UF) && req.UF.Trim().Length != 2)
-            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "UF deve conter 2 caracteres.");
+        ValidarCamposCadastraisObrigatorios(req.NomeCompleto, req.Sexo, req.EstadoCivil, req.Profissao, req.Fone, req.Email);
 
         var nowUtc = DateTime.UtcNow;
         var hoje = TimeZoneHelper.TodaySaoPaulo(nowUtc);
@@ -886,18 +915,21 @@ public class AssociadoAndCadastroService
                 throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DependenteIdadeInvalida, "Filho(a) dependente deve ter até 21 anos, inclusive.");
         }
 
+        var informadaLocalidadeProp = !string.IsNullOrWhiteSpace(req.Cidade) || !string.IsNullOrWhiteSpace(req.UF);
+        var (cidade, uf) = informadaLocalidadeProp
+            ? await ValidarLocalidadeOpcionalAsync(req.Cidade, req.UF, ct)
+            : (titular.Pessoa?.Cidade ?? string.Empty, titular.Pessoa?.UF ?? string.Empty);
+
+        var logradouro = string.IsNullOrWhiteSpace(req.Logradouro) ? (titular.Pessoa?.Logradouro ?? string.Empty) : req.Logradouro.Trim();
+        var bairro = string.IsNullOrWhiteSpace(req.Bairro) ? (titular.Pessoa?.Bairro ?? string.Empty) : req.Bairro.Trim();
+        var numero = string.IsNullOrWhiteSpace(req.Numero) ? (titular.Pessoa?.Numero ?? string.Empty) : req.Numero.Trim();
+
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
         var pessoaDep = await _db.Pessoas
             .Include(p => p.Usuario)
             .Include(p => p.Associado)
             .FirstOrDefaultAsync(p => p.Cpf == cpf, ct);
-
-        var logradouro = string.IsNullOrWhiteSpace(req.Logradouro) ? (titular.Pessoa?.Logradouro ?? string.Empty) : req.Logradouro.Trim();
-        var bairro = string.IsNullOrWhiteSpace(req.Bairro) ? (titular.Pessoa?.Bairro ?? string.Empty) : req.Bairro.Trim();
-        var numero = string.IsNullOrWhiteSpace(req.Numero) ? (titular.Pessoa?.Numero ?? string.Empty) : req.Numero.Trim();
-        var cidade = string.IsNullOrWhiteSpace(req.Cidade) ? (titular.Pessoa?.Cidade ?? string.Empty) : req.Cidade.Trim();
-        var uf = string.IsNullOrWhiteSpace(req.UF) ? (titular.Pessoa?.UF ?? string.Empty) : req.UF.Trim().ToUpperInvariant();
 
         if (pessoaDep is not null)
         {
@@ -914,38 +946,46 @@ public class AssociadoAndCadastroService
             if (temSolicitacaoPendente)
                 throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.SolicitacaoJaPendente, "Já existe uma solicitação de cadastro pendente para este CPF.");
 
-            pessoaDep.NomeCompleto = req.NomeCompleto.Trim();
-            pessoaDep.Sexo = req.Sexo.Trim();
-            pessoaDep.EstadoCivil = string.IsNullOrWhiteSpace(req.EstadoCivil) ? pessoaDep.EstadoCivil : req.EstadoCivil.Trim();
-            pessoaDep.DataNascimento = req.DataNascimento;
-            pessoaDep.Logradouro = logradouro;
-            pessoaDep.Bairro = bairro;
-            pessoaDep.Numero = numero;
-            pessoaDep.Cidade = cidade;
-            pessoaDep.UF = uf;
-            pessoaDep.Fone = string.IsNullOrWhiteSpace(req.Fone) ? pessoaDep.Fone : req.Fone.Trim();
-            pessoaDep.Email = string.IsNullOrWhiteSpace(req.Email) ? pessoaDep.Email : req.Email.Trim();
-            pessoaDep.AtualizadaEmUtc = nowUtc;
+            AplicarDadosCadastraisPessoa(
+                pessoaDep,
+                req.NomeCompleto,
+                req.Sexo,
+                req.EstadoCivil,
+                req.DataNascimento,
+                req.Profissao,
+                logradouro,
+                bairro,
+                numero,
+                cidade,
+                uf,
+                req.Fone,
+                req.Email,
+                nowUtc,
+                user.UsuarioId);
         }
         else
         {
             pessoaDep = new Pessoa
             {
-                NomeCompleto = req.NomeCompleto.Trim(),
                 Cpf = cpf,
-                Sexo = req.Sexo.Trim(),
-                EstadoCivil = (req.EstadoCivil ?? string.Empty).Trim(),
-                DataNascimento = req.DataNascimento,
-                Logradouro = logradouro,
-                Bairro = bairro,
-                Numero = numero,
-                Cidade = cidade,
-                UF = uf,
-                Fone = (req.Fone ?? string.Empty).Trim(),
-                Email = (req.Email ?? string.Empty).Trim(),
-                CriadaEmUtc = nowUtc,
-                AtualizadaEmUtc = nowUtc
+                CriadaEmUtc = nowUtc
             };
+            AplicarDadosCadastraisPessoa(
+                pessoaDep,
+                req.NomeCompleto,
+                req.Sexo,
+                req.EstadoCivil,
+                req.DataNascimento,
+                req.Profissao,
+                logradouro,
+                bairro,
+                numero,
+                cidade,
+                uf,
+                req.Fone,
+                req.Email,
+                nowUtc,
+                user.UsuarioId);
             _db.Pessoas.Add(pessoaDep);
             await _db.SaveChangesAsync(ct);
         }
@@ -1019,7 +1059,8 @@ public class AssociadoAndCadastroService
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return ToDependenteDto(dep, pessoaDep);
+        var nomeAutor = await ObterNomeUsuarioAsync(user.UsuarioId, ct);
+        return ToDependenteDto(dep, pessoaDep, nomeAutor);
     }
 
     public async Task<DependenteDto> AlterarStatusDependenteAsync(
@@ -1033,17 +1074,16 @@ public class AssociadoAndCadastroService
             .FirstOrDefaultAsync(a => a.Id == associadoTitularId, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado titular não encontrado.");
 
-        var solicitadoPeloTitular = user.AssociadoId == titular.Id
-            && user.Role != RoleAdministrativa.Admin
-            && user.Role != RoleAdministrativa.SuperAdmin;
-        if (!solicitadoPeloTitular)
-            _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
+        var solicitadoPeloTitular = EnsurePodeGerenciarDependente(user, titular);
 
         var dep = await _db.Dependencias
             .Include(d => d.PessoaDependente)
                 .ThenInclude(p => p.Usuario)
             .Include(d => d.PessoaDependente)
                 .ThenInclude(p => p.Associado)
+            .Include(d => d.PessoaDependente)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
             .FirstOrDefaultAsync(d => d.Id == dependenciaId && d.AssociadoTitularId == titular.Id, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Vínculo de dependente não encontrado para este associado.");
 
@@ -1099,6 +1139,9 @@ public class AssociadoAndCadastroService
                 dep.PessoaDependente.Usuario.VersaoSeguranca++;
         }
 
+        dep.PessoaDependente.AtualizadaEmUtc = nowUtc;
+        dep.PessoaDependente.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+
         _auditoria.Registrar(
             user.UsuarioId,
             titular.UnidadeId,
@@ -1108,7 +1151,88 @@ public class AssociadoAndCadastroService
             $"Status do dependente #{dep.Id} alterado para {(req.Ativo ? "Ativo" : "Encerrado")}.");
         await _db.SaveChangesAsync(ct);
 
-        return ToDependenteDto(dep);
+        var nomeAutor = await ObterNomeUsuarioAsync(user.UsuarioId, ct);
+        return ToDependenteDto(dep, alteradoPorNomeOverride: nomeAutor);
+    }
+
+    public async Task<AssociadoDto> AtualizarDadosAssociadoAsync(
+        AuthenticatedUserInfo user,
+        int associadoId,
+        AtualizarDadosCadastraisRequest req,
+        CancellationToken ct = default)
+    {
+        var associado = await _db.Associados
+            .Include(a => a.Pessoa)
+            .FirstOrDefaultAsync(a => a.Id == associadoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado não encontrado.");
+
+        if (user.AssociadoId != associado.Id)
+            _currentUser.EnsureAdminOrSuperAdminForUnit(user, associado.UnidadeId);
+
+        await AtualizarPessoaPorRequestAsync(associado.Pessoa, req, user.UsuarioId, ct);
+
+        _auditoria.Registrar(user.UsuarioId, associado.UnidadeId, "ATUALIZAR_DADOS_ASSOCIADO", nameof(Associado), associado.Id,
+            $"Dados cadastrais do associado #{associado.Id} atualizados.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterAssociadoPorIdAsync(user, associado.Id, ct);
+    }
+
+    public async Task AtualizarMeusDadosCadastraisAsync(
+        AuthenticatedUserInfo user,
+        AtualizarDadosCadastraisRequest req,
+        CancellationToken ct = default)
+    {
+        var pessoa = await _db.Pessoas.FirstOrDefaultAsync(p => p.Id == user.PessoaId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Cadastro pessoal não encontrado.");
+
+        await AtualizarPessoaPorRequestAsync(pessoa, req, user.UsuarioId, ct);
+
+        _auditoria.Registrar(user.UsuarioId, user.UnidadeAssociadoId ?? user.UnidadeTitularId ?? user.UnidadeAdministrativaId,
+            "ATUALIZAR_MEUS_DADOS_CADASTRAIS", nameof(Pessoa), pessoa.Id, "Usuário atualizou seus próprios dados cadastrais.");
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<DependenteDto> AtualizarDadosDependenteAsync(
+        AuthenticatedUserInfo user,
+        int associadoTitularId,
+        int dependenciaId,
+        AtualizarDadosCadastraisRequest req,
+        CancellationToken ct = default)
+    {
+        var titular = await _db.Associados
+            .FirstOrDefaultAsync(a => a.Id == associadoTitularId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Associado titular não encontrado.");
+
+        EnsurePodeGerenciarDependente(user, titular);
+
+        var dep = await _db.Dependencias
+            .Include(d => d.PessoaDependente)
+                .ThenInclude(p => p.Usuario)
+            .Include(d => d.PessoaDependente)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
+            .FirstOrDefaultAsync(d => d.Id == dependenciaId && d.AssociadoTitularId == titular.Id, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Vínculo de dependente não encontrado para este associado.");
+
+        var tipoVinculo = req.TipoVinculo ?? dep.TipoVinculo;
+        var hoje = TimeZoneHelper.TodaySaoPaulo();
+        if (tipoVinculo == TipoVinculoDependente.Filho && dep.DataFim is null)
+        {
+            var idade = TimeZoneHelper.CalculateAge(req.DataNascimento, hoje);
+            if (idade < 0 || idade > 21)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DependenteIdadeInvalida, "Filho(a) dependente deve ter até 21 anos, inclusive.");
+        }
+
+        dep.TipoVinculo = tipoVinculo;
+        await AtualizarPessoaPorRequestAsync(dep.PessoaDependente, req, user.UsuarioId, ct);
+
+        _auditoria.Registrar(user.UsuarioId, titular.UnidadeId, "ATUALIZAR_DADOS_DEPENDENTE", nameof(Dependencia), dep.Id,
+            $"Dados cadastrais do dependente #{dep.Id} atualizados.");
+        await _db.SaveChangesAsync(ct);
+
+        var nomeAutor = await ObterNomeUsuarioAsync(user.UsuarioId, ct);
+        return ToDependenteDto(dep, alteradoPorNomeOverride: nomeAutor);
     }
 
     public async Task<int> ProcessarTransicaoDependentes22AnosAsync(DateOnly? dataReferencia = null, CancellationToken ct = default)
@@ -1268,6 +1392,155 @@ public class AssociadoAndCadastroService
         }
     }
 
+    private bool EnsurePodeGerenciarDependente(AuthenticatedUserInfo user, Associado titular)
+    {
+        var solicitadoPeloTitular = user.AssociadoId == titular.Id
+            && user.Role != RoleAdministrativa.Admin
+            && user.Role != RoleAdministrativa.SuperAdmin;
+        if (!solicitadoPeloTitular)
+            _currentUser.EnsureAdminOrSuperAdminForUnit(user, titular.UnidadeId);
+
+        return solicitadoPeloTitular;
+    }
+
+    private async Task AtualizarPessoaPorRequestAsync(
+        Pessoa pessoa,
+        AtualizarDadosCadastraisRequest req,
+        int usuarioEditorId,
+        CancellationToken ct)
+    {
+        ValidarCamposCadastraisObrigatorios(req.NomeCompleto, req.Sexo, req.EstadoCivil, req.Profissao, req.Fone, req.Email);
+        var (cidade, uf) = await ValidarLocalidadeOpcionalAsync(req.Cidade, req.UF, ct);
+
+        AplicarDadosCadastraisPessoa(
+            pessoa,
+            req.NomeCompleto,
+            req.Sexo,
+            req.EstadoCivil,
+            req.DataNascimento,
+            req.Profissao,
+            (req.Logradouro ?? string.Empty).Trim(),
+            (req.Bairro ?? string.Empty).Trim(),
+            (req.Numero ?? string.Empty).Trim(),
+            cidade,
+            uf,
+            req.Fone,
+            req.Email,
+            DateTime.UtcNow,
+            usuarioEditorId);
+    }
+
+    private async Task<string?> ObterNomeUsuarioAsync(int usuarioId, CancellationToken ct) =>
+        await _db.Usuarios
+            .AsNoTracking()
+            .Where(u => u.Id == usuarioId)
+            .Select(u => u.Pessoa.NomeCompleto)
+            .FirstOrDefaultAsync(ct);
+
+    private static void ValidarCamposCadastraisObrigatorios(
+        string? nomeCompleto,
+        string? sexo,
+        string? estadoCivil,
+        string? profissao,
+        string? fone,
+        string? email)
+    {
+        if (string.IsNullOrWhiteSpace(nomeCompleto)
+            || string.IsNullOrWhiteSpace(sexo)
+            || string.IsNullOrWhiteSpace(estadoCivil)
+            || string.IsNullOrWhiteSpace(profissao)
+            || string.IsNullOrWhiteSpace(fone)
+            || string.IsNullOrWhiteSpace(email))
+        {
+            throw new ApiException(
+                StatusCodes.Status400BadRequest,
+                CodigosErro.DadosInvalidos,
+                "Todos os dados cadastrais obrigatórios (nome, CPF, sexo, estado civil, profissão, telefone e e-mail) devem ser informados.");
+        }
+    }
+
+    private async Task<(string Cidade, string UF)> ValidarLocalidadeOpcionalAsync(string? cidade, string? uf, CancellationToken ct)
+    {
+        var cidadeTrim = (cidade ?? string.Empty).Trim();
+        var ufNorm = (uf ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (!string.IsNullOrEmpty(ufNorm) && ufNorm.Length != 2)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Quando informada, a UF deve conter 2 caracteres.");
+
+        if (!await _db.Estados.AnyAsync(ct))
+            return (cidadeTrim, ufNorm);
+
+        if (!string.IsNullOrEmpty(cidadeTrim))
+        {
+            var cidadeLower = cidadeTrim.ToLower();
+            if (!string.IsNullOrEmpty(ufNorm))
+            {
+                var cidadeMatch = await _db.Cidades
+                    .AsNoTracking()
+                    .Include(c => c.Estado)
+                    .FirstOrDefaultAsync(c => c.Nome.ToLower() == cidadeLower && c.Estado.UF.ToUpper() == ufNorm, ct)
+                    ?? throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "A cidade selecionada não pertence ao estado (UF) informado.");
+                return (cidadeMatch.Nome, cidadeMatch.Estado.UF);
+            }
+
+            var matches = await _db.Cidades
+                .AsNoTracking()
+                .Include(c => c.Estado)
+                .Where(c => c.Nome.ToLower() == cidadeLower && c.Ativa && c.Estado.Ativo)
+                .ToListAsync(ct);
+
+            if (matches.Count == 1)
+                return (matches[0].Nome, matches[0].Estado.UF);
+            if (matches.Count > 1)
+                throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Mais de um estado possui esta cidade; selecione também o estado (UF).");
+
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Cidade selecionada não encontrada na base de localidades.");
+        }
+
+        if (!string.IsNullOrEmpty(ufNorm))
+        {
+            var ufExiste = await _db.Estados.AnyAsync(e => e.UF.ToUpper() == ufNorm, ct);
+            if (!ufExiste)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, "Estado (UF) selecionado não encontrado na base de localidades.");
+        }
+
+        return (cidadeTrim, ufNorm);
+    }
+
+    private static void AplicarDadosCadastraisPessoa(
+        Pessoa pessoa,
+        string nomeCompleto,
+        string sexo,
+        string estadoCivil,
+        DateOnly dataNascimento,
+        string profissao,
+        string logradouro,
+        string bairro,
+        string numero,
+        string cidade,
+        string uf,
+        string fone,
+        string email,
+        DateTime nowUtc,
+        int? alteradoPorUsuarioId)
+    {
+        pessoa.NomeCompleto = nomeCompleto.Trim();
+        pessoa.Sexo = sexo.Trim();
+        pessoa.EstadoCivil = estadoCivil.Trim();
+        pessoa.DataNascimento = dataNascimento;
+        pessoa.Profissao = profissao.Trim();
+        pessoa.Logradouro = logradouro;
+        pessoa.Bairro = bairro;
+        pessoa.Numero = numero;
+        pessoa.Cidade = cidade;
+        pessoa.UF = uf;
+        pessoa.Fone = fone.Trim();
+        pessoa.Email = email.Trim();
+        pessoa.AtualizadaEmUtc = nowUtc;
+        if (alteradoPorUsuarioId.HasValue)
+            pessoa.UltimaAlteracaoPorUsuarioId = alteradoPorUsuarioId.Value;
+    }
+
     private static SolicitacaoCadastroListItemDto ToSolicitacaoListItemDto(
         SolicitacaoCadastro s,
         string? categoriaAprovadaNome,
@@ -1295,10 +1568,14 @@ public class AssociadoAndCadastroService
             Bairro: s.Pessoa.Bairro,
             Numero: s.Pessoa.Numero,
             Cidade: s.Pessoa.Cidade,
-            UF: s.Pessoa.UF);
+            UF: s.Pessoa.UF,
+            Profissao: s.Pessoa.Profissao,
+            CriadoEm: TimeZoneHelper.ToSaoPauloOffset(s.Pessoa.CriadaEmUtc),
+            AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(s.Pessoa.AtualizadaEmUtc),
+            UltimaAlteracaoPorNome: s.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
     }
 
-    private static DependenteDto ToDependenteDto(Dependencia d, Pessoa? pessoaOverride = null)
+    private static DependenteDto ToDependenteDto(Dependencia d, Pessoa? pessoaOverride = null, string? alteradoPorNomeOverride = null)
     {
         var pessoa = pessoaOverride ?? d.PessoaDependente;
         var pendenteAprovacao = d.DataFim == null && pessoa.Usuario?.EstadoConta == EstadoConta.RestritaCadastro;
@@ -1318,7 +1595,17 @@ public class AssociadoAndCadastroService
             DataFim: d.DataFim,
             MotivoFim: d.MotivoFim,
             Ativo: d.DataFim == null && !pendenteAprovacao,
-            PendenteAprovacao: pendenteAprovacao);
+            PendenteAprovacao: pendenteAprovacao,
+            EstadoCivil: pessoa.EstadoCivil,
+            Profissao: pessoa.Profissao,
+            Logradouro: pessoa.Logradouro,
+            Bairro: pessoa.Bairro,
+            Numero: pessoa.Numero,
+            Cidade: pessoa.Cidade,
+            UF: pessoa.UF,
+            CriadoEm: TimeZoneHelper.ToSaoPauloOffset(pessoa.CriadaEmUtc),
+            AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(pessoa.AtualizadaEmUtc),
+            UltimaAlteracaoPorNome: alteradoPorNomeOverride ?? pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
     }
 
     public static AssociadoDto ToAssociadoDto(Associado a) => new(
@@ -1351,5 +1638,9 @@ public class AssociadoAndCadastroService
             .OrderByDescending(d => d.DataFim == null)
             .ThenBy(d => d.PessoaDependente.NomeCompleto)
             .Select(d => ToDependenteDto(d))
-            .ToList());
+            .ToList(),
+        Profissao: a.Pessoa.Profissao,
+        CriadoEm: TimeZoneHelper.ToSaoPauloOffset(a.Pessoa.CriadaEmUtc),
+        AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(a.Pessoa.AtualizadaEmUtc),
+        UltimaAlteracaoPorNome: a.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
 }

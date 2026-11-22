@@ -36,7 +36,19 @@ public record PerfilUsuarioDto(
     string? TitularNome,
     int? UnidadeTitularId,
     string? UnidadeTitularNome,
-    IReadOnlyList<string> Interesses);
+    IReadOnlyList<string> Interesses,
+    string Profissao = "",
+    string EstadoCivil = "",
+    string Sexo = "",
+    DateOnly DataNascimento = default,
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null);
 
 public record StatusCadastroResponse(
     int SolicitacaoId,
@@ -86,6 +98,38 @@ public record DesignarRoleUnidadeRequest(
     int? UsuarioId,
     RoleAdministrativa Role);
 
+// ==================== LOCALIDADES (ESTADOS & CIDADES) ====================
+public record EstadoDto(
+    int Id,
+    string Nome,
+    string UF,
+    bool Ativo,
+    int QuantidadeCidades,
+    DateTimeOffset CriadoEm,
+    DateTimeOffset AtualizadoEm,
+    string? UltimaAlteracaoPorNome = null);
+
+public record CriarOuAtualizarEstadoRequest(
+    string Nome,
+    string UF,
+    bool Ativo = true);
+
+public record CidadeDto(
+    int Id,
+    string Nome,
+    int EstadoId,
+    string EstadoNome,
+    string EstadoUF,
+    bool Ativa,
+    DateTimeOffset CriadaEm,
+    DateTimeOffset AtualizadaEm,
+    string? UltimaAlteracaoPorNome = null);
+
+public record CriarOuAtualizarCidadeRequest(
+    string Nome,
+    int EstadoId,
+    bool Ativa = true);
+
 // ==================== CADASTROS & ASSOCIADOS ====================
 public record SolicitarCadastroRequest(
     string NomeCompleto,
@@ -103,7 +147,8 @@ public record SolicitarCadastroRequest(
     int UnidadePretendidaId,
     string Senha,
     IReadOnlyList<int>? InteressesIds = null,
-    string? CodigoCategoriaPretendida = null);
+    string? CodigoCategoriaPretendida = null,
+    string Profissao = "Não informada");
 
 public record ReenviarSolicitacaoCadastroRequest(
     string NomeCompleto,
@@ -119,7 +164,8 @@ public record ReenviarSolicitacaoCadastroRequest(
     string Email,
     int UnidadePretendidaId,
     IReadOnlyList<int>? InteressesIds = null,
-    string? CodigoCategoriaPretendida = null);
+    string? CodigoCategoriaPretendida = null,
+    string Profissao = "Não informada");
 
 public record SolicitacaoCadastroListItemDto(
     int Id,
@@ -142,7 +188,11 @@ public record SolicitacaoCadastroListItemDto(
     string Bairro = "",
     string Numero = "",
     string Cidade = "",
-    string UF = "");
+    string UF = "",
+    string Profissao = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null);
 
 public record AprovarSolicitacaoRequest(string CodigoCategoria);
 
@@ -174,7 +224,11 @@ public record AssociadoDto(
     DateOnly? DataInicioCobranca,
     RoleAdministrativa RoleAdministrativa,
     IReadOnlyList<string> Interesses,
-    IReadOnlyList<DependenteDto> Dependentes);
+    IReadOnlyList<DependenteDto> Dependentes,
+    string Profissao = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null);
 
 public record CriarAssociadoAdminRequest(
     string NomeCompleto,
@@ -193,7 +247,8 @@ public record CriarAssociadoAdminRequest(
     string CodigoCategoria,
     string SenhaInicial,
     IReadOnlyList<int>? InteressesIds = null,
-    RoleAdministrativa RoleInicial = RoleAdministrativa.Nenhuma);
+    RoleAdministrativa RoleInicial = RoleAdministrativa.Nenhuma,
+    string Profissao = "Não informada");
 
 public record AlterarCategoriaAssociadoRequest(
     string NovoCodigoCategoria,
@@ -220,7 +275,17 @@ public record DependenteDto(
     DateOnly? DataFim,
     MotivoFimDependencia? MotivoFim,
     bool Ativo,
-    bool PendenteAprovacao = false);
+    bool PendenteAprovacao = false,
+    string EstadoCivil = "",
+    string Profissao = "",
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null);
 
 public record CadastrarDependenteRequest(
     string NomeCompleto,
@@ -237,9 +302,25 @@ public record CadastrarDependenteRequest(
     string Email,
     TipoVinculoDependente TipoVinculo,
     string? SenhaContaPropria = null,
-    IReadOnlyList<int>? InteressesIds = null);
+    IReadOnlyList<int>? InteressesIds = null,
+    string Profissao = "Não informada");
 
 public record AlterarStatusDependenteRequest(bool Ativo);
+
+public record AtualizarDadosCadastraisRequest(
+    string NomeCompleto,
+    string Sexo,
+    string EstadoCivil,
+    DateOnly DataNascimento,
+    string Profissao,
+    string Fone,
+    string Email,
+    string Logradouro,
+    string Bairro,
+    string Numero,
+    string Cidade,
+    string UF,
+    TipoVinculoDependente? TipoVinculo = null);
 
 public record TransferenciaHistoricoDto(
     int Id,

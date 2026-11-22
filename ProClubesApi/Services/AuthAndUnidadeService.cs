@@ -172,6 +172,9 @@ public class AuthService
             .Include(u => u.Pessoa)
                 .ThenInclude(p => p.Interesses)
                     .ThenInclude(pi => pi.Interesse)
+            .Include(u => u.Pessoa)
+                .ThenInclude(p => p.UltimaAlteracaoPorUsuario)
+                    .ThenInclude(ua => ua!.Pessoa)
             .Include(u => u.UnidadeAdministrativa)
             .FirstOrDefaultAsync(u => u.Id == usuarioId, ct);
 
@@ -213,7 +216,19 @@ public class AuthService
             TitularNome: dep?.AssociadoTitular.Pessoa.NomeCompleto,
             UnidadeTitularId: dep?.AssociadoTitular.UnidadeId,
             UnidadeTitularNome: dep?.AssociadoTitular.Unidade.Nome,
-            Interesses: usuario.Pessoa.Interesses.Select(i => i.Interesse.Nome).OrderBy(n => n).ToList());
+            Interesses: usuario.Pessoa.Interesses.Select(i => i.Interesse.Nome).OrderBy(n => n).ToList(),
+            Profissao: usuario.Pessoa.Profissao,
+            EstadoCivil: usuario.Pessoa.EstadoCivil,
+            Sexo: usuario.Pessoa.Sexo,
+            DataNascimento: usuario.Pessoa.DataNascimento,
+            Logradouro: usuario.Pessoa.Logradouro,
+            Bairro: usuario.Pessoa.Bairro,
+            Numero: usuario.Pessoa.Numero,
+            Cidade: usuario.Pessoa.Cidade,
+            UF: usuario.Pessoa.UF,
+            CriadoEm: TimeZoneHelper.ToSaoPauloOffset(usuario.Pessoa.CriadaEmUtc),
+            AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(usuario.Pessoa.AtualizadaEmUtc),
+            UltimaAlteracaoPorNome: usuario.Pessoa.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
     }
 
     public async Task<StatusCadastroResponse> ObterStatusCadastroAsync(int usuarioId, CancellationToken ct = default)
@@ -541,4 +556,220 @@ public class UnidadeService
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Todos os campos da unidade são obrigatórios e a UF deve conter 2 caracteres.");
         }
     }
+
+    // ==================== LOCALIDADES (ESTADOS & CIDADES) ====================
+
+    public async Task<IReadOnlyList<EstadoDto>> ListarEstadosAsync(bool apenasAtivos = true, CancellationToken ct = default)
+    {
+        var query = _db.Estados
+            .AsNoTracking()
+            .Include(e => e.Cidades)
+            .Include(e => e.UltimaAlteracaoPorUsuario)
+                .ThenInclude(u => u!.Pessoa)
+            .AsQueryable();
+
+        if (apenasAtivos)
+            query = query.Where(e => e.Ativo);
+
+        var items = await query.OrderBy(e => e.Nome).ToListAsync(ct);
+        return items.Select(ToEstadoDto).ToList();
+    }
+
+    public async Task<EstadoDto> CriarEstadoAsync(AuthenticatedUserInfo user, CriarOuAtualizarEstadoRequest req, CancellationToken ct = default)
+    {
+        EnsureGerenciaLocalidades(user);
+        var (nome, uf) = ValidarRequestEstado(req);
+
+        if (await _db.Estados.AnyAsync(e => e.UF.ToUpper() == uf, ct))
+            throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.DadosInvalidos, $"Já existe um estado cadastrado com a UF {uf}.");
+
+        var nowUtc = DateTime.UtcNow;
+        var estado = new Estado
+        {
+            Nome = nome,
+            UF = uf,
+            Ativo = req.Ativo,
+            CriadoEmUtc = nowUtc,
+            AtualizadoEmUtc = nowUtc,
+            UltimaAlteracaoPorUsuarioId = user.UsuarioId
+        };
+        _db.Estados.Add(estado);
+        await _db.SaveChangesAsync(ct);
+
+        _auditoria.Registrar(user.UsuarioId, null, "CRIAR_ESTADO", nameof(Estado), estado.Id, $"Estado {estado.Nome} ({estado.UF}) criado.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterEstadoPorIdAsync(estado.Id, ct);
+    }
+
+    public async Task<EstadoDto> AtualizarEstadoAsync(AuthenticatedUserInfo user, int estadoId, CriarOuAtualizarEstadoRequest req, CancellationToken ct = default)
+    {
+        EnsureGerenciaLocalidades(user);
+        var (nome, uf) = ValidarRequestEstado(req);
+
+        var estado = await _db.Estados.FirstOrDefaultAsync(e => e.Id == estadoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Estado não encontrado.");
+
+        if (await _db.Estados.AnyAsync(e => e.Id != estadoId && e.UF.ToUpper() == uf, ct))
+            throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.DadosInvalidos, $"Já existe outro estado cadastrado com a UF {uf}.");
+
+        estado.Nome = nome;
+        estado.UF = uf;
+        estado.Ativo = req.Ativo;
+        estado.AtualizadoEmUtc = DateTime.UtcNow;
+        estado.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+
+        _auditoria.Registrar(user.UsuarioId, null, "ATUALIZAR_ESTADO", nameof(Estado), estado.Id, $"Estado {estado.Nome} ({estado.UF}) atualizado.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterEstadoPorIdAsync(estado.Id, ct);
+    }
+
+    public async Task<IReadOnlyList<CidadeDto>> ListarCidadesAsync(
+        int? estadoId = null,
+        string? uf = null,
+        bool apenasAtivas = true,
+        CancellationToken ct = default)
+    {
+        var query = _db.Cidades
+            .AsNoTracking()
+            .Include(c => c.Estado)
+            .Include(c => c.UltimaAlteracaoPorUsuario)
+                .ThenInclude(u => u!.Pessoa)
+            .AsQueryable();
+
+        if (apenasAtivas)
+            query = query.Where(c => c.Ativa && c.Estado.Ativo);
+
+        if (estadoId.HasValue)
+            query = query.Where(c => c.EstadoId == estadoId.Value);
+
+        if (!string.IsNullOrWhiteSpace(uf))
+        {
+            var ufNorm = uf.Trim().ToUpperInvariant();
+            query = query.Where(c => c.Estado.UF.ToUpper() == ufNorm);
+        }
+
+        var items = await query.OrderBy(c => c.Estado.Nome).ThenBy(c => c.Nome).ToListAsync(ct);
+        return items.Select(ToCidadeDto).ToList();
+    }
+
+    public async Task<CidadeDto> CriarCidadeAsync(AuthenticatedUserInfo user, CriarOuAtualizarCidadeRequest req, CancellationToken ct = default)
+    {
+        EnsureGerenciaLocalidades(user);
+        if (string.IsNullOrWhiteSpace(req.Nome))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O nome da cidade é obrigatório.");
+
+        var estado = await _db.Estados.FirstOrDefaultAsync(e => e.Id == req.EstadoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Estado selecionado não encontrado.");
+
+        var nome = req.Nome.Trim();
+        var nomeLower = nome.ToLower();
+        if (await _db.Cidades.AnyAsync(c => c.EstadoId == estado.Id && c.Nome.ToLower() == nomeLower, ct))
+            throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.DadosInvalidos, $"A cidade {nome} já está cadastrada no estado {estado.UF}.");
+
+        var nowUtc = DateTime.UtcNow;
+        var cidade = new Cidade
+        {
+            Nome = nome,
+            EstadoId = estado.Id,
+            Ativa = req.Ativa,
+            CriadaEmUtc = nowUtc,
+            AtualizadaEmUtc = nowUtc,
+            UltimaAlteracaoPorUsuarioId = user.UsuarioId
+        };
+        _db.Cidades.Add(cidade);
+        await _db.SaveChangesAsync(ct);
+
+        _auditoria.Registrar(user.UsuarioId, null, "CRIAR_CIDADE", nameof(Cidade), cidade.Id, $"Cidade {cidade.Nome}/{estado.UF} criada.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterCidadePorIdAsync(cidade.Id, ct);
+    }
+
+    public async Task<CidadeDto> AtualizarCidadeAsync(AuthenticatedUserInfo user, int cidadeId, CriarOuAtualizarCidadeRequest req, CancellationToken ct = default)
+    {
+        EnsureGerenciaLocalidades(user);
+        if (string.IsNullOrWhiteSpace(req.Nome))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O nome da cidade é obrigatório.");
+
+        var cidade = await _db.Cidades.FirstOrDefaultAsync(c => c.Id == cidadeId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Cidade não encontrada.");
+
+        var estado = await _db.Estados.FirstOrDefaultAsync(e => e.Id == req.EstadoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Estado selecionado não encontrado.");
+
+        var nome = req.Nome.Trim();
+        var nomeLower = nome.ToLower();
+        if (await _db.Cidades.AnyAsync(c => c.Id != cidadeId && c.EstadoId == estado.Id && c.Nome.ToLower() == nomeLower, ct))
+            throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.DadosInvalidos, $"Já existe a cidade {nome} cadastrada no estado {estado.UF}.");
+
+        cidade.Nome = nome;
+        cidade.EstadoId = estado.Id;
+        cidade.Ativa = req.Ativa;
+        cidade.AtualizadaEmUtc = DateTime.UtcNow;
+        cidade.UltimaAlteracaoPorUsuarioId = user.UsuarioId;
+
+        _auditoria.Registrar(user.UsuarioId, null, "ATUALIZAR_CIDADE", nameof(Cidade), cidade.Id, $"Cidade {cidade.Nome}/{estado.UF} atualizada.");
+        await _db.SaveChangesAsync(ct);
+
+        return await ObterCidadePorIdAsync(cidade.Id, ct);
+    }
+
+    private static void EnsureGerenciaLocalidades(AuthenticatedUserInfo user)
+    {
+        if (user.Role != RoleAdministrativa.Admin && user.Role != RoleAdministrativa.SuperAdmin)
+            throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.RecursoSemPermissao, "Apenas Admin ou Super Admin podem gerenciar estados e cidades.");
+    }
+
+    private static (string Nome, string UF) ValidarRequestEstado(CriarOuAtualizarEstadoRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Nome) || string.IsNullOrWhiteSpace(req.UF) || req.UF.Trim().Length != 2)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Nome do estado e UF com 2 caracteres são obrigatórios.");
+
+        return (req.Nome.Trim(), req.UF.Trim().ToUpperInvariant());
+    }
+
+    private async Task<EstadoDto> ObterEstadoPorIdAsync(int id, CancellationToken ct)
+    {
+        var estado = await _db.Estados
+            .AsNoTracking()
+            .Include(e => e.Cidades)
+            .Include(e => e.UltimaAlteracaoPorUsuario)
+                .ThenInclude(u => u!.Pessoa)
+            .FirstAsync(e => e.Id == id, ct);
+        return ToEstadoDto(estado);
+    }
+
+    private async Task<CidadeDto> ObterCidadePorIdAsync(int id, CancellationToken ct)
+    {
+        var cidade = await _db.Cidades
+            .AsNoTracking()
+            .Include(c => c.Estado)
+            .Include(c => c.UltimaAlteracaoPorUsuario)
+                .ThenInclude(u => u!.Pessoa)
+            .FirstAsync(c => c.Id == id, ct);
+        return ToCidadeDto(cidade);
+    }
+
+    private static EstadoDto ToEstadoDto(Estado e) => new(
+        Id: e.Id,
+        Nome: e.Nome,
+        UF: e.UF,
+        Ativo: e.Ativo,
+        QuantidadeCidades: e.Cidades.Count,
+        CriadoEm: TimeZoneHelper.ToSaoPauloOffset(e.CriadoEmUtc),
+        AtualizadoEm: TimeZoneHelper.ToSaoPauloOffset(e.AtualizadoEmUtc),
+        UltimaAlteracaoPorNome: e.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
+
+    private static CidadeDto ToCidadeDto(Cidade c) => new(
+        Id: c.Id,
+        Nome: c.Nome,
+        EstadoId: c.EstadoId,
+        EstadoNome: c.Estado.Nome,
+        EstadoUF: c.Estado.UF,
+        Ativa: c.Ativa,
+        CriadaEm: TimeZoneHelper.ToSaoPauloOffset(c.CriadaEmUtc),
+        AtualizadaEm: TimeZoneHelper.ToSaoPauloOffset(c.AtualizadaEmUtc),
+        UltimaAlteracaoPorNome: c.UltimaAlteracaoPorUsuario?.Pessoa.NomeCompleto);
 }
