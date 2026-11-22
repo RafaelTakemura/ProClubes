@@ -261,6 +261,15 @@ public class UnidadesController : ControllerBase
     }
 
     [Authorize]
+    [HttpDelete("admin/localidades/estados/{id:int}")]
+    public async Task<IActionResult> ExcluirEstado(int id, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        await _unidadeService.ExcluirEstadoAsync(user, id, ct);
+        return NoContent();
+    }
+
+    [Authorize]
     [HttpPost("admin/localidades/cidades")]
     public async Task<ActionResult<CidadeDto>> CriarCidade([FromBody] CriarOuAtualizarCidadeRequest request, CancellationToken ct)
     {
@@ -275,5 +284,14 @@ public class UnidadesController : ControllerBase
     {
         var user = await _currentUser.GetRequiredUserAsync(ct: ct);
         return Ok(await _unidadeService.AtualizarCidadeAsync(user, id, request, ct));
+    }
+
+    [Authorize]
+    [HttpDelete("admin/localidades/cidades/{id:int}")]
+    public async Task<IActionResult> ExcluirCidade(int id, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        await _unidadeService.ExcluirCidadeAsync(user, id, ct);
+        return NoContent();
     }
 }

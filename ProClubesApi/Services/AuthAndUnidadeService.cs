@@ -737,6 +737,56 @@ public class UnidadeService
         return await ObterCidadePorIdAsync(cidade.Id, ct);
     }
 
+    public async Task ExcluirEstadoAsync(AuthenticatedUserInfo user, int estadoId, CancellationToken ct = default)
+    {
+        EnsureGerenciaLocalidades(user);
+
+        var estado = await _db.Estados
+            .Include(e => e.Cidades)
+            .FirstOrDefaultAsync(e => e.Id == estadoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Estado não encontrado.");
+
+        var ufUpper = estado.UF.ToUpperInvariant();
+        var emUsoUnidade = await _db.Unidades.AnyAsync(u => u.UF.ToUpper() == ufUpper, ct);
+        var emUsoPessoa = await _db.Pessoas.AnyAsync(p => p.UF.ToUpper() == ufUpper, ct);
+        if (emUsoUnidade || emUsoPessoa)
+            throw new ApiException(
+                StatusCodes.Status422UnprocessableEntity,
+                CodigosErro.DadosInvalidos,
+                $"Não é possível excluir o estado {estado.Nome} ({estado.UF}) pois existem cadastros vinculados a ele.");
+
+        if (estado.Cidades.Count > 0)
+            _db.Cidades.RemoveRange(estado.Cidades);
+
+        _db.Estados.Remove(estado);
+        _auditoria.Registrar(user.UsuarioId, null, "EXCLUIR_ESTADO", nameof(Estado), estado.Id, $"Estado {estado.Nome} ({estado.UF}) excluído.");
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task ExcluirCidadeAsync(AuthenticatedUserInfo user, int cidadeId, CancellationToken ct = default)
+    {
+        EnsureGerenciaLocalidades(user);
+
+        var cidade = await _db.Cidades
+            .Include(c => c.Estado)
+            .FirstOrDefaultAsync(c => c.Id == cidadeId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Cidade não encontrada.");
+
+        var nomeLower = cidade.Nome.ToLowerInvariant();
+        var ufUpper = cidade.Estado.UF.ToUpperInvariant();
+        var emUsoUnidade = await _db.Unidades.AnyAsync(u => u.Cidade.ToLower() == nomeLower && u.UF.ToUpper() == ufUpper, ct);
+        var emUsoPessoa = await _db.Pessoas.AnyAsync(p => p.Cidade.ToLower() == nomeLower && p.UF.ToUpper() == ufUpper, ct);
+        if (emUsoUnidade || emUsoPessoa)
+            throw new ApiException(
+                StatusCodes.Status422UnprocessableEntity,
+                CodigosErro.DadosInvalidos,
+                $"Não é possível excluir a cidade {cidade.Nome}/{cidade.Estado.UF} pois existem cadastros vinculados a ela.");
+
+        _db.Cidades.Remove(cidade);
+        _auditoria.Registrar(user.UsuarioId, null, "EXCLUIR_CIDADE", nameof(Cidade), cidade.Id, $"Cidade {cidade.Nome}/{cidade.Estado.UF} excluída.");
+        await _db.SaveChangesAsync(ct);
+    }
+
     private static void EnsureGerenciaLocalidades(AuthenticatedUserInfo user)
     {
         if (user.Role != RoleAdministrativa.Admin && user.Role != RoleAdministrativa.SuperAdmin)

@@ -716,15 +716,38 @@ public class AssociadoAndCadastroService
             PessoaId = pessoa.Id,
             UnidadeId = unidade.Id,
             CategoriaAssociadoId = categoria.Id,
-            Status = StatusAssociado.Ativo,
+            Status = StatusAssociado.AguardandoAceiteContrato,
             DataIngresso = hoje,
-            DataInicioCobranca = categoria.IsentoMensalidade ? null : TimeZoneHelper.FirstDayOfNextMonth(hoje)
+            DataInicioCobranca = null
         };
         _db.Associados.Add(associado);
         await _db.SaveChangesAsync(ct);
 
+        var contrato = await GerarContratoFiliacaoInternoAsync(
+            associado,
+            unidade,
+            categoria,
+            pessoa,
+            solicitacaoCadastroId: null,
+            geradoPorUsuarioId: user.UsuarioId,
+            observacoesAdmin: null,
+            nowUtc,
+            hoje,
+            ct);
+        await _db.SaveChangesAsync(ct);
+
+        await _notificacao.CriarNotificacaoAsync(
+            usuario.Id,
+            TipoNotificacao.SolicitacaoCadastroAnalisada,
+            "Cadastro realizado — contrato disponível!",
+            $"Seu cadastro na unidade {unidade.Nome} foi registrado. O contrato {contrato.NumeroContrato} foi gerado e aguarda seu aceite no aplicativo para liberar suas permissões.",
+            nameof(ContratoAssociado),
+            contrato.Id,
+            $"CAD_ADMIN_CONTRATO_{contrato.Id}",
+            ct);
+
         var sufixoRole = req.RoleInicial != RoleAdministrativa.Nenhuma ? $" e designado como {req.RoleInicial}" : "";
-        _auditoria.Registrar(user.UsuarioId, unidade.Id, "CRIAR_ASSOCIADO", nameof(Associado), associado.Id, $"Associado #{associado.Id} cadastrado na categoria {categoria.Codigo}{sufixoRole}.");
+        _auditoria.Registrar(user.UsuarioId, unidade.Id, "CRIAR_ASSOCIADO", nameof(Associado), associado.Id, $"Associado #{associado.Id} cadastrado na categoria {categoria.Codigo}{sufixoRole}. Contrato {contrato.NumeroContrato} gerado aguardando aceite.");
         await _db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
