@@ -37,7 +37,7 @@ public sealed class DependentesMobilePage : ContentPage
             FontSize = 13,
             FontAttributes = FontAttributes.Bold
         };
-        btnSolicitar.Clicked += (_, _) => AbrirPopupNovoDependente();
+        btnSolicitar.Clicked += async (_, _) => await AbrirPopupFormularioDependenteAsync(null);
 
         var btnAtualizar = new Button
         {
@@ -159,6 +159,13 @@ public sealed class DependentesMobilePage : ContentPage
             };
             lblSubtitulo.SetBinding(Label.TextProperty, nameof(DependenteMobileDto.SubtituloFormatado));
 
+            var lblProfissao = new Label
+            {
+                FontSize = 12,
+                TextColor = ProClubesTheme.TextSecondary
+            };
+            lblProfissao.SetBinding(Label.TextProperty, nameof(DependenteMobileDto.ProfissaoFormatada), stringFormat: "Profissão: {0}");
+
             var statusPill = CreateStatusPill(new Thickness(10, 3), 11);
 
             var topGrid = new Grid
@@ -177,9 +184,34 @@ public sealed class DependentesMobilePage : ContentPage
             {
                 Spacing = 2,
                 VerticalOptions = LayoutOptions.Center,
-                Children = { lblNome, lblSubtitulo }
+                Children = { lblNome, lblSubtitulo, lblProfissao }
             }, 1, 0);
             topGrid.Add(statusPill, 2, 0);
+
+            var lblAuditoria = new Label
+            {
+                FontSize = 11,
+                TextColor = ProClubesTheme.TextMuted
+            };
+            lblAuditoria.SetBinding(Label.TextProperty, nameof(DependenteMobileDto.AuditoriaResumo));
+
+            var btnEditarDados = new Button
+            {
+                Text = "Editar Dados Cadastrais",
+                BackgroundColor = ProClubesTheme.SurfaceSubtle,
+                TextColor = ProClubesTheme.BrandPrimary,
+                BorderColor = ProClubesTheme.BorderDefault,
+                BorderWidth = 1,
+                CornerRadius = 8,
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold,
+                HeightRequest = 38
+            };
+            btnEditarDados.Clicked += async (_, _) =>
+            {
+                if (btnEditarDados.BindingContext is DependenteMobileDto depSelecionado)
+                    await AbrirPopupFormularioDependenteAsync(depSelecionado);
+            };
 
             var btnAlterarStatus = new Button
             {
@@ -220,7 +252,9 @@ public sealed class DependentesMobilePage : ContentPage
                 Children =
                 {
                     topGrid,
+                    lblAuditoria,
                     new BoxView { HeightRequest = 1, Color = ProClubesTheme.BorderDefault },
+                    btnEditarDados,
                     btnAlterarStatus,
                     lblAguardando
                 }
@@ -291,9 +325,22 @@ public sealed class DependentesMobilePage : ContentPage
         return statusPill;
     }
 
-    private void AbrirPopupNovoDependente()
+    private async Task AbrirPopupFormularioDependenteAsync(DependenteMobileDto? depEdicao)
     {
-        _vm.LimparFormulario();
+        var ehEdicao = depEdicao is not null;
+        if (ehEdicao)
+        {
+            if (_vm.IsOffline)
+            {
+                await DisplayAlertAsync("Modo Offline", "A edição de dependentes exige conexão com a internet.", "OK");
+                return;
+            }
+            await _vm.PrepararEdicaoDependenteAsync(depEdicao!);
+        }
+        else
+        {
+            await _vm.PrepararNovoDependenteAsync();
+        }
 
         var vinculoPicker = new Picker
         {
@@ -307,9 +354,26 @@ public sealed class DependentesMobilePage : ContentPage
         var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
         nomeEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.NomeCompleto));
 
-        var cpfEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
-        ProClubesTheme.ApplyCpfCnpjMask(cpfEntry);
-        cpfEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Cpf));
+        var cpfEntry = ehEdicao
+            ? new Entry
+            {
+                IsReadOnly = true,
+                IsEnabled = false,
+                BackgroundColor = ProClubesTheme.SurfaceSubtle,
+                TextColor = ProClubesTheme.TextMuted,
+                HeightRequest = 42
+            }
+            : new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
+
+        if (ehEdicao)
+        {
+            cpfEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.CpfSomenteLeitura));
+        }
+        else
+        {
+            ProClubesTheme.ApplyCpfCnpjMask(cpfEntry);
+            cpfEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Cpf));
+        }
 
         var sexoPicker = new Picker
         {
@@ -319,6 +383,15 @@ public sealed class DependentesMobilePage : ContentPage
             ItemsSource = _vm.OpcoesSexo.ToList()
         };
         sexoPicker.SetBinding(Picker.SelectedItemProperty, nameof(DependentesViewModel.Sexo));
+
+        var estadoCivilPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            TitleColor = ProClubesTheme.TextMuted,
+            ItemsSource = _vm.OpcoesEstadoCivil.ToList()
+        };
+        estadoCivilPicker.SetBinding(Picker.SelectedItemProperty, nameof(DependentesViewModel.EstadoCivil));
 
         var dataNascPicker = new DatePicker
         {
@@ -330,14 +403,8 @@ public sealed class DependentesMobilePage : ContentPage
         };
         dataNascPicker.SetBinding(DatePicker.DateProperty, nameof(DependentesViewModel.DataNascimento));
 
-        var estadoCivilPicker = new Picker
-        {
-            Title = "-- Opcional --",
-            TextColor = ProClubesTheme.TextPrimary,
-            TitleColor = ProClubesTheme.TextMuted,
-            ItemsSource = _vm.OpcoesEstadoCivil.ToList()
-        };
-        estadoCivilPicker.SetBinding(Picker.SelectedItemProperty, nameof(DependentesViewModel.EstadoCivil));
+        var profissaoEntry = new Entry { Placeholder = "Ex.: Estudante, Arquiteto(a)...", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
+        profissaoEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Profissao));
 
         var telEntry = new Entry { Keyboard = Keyboard.Telephone, MaxLength = 15, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
         telEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Telefone));
@@ -354,15 +421,11 @@ public sealed class DependentesMobilePage : ContentPage
         var bairroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
         bairroEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Bairro));
 
-        var cidadeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
-        cidadeEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.Cidade));
-
-        var ufEntry = new Entry { MaxLength = 2, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 42 };
-        ufEntry.SetBinding(Entry.TextProperty, nameof(DependentesViewModel.UF));
+        var localidadesSection = ProClubesTheme.CreateLocalidadePickers(_vm.Localidades);
 
         var btnEnviar = new Button
         {
-            Text = "Enviar para Aprovação",
+            Text = ehEdicao ? "Salvar Alterações" : "Enviar para Aprovação",
             BackgroundColor = ProClubesTheme.BrandSecondary,
             TextColor = Colors.White,
             CornerRadius = 10,
@@ -371,7 +434,9 @@ public sealed class DependentesMobilePage : ContentPage
         };
         btnEnviar.Clicked += async (_, _) =>
         {
-            var ok = await _vm.SolicitarDependenteAsync();
+            var ok = ehEdicao
+                ? await _vm.SalvarEdicaoDependenteAsync()
+                : await _vm.SolicitarDependenteAsync();
             if (ok)
                 _popupHost.Close();
         };
@@ -390,15 +455,7 @@ public sealed class DependentesMobilePage : ContentPage
             _popupHost.Close();
         };
 
-        static VerticalStackLayout CriarCampoPopup(string rotulo, View controle) => new()
-        {
-            Spacing = 2,
-            Children =
-            {
-                new Label { Text = rotulo, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                controle
-            }
-        };
+        static VerticalStackLayout CriarCampoPopup(string rotulo, View controle) => ProClubesTheme.CreateFormField(rotulo, controle);
 
         var body = new VerticalStackLayout
         {
@@ -416,32 +473,35 @@ public sealed class DependentesMobilePage : ContentPage
                 },
                 CriarCampoPopup("Tipo de Vínculo *", vinculoPicker),
                 CriarCampoPopup("Nome Completo *", nomeEntry),
-                CriarCampoPopup("CPF (11 dígitos) *", cpfEntry),
+                CriarCampoPopup(ehEdicao ? "CPF (não alterável)" : "CPF (11 dígitos) *", cpfEntry),
                 CriarCampoPopup("Sexo *", sexoPicker),
+                CriarCampoPopup("Estado Civil *", estadoCivilPicker),
                 CriarCampoPopup("Data de Nascimento *", dataNascPicker),
+                CriarCampoPopup("Profissão *", profissaoEntry),
+                CriarCampoPopup("Telefone *", telEntry),
+                CriarCampoPopup("E-mail *", emailEntry),
                 new BoxView { HeightRequest = 1, Color = ProClubesTheme.BorderDefault, Margin = new Thickness(0, 4) },
                 new Label
                 {
-                    Text = "CONTATO E ENDEREÇO (OPCIONAIS)",
+                    Text = "ENDEREÇO (OPCIONAL)",
                     FontSize = 11,
                     FontAttributes = FontAttributes.Bold,
                     TextColor = ProClubesTheme.TextMuted,
                     CharacterSpacing = 1
                 },
-                CriarCampoPopup("Estado Civil", estadoCivilPicker),
-                CriarCampoPopup("Telefone", telEntry),
-                CriarCampoPopup("E-mail", emailEntry),
                 CriarCampoPopup("Logradouro", logradouroEntry),
                 CriarCampoPopup("Número", numeroEntry),
                 CriarCampoPopup("Bairro", bairroEntry),
-                CriarCampoPopup("Cidade", cidadeEntry),
-                CriarCampoPopup("UF (2 letras)", ufEntry),
+                localidadesSection,
                 btnEnviar,
                 btnCancelar
             }
         };
 
-        _popupHost.Show("Solicitar Cadastro de Dependente", body, () => _vm.ErrorMessage = null);
+        _popupHost.Show(
+            ehEdicao ? $"Editar Dependente — {depEdicao!.NomeCompleto}" : "Solicitar Cadastro de Dependente",
+            body,
+            () => _vm.ErrorMessage = null);
     }
 
     protected override async void OnAppearing()

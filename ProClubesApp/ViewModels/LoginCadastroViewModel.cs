@@ -20,13 +20,12 @@ public class LoginCadastroViewModel : BaseViewModel
     private string? _sexo;
     private string? _estadoCivil;
     private DateTime _dataNascimento = new(2000, 1, 1);
+    private string _profissao = string.Empty;
     private string _email = string.Empty;
     private string _telefone = string.Empty;
     private string _logradouro = string.Empty;
     private string _numero = string.Empty;
     private string _bairro = string.Empty;
-    private string _cidade = string.Empty;
-    private string _uf = string.Empty;
     private string _senhaCadastro = string.Empty;
     private string _categoriaSelecionada = "Sócio Associado";
     private UnidadePublicaDto? _unidadeSelecionada;
@@ -38,6 +37,7 @@ public class LoginCadastroViewModel : BaseViewModel
     public IReadOnlyList<string> OpcoesEstadoCivil => OpcoesEstadoCivilPadrao;
     public IReadOnlyList<string> OpcoesCategoria { get; } = ["Sócio Associado", "Sócio Fundador", "Sócio Convidado", "Simpatizante"];
 
+    public LocalidadesPickerController Localidades { get; } = new();
     public ObservableCollection<EventoDto> EventosPublicos { get; } = new();
     public ObservableCollection<UnidadePublicaDto> UnidadesPublicas { get; } = new();
 
@@ -52,13 +52,12 @@ public class LoginCadastroViewModel : BaseViewModel
     public string? Sexo { get => _sexo; set => SetProperty(ref _sexo, value); }
     public string? EstadoCivil { get => _estadoCivil; set => SetProperty(ref _estadoCivil, value); }
     public DateTime DataNascimento { get => _dataNascimento; set => SetProperty(ref _dataNascimento, value); }
+    public string Profissao { get => _profissao; set => SetProperty(ref _profissao, value); }
     public string Email { get => _email; set => SetProperty(ref _email, value); }
     public string Telefone { get => _telefone; set => SetProperty(ref _telefone, value); }
     public string Logradouro { get => _logradouro; set => SetProperty(ref _logradouro, value); }
     public string Numero { get => _numero; set => SetProperty(ref _numero, value); }
     public string Bairro { get => _bairro; set => SetProperty(ref _bairro, value); }
-    public string Cidade { get => _cidade; set => SetProperty(ref _cidade, value); }
-    public string UF { get => _uf; set => SetProperty(ref _uf, value); }
     public string SenhaCadastro { get => _senhaCadastro; set => SetProperty(ref _senhaCadastro, value); }
     public string CategoriaSelecionada { get => _categoriaSelecionada; set => SetProperty(ref _categoriaSelecionada, value); }
     public UnidadePublicaDto? UnidadeSelecionada { get => _unidadeSelecionada; set => SetProperty(ref _unidadeSelecionada, value); }
@@ -109,12 +108,33 @@ public class LoginCadastroViewModel : BaseViewModel
             EventosPublicos.Clear();
             foreach (var e in pubEv) EventosPublicos.Add(e);
         }
+
+        await Localidades.CarregarAsync(_api);
     }
 
-    public void PrepararReenvioCadastro()
+    public async Task PrepararReenvioCadastroAsync()
     {
         ErrorMessage = null;
         SuccessMessage = null;
+        await Localidades.CarregarAsync(_api);
+
+        var perfil = _api.UsuarioAtual;
+        if (perfil is not null)
+        {
+            NomeCompleto = perfil.NomeCompleto;
+            Email = perfil.Email;
+            Telefone = perfil.Fone;
+            Sexo = OpcoesSexo.FirstOrDefault(s => string.Equals(s, perfil.Sexo, StringComparison.OrdinalIgnoreCase)) ?? OpcoesSexo[0];
+            EstadoCivil = OpcoesEstadoCivil.FirstOrDefault(e => string.Equals(e, perfil.EstadoCivil, StringComparison.OrdinalIgnoreCase)) ?? OpcoesEstadoCivil[0];
+            if (perfil.DataNascimento != default)
+                DataNascimento = perfil.DataNascimento.ToDateTime(TimeOnly.MinValue);
+            Profissao = perfil.Profissao;
+            Logradouro = perfil.Logradouro;
+            Numero = perfil.Numero;
+            Bairro = perfil.Bairro;
+            Localidades.DefinirValores(perfil.UF, perfil.Cidade);
+        }
+
         if (StatusCadastroAtual is null) return;
 
         NomeCompleto = StatusCadastroAtual.NomeCompleto;
@@ -169,17 +189,12 @@ public class LoginCadastroViewModel : BaseViewModel
             || string.IsNullOrWhiteSpace(Cpf)
             || string.IsNullOrWhiteSpace(Sexo)
             || string.IsNullOrWhiteSpace(EstadoCivil)
+            || string.IsNullOrWhiteSpace(Profissao)
             || string.IsNullOrWhiteSpace(Telefone)
             || string.IsNullOrWhiteSpace(Email)
             || string.IsNullOrWhiteSpace(SenhaCadastro))
         {
             ErrorMessage = "Preencha todos os campos obrigatórios (*) antes de enviar.";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(UF) && UF.Trim().Length != 2)
-        {
-            ErrorMessage = "Quando informada, a UF deve conter exatamente 2 letras (ex.: PR, SP).";
             return;
         }
 
@@ -201,6 +216,8 @@ public class LoginCadastroViewModel : BaseViewModel
             return;
         }
 
+        var (cidadeSel, ufSel) = Localidades.ObterValores();
+
         var req = new SolicitarCadastroRequest(
             NomeCompleto.Trim(),
             Cpf.Trim(),
@@ -210,13 +227,14 @@ public class LoginCadastroViewModel : BaseViewModel
             Logradouro.Trim(),
             Bairro.Trim(),
             Numero.Trim(),
-            Cidade.Trim(),
-            UF.Trim().ToUpperInvariant(),
+            cidadeSel,
+            ufSel,
             Telefone.Trim(),
             Email.Trim(),
             UnidadeSelecionada.Id,
             SenhaCadastro,
-            CodigoCategoriaPretendida: MapearCategoriaParaCodigo(CategoriaSelecionada));
+            CodigoCategoriaPretendida: MapearCategoriaParaCodigo(CategoriaSelecionada),
+            Profissao: Profissao.Trim());
 
         var (res, err) = await _api.PostAsync<StatusCadastroResponse>("api/v1/cadastros/solicitacoes", req, anonymous: true);
         if (err is not null)
@@ -244,16 +262,11 @@ public class LoginCadastroViewModel : BaseViewModel
             || string.IsNullOrWhiteSpace(NomeCompleto)
             || string.IsNullOrWhiteSpace(Sexo)
             || string.IsNullOrWhiteSpace(EstadoCivil)
+            || string.IsNullOrWhiteSpace(Profissao)
             || string.IsNullOrWhiteSpace(Telefone)
             || string.IsNullOrWhiteSpace(Email))
         {
             ErrorMessage = "Preencha todos os campos obrigatórios (*) antes de reenviar.";
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(UF) && UF.Trim().Length != 2)
-        {
-            ErrorMessage = "Quando informada, a UF deve conter exatamente 2 letras (ex.: PR, SP).";
             return false;
         }
 
@@ -269,6 +282,8 @@ public class LoginCadastroViewModel : BaseViewModel
             return false;
         }
 
+        var (cidadeSel, ufSel) = Localidades.ObterValores();
+
         var req = new ReenviarSolicitacaoCadastroRequest(
             NomeCompleto.Trim(),
             Sexo,
@@ -277,12 +292,13 @@ public class LoginCadastroViewModel : BaseViewModel
             Logradouro.Trim(),
             Bairro.Trim(),
             Numero.Trim(),
-            Cidade.Trim(),
-            UF.Trim().ToUpperInvariant(),
+            cidadeSel,
+            ufSel,
             Telefone.Trim(),
             Email.Trim(),
             UnidadeSelecionada.Id,
-            CodigoCategoriaPretendida: MapearCategoriaParaCodigo(CategoriaSelecionada));
+            CodigoCategoriaPretendida: MapearCategoriaParaCodigo(CategoriaSelecionada),
+            Profissao: Profissao.Trim());
 
         var (res, err) = await _api.PutAsync<StatusCadastroResponse>("api/v1/me/cadastro/reenvio", req);
         if (err is not null)

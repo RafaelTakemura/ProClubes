@@ -14,6 +14,7 @@ public class DependentesViewModel : BaseViewModel
     private const string VinculoConjugeLabel = "Cônjuge";
 
     private readonly MobileSessionAndApiService _api;
+    private DependenteMobileDto? _dependenteEmEdicao;
     private string _resumoContagem = "Carregando vínculos...";
     private bool _temDependentes;
     private bool _semDependentes;
@@ -21,20 +22,21 @@ public class DependentesViewModel : BaseViewModel
     private string _tipoVinculoSelecionado = VinculoFilhoLabel;
     private string _nomeCompleto = string.Empty;
     private string _cpf = string.Empty;
+    private string _cpfSomenteLeitura = string.Empty;
     private string? _sexo;
     private string? _estadoCivil;
     private DateTime _dataNascimento = DateTime.Today.AddYears(-10);
+    private string _profissao = string.Empty;
     private string _telefone = string.Empty;
     private string _email = string.Empty;
     private string _logradouro = string.Empty;
     private string _numero = string.Empty;
     private string _bairro = string.Empty;
-    private string _cidade = string.Empty;
-    private string _uf = string.Empty;
 
     public IReadOnlyList<string> OpcoesTipoVinculo { get; } = [VinculoFilhoLabel, VinculoConjugeLabel];
     public IReadOnlyList<string> OpcoesSexo => LoginCadastroViewModel.OpcoesSexoPadrao;
     public IReadOnlyList<string> OpcoesEstadoCivil => LoginCadastroViewModel.OpcoesEstadoCivilPadrao;
+    public LocalidadesPickerController Localidades { get; } = new();
 
     public ObservableCollection<DependenteMobileDto> Dependentes { get; } = new();
 
@@ -45,16 +47,16 @@ public class DependentesViewModel : BaseViewModel
     public string TipoVinculoSelecionado { get => _tipoVinculoSelecionado; set => SetProperty(ref _tipoVinculoSelecionado, value); }
     public string NomeCompleto { get => _nomeCompleto; set => SetProperty(ref _nomeCompleto, value); }
     public string Cpf { get => _cpf; set => SetProperty(ref _cpf, LoginCadastroViewModel.FormatarCpfOuCnpj(value)); }
+    public string CpfSomenteLeitura { get => _cpfSomenteLeitura; set => SetProperty(ref _cpfSomenteLeitura, value); }
     public string? Sexo { get => _sexo; set => SetProperty(ref _sexo, value); }
     public string? EstadoCivil { get => _estadoCivil; set => SetProperty(ref _estadoCivil, value); }
     public DateTime DataNascimento { get => _dataNascimento; set => SetProperty(ref _dataNascimento, value); }
+    public string Profissao { get => _profissao; set => SetProperty(ref _profissao, value); }
     public string Telefone { get => _telefone; set => SetProperty(ref _telefone, value); }
     public string Email { get => _email; set => SetProperty(ref _email, value); }
     public string Logradouro { get => _logradouro; set => SetProperty(ref _logradouro, value); }
     public string Numero { get => _numero; set => SetProperty(ref _numero, value); }
     public string Bairro { get => _bairro; set => SetProperty(ref _bairro, value); }
-    public string Cidade { get => _cidade; set => SetProperty(ref _cidade, value); }
-    public string UF { get => _uf; set => SetProperty(ref _uf, value); }
 
     public ICommand AtualizarCommand { get; }
     public ICommand AlterarStatusCommand { get; }
@@ -106,19 +108,107 @@ public class DependentesViewModel : BaseViewModel
     public void LimparFormulario()
     {
         ErrorMessage = null;
+        _dependenteEmEdicao = null;
         TipoVinculoSelecionado = VinculoFilhoLabel;
         NomeCompleto = string.Empty;
         Cpf = string.Empty;
+        CpfSomenteLeitura = string.Empty;
         Sexo = null;
         EstadoCivil = null;
         DataNascimento = DateTime.Today.AddYears(-10);
+        Profissao = string.Empty;
         Telefone = string.Empty;
         Email = string.Empty;
         Logradouro = string.Empty;
         Numero = string.Empty;
         Bairro = string.Empty;
-        Cidade = string.Empty;
-        UF = string.Empty;
+        Localidades.LimparSelecao();
+    }
+
+    public async Task PrepararNovoDependenteAsync()
+    {
+        LimparFormulario();
+        await Localidades.CarregarAsync(_api);
+    }
+
+    public async Task PrepararEdicaoDependenteAsync(DependenteMobileDto dep)
+    {
+        ErrorMessage = null;
+        _dependenteEmEdicao = dep;
+        await Localidades.CarregarAsync(_api);
+
+        TipoVinculoSelecionado = dep.TipoVinculo == "Conjuge" ? VinculoConjugeLabel : VinculoFilhoLabel;
+        NomeCompleto = dep.NomeCompleto;
+        Cpf = string.Empty;
+        CpfSomenteLeitura = dep.CpfMascarado;
+        Sexo = OpcoesSexo.FirstOrDefault(s => string.Equals(s, dep.Sexo, StringComparison.OrdinalIgnoreCase)) ?? dep.Sexo;
+        EstadoCivil = OpcoesEstadoCivil.FirstOrDefault(e => string.Equals(e, dep.EstadoCivil, StringComparison.OrdinalIgnoreCase)) ?? dep.EstadoCivil;
+        DataNascimento = dep.DataNascimento != default
+            ? dep.DataNascimento.ToDateTime(TimeOnly.MinValue)
+            : DateTime.Today.AddYears(-10);
+        Profissao = dep.Profissao;
+        Telefone = dep.Fone;
+        Email = dep.Email;
+        Logradouro = dep.Logradouro;
+        Numero = dep.Numero;
+        Bairro = dep.Bairro;
+        Localidades.DefinirValores(dep.UF, dep.Cidade);
+    }
+
+    private bool ValidarCamposObrigatorios(bool validarCpf, out bool ehConjuge, out DateOnly dob)
+    {
+        dob = DateOnly.FromDateTime(DataNascimento);
+        ehConjuge = string.Equals(TipoVinculoSelecionado, VinculoConjugeLabel, StringComparison.Ordinal);
+
+        if (string.IsNullOrWhiteSpace(TipoVinculoSelecionado)
+            || string.IsNullOrWhiteSpace(NomeCompleto)
+            || (validarCpf && string.IsNullOrWhiteSpace(Cpf))
+            || string.IsNullOrWhiteSpace(Sexo)
+            || string.IsNullOrWhiteSpace(EstadoCivil)
+            || string.IsNullOrWhiteSpace(Profissao)
+            || string.IsNullOrWhiteSpace(Telefone)
+            || string.IsNullOrWhiteSpace(Email))
+        {
+            ErrorMessage = "Preencha todos os campos obrigatórios (*) antes de enviar.";
+            return false;
+        }
+
+        if (validarCpf && !LoginCadastroViewModel.ValidarSintaxeCpf(Cpf))
+        {
+            ErrorMessage = "Sintaxe de CPF inválida. Informe 11 dígitos numéricos ou no formato 000.000.000-00.";
+            return false;
+        }
+
+        var hoje = DateOnly.FromDateTime(DateTime.Today);
+        if (dob > hoje)
+        {
+            ErrorMessage = "A data de nascimento não pode ser futura.";
+            return false;
+        }
+
+        if (!ehConjuge)
+        {
+            var idade = hoje.Year - dob.Year - (dob > hoje.AddYears(-(hoje.Year - dob.Year)) ? 1 : 0);
+            if (idade > 21)
+            {
+                ErrorMessage = "Filho(a) dependente deve ter até 21 anos, inclusive.";
+                return false;
+            }
+        }
+
+        if (!LoginCadastroViewModel.ValidarSintaxeTelefone(Telefone))
+        {
+            ErrorMessage = "Sintaxe de telefone inválida. Informe DDD + número (10 ou 11 dígitos).";
+            return false;
+        }
+
+        if (!LoginCadastroViewModel.ValidarSintaxeEmail(Email))
+        {
+            ErrorMessage = "Sintaxe de e-mail inválida. Informe um endereço no formato usuario@dominio.com.";
+            return false;
+        }
+
+        return true;
     }
 
     public async Task<bool> SolicitarDependenteAsync()
@@ -132,72 +222,26 @@ public class DependentesViewModel : BaseViewModel
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(TipoVinculoSelecionado)
-            || string.IsNullOrWhiteSpace(NomeCompleto)
-            || string.IsNullOrWhiteSpace(Cpf)
-            || string.IsNullOrWhiteSpace(Sexo))
-        {
-            ErrorMessage = "Preencha todos os campos obrigatórios (*) antes de enviar.";
+        if (!ValidarCamposObrigatorios(validarCpf: true, out var ehConjuge, out var dob))
             return false;
-        }
 
-        if (!LoginCadastroViewModel.ValidarSintaxeCpf(Cpf))
-        {
-            ErrorMessage = "Sintaxe de CPF inválida. Informe 11 dígitos numéricos ou no formato 000.000.000-00.";
-            return false;
-        }
-
-        var dob = DateOnly.FromDateTime(DataNascimento);
-        var hoje = DateOnly.FromDateTime(DateTime.Today);
-        if (dob > hoje)
-        {
-            ErrorMessage = "A data de nascimento não pode ser futura.";
-            return false;
-        }
-
-        var ehConjuge = string.Equals(TipoVinculoSelecionado, VinculoConjugeLabel, StringComparison.Ordinal);
-        if (!ehConjuge)
-        {
-            var idade = hoje.Year - dob.Year - (dob > hoje.AddYears(-(hoje.Year - dob.Year)) ? 1 : 0);
-            if (idade > 21)
-            {
-                ErrorMessage = "Filho(a) dependente deve ter até 21 anos, inclusive.";
-                return false;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(Telefone) && !LoginCadastroViewModel.ValidarSintaxeTelefone(Telefone))
-        {
-            ErrorMessage = "Quando informado, o telefone deve conter DDD + número (10 ou 11 dígitos).";
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(Email) && !LoginCadastroViewModel.ValidarSintaxeEmail(Email))
-        {
-            ErrorMessage = "Quando informado, o e-mail deve estar no formato usuario@dominio.com.";
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(UF) && UF.Trim().Length != 2)
-        {
-            ErrorMessage = "Quando informada, a UF deve conter exatamente 2 letras (ex.: PR, SP).";
-            return false;
-        }
+        var (cidadeSel, ufSel) = Localidades.ObterValores();
 
         var req = new CadastrarDependenteMobileRequest(
             NomeCompleto.Trim(),
             Cpf.Trim(),
-            Sexo,
-            EstadoCivil?.Trim() ?? string.Empty,
+            Sexo!,
+            EstadoCivil!,
             dob,
             Logradouro.Trim(),
             Bairro.Trim(),
             Numero.Trim(),
-            Cidade.Trim(),
-            UF.Trim().ToUpperInvariant(),
+            cidadeSel,
+            ufSel,
             Telefone.Trim(),
             Email.Trim(),
-            ehConjuge ? "Conjuge" : "Filho");
+            ehConjuge ? "Conjuge" : "Filho",
+            Profissao: Profissao.Trim());
 
         var (_, err) = await _api.PostAsync<DependenteMobileDto>($"api/v1/admin/associados/{associadoId}/dependentes", req);
         if (err is not null)
@@ -209,6 +253,54 @@ public class DependentesViewModel : BaseViewModel
         LimparFormulario();
         await CarregarAsync();
         SuccessMessage = "Solicitação de dependente enviada para aprovação da diretoria!";
+        return true;
+    }
+
+    public async Task<bool> SalvarEdicaoDependenteAsync()
+    {
+        ErrorMessage = null;
+        SuccessMessage = null;
+
+        if (_dependenteEmEdicao is null || _api.UsuarioAtual?.AssociadoId is not int associadoId)
+        {
+            ErrorMessage = "Nenhum dependente selecionado para edição.";
+            return false;
+        }
+
+        if (!ValidarCamposObrigatorios(validarCpf: false, out var ehConjuge, out var dob))
+            return false;
+
+        var (cidadeSel, ufSel) = Localidades.ObterValores();
+
+        var req = new AtualizarDadosCadastraisMobileRequest(
+            NomeCompleto.Trim(),
+            Sexo!,
+            EstadoCivil!,
+            dob,
+            Profissao.Trim(),
+            Telefone.Trim(),
+            Email.Trim(),
+            Logradouro.Trim(),
+            Bairro.Trim(),
+            Numero.Trim(),
+            cidadeSel,
+            ufSel,
+            ehConjuge ? "Conjuge" : "Filho");
+
+        var (_, err) = await _api.PutAsync<DependenteMobileDto>(
+            $"api/v1/admin/associados/{associadoId}/dependentes/{_dependenteEmEdicao.DependenciaId}/dados-cadastrais",
+            req);
+
+        if (err is not null)
+        {
+            ErrorMessage = err;
+            return false;
+        }
+
+        var nomeAtualizado = NomeCompleto.Trim();
+        LimparFormulario();
+        await CarregarAsync();
+        SuccessMessage = $"Dados do dependente {nomeAtualizado} atualizados com sucesso!";
         return true;
     }
 

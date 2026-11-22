@@ -145,21 +145,28 @@ public sealed class InicioMobilePage : ContentPage
             VerticalOptions = LayoutOptions.Center
         }, 0, 0);
 
-        topoCredencialGrid.Add(new Border
+        var lblBadgeCred = new Label
+        {
+            FontSize = 10,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = ProClubesTheme.StatusSuccess
+        };
+        lblBadgeCred.SetBinding(Label.TextProperty, nameof(InicioViewModel.StatusCredencialTexto));
+        lblBadgeCred.SetBinding(Label.TextColorProperty, nameof(InicioViewModel.CredencialStatusTextColor));
+
+        var badgeCred = new Border
         {
             BackgroundColor = ProClubesTheme.StatusSuccessBg,
             Stroke = ProClubesTheme.StatusSuccessBorder,
             StrokeThickness = 1,
             StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(999) },
             Padding = new Thickness(10, 3),
-            Content = new Label
-            {
-                Text = "ATIVO",
-                FontSize = 10,
-                FontAttributes = FontAttributes.Bold,
-                TextColor = ProClubesTheme.StatusSuccess
-            }
-        }, 1, 0);
+            Content = lblBadgeCred
+        };
+        badgeCred.SetBinding(VisualElement.BackgroundColorProperty, nameof(InicioViewModel.CredencialStatusBg));
+        badgeCred.SetBinding(Border.StrokeProperty, nameof(InicioViewModel.CredencialStatusBorder));
+
+        topoCredencialGrid.Add(badgeCred, 1, 0);
 
         var lblNomeCred = new Label
         {
@@ -541,6 +548,63 @@ public sealed class InicioMobilePage : ContentPage
         };
         secaoDependentes.SetBinding(VisualElement.IsVisibleProperty, nameof(InicioViewModel.TemDependentes));
 
+        // 5B. Meu Cadastro, Auditoria e Edição Cadastral
+        var lblPerfilCpf = new Label { FontSize = 13, TextColor = ProClubesTheme.TextPrimary };
+        lblPerfilCpf.SetBinding(Label.TextProperty, nameof(InicioViewModel.PerfilCpf), stringFormat: "CPF: {0}");
+
+        var lblPerfilProfissao = new Label { FontSize = 13, TextColor = ProClubesTheme.TextPrimary };
+        lblPerfilProfissao.SetBinding(Label.TextProperty, nameof(InicioViewModel.PerfilProfissao), stringFormat: "Profissão: {0}");
+
+        var lblPerfilContato = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
+        lblPerfilContato.SetBinding(Label.TextProperty, nameof(InicioViewModel.PerfilEmail), stringFormat: "E-mail: {0}");
+
+        var lblPerfilFone = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
+        lblPerfilFone.SetBinding(Label.TextProperty, nameof(InicioViewModel.PerfilTelefone), stringFormat: "Telefone: {0}");
+
+        var lblPerfilEndereco = new Label { FontSize = 12, TextColor = ProClubesTheme.TextSecondary };
+        lblPerfilEndereco.SetBinding(Label.TextProperty, nameof(InicioViewModel.PerfilEndereco), stringFormat: "Endereço: {0}");
+
+        var lblPerfilAuditoria = new Label { FontSize = 11, TextColor = ProClubesTheme.TextMuted };
+        lblPerfilAuditoria.SetBinding(Label.TextProperty, nameof(InicioViewModel.PerfilAuditoria));
+
+        var btnEditarMeusDados = new Button
+        {
+            Text = "Editar Meus Dados Cadastrais",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.BrandPrimary,
+            BorderColor = ProClubesTheme.BorderDefault,
+            BorderWidth = 1,
+            CornerRadius = 10,
+            FontSize = 13,
+            FontAttributes = FontAttributes.Bold,
+            HeightRequest = 40
+        };
+        btnEditarMeusDados.Clicked += async (_, _) => await AbrirPopupEditarMeusDadosAsync();
+
+        var secaoMeuCadastro = ProClubesTheme.CreateCard(new VerticalStackLayout
+        {
+            Spacing = 6,
+            Children =
+            {
+                new Label
+                {
+                    Text = "MEU CADASTRO E AUDITORIA",
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextMuted,
+                    CharacterSpacing = 1
+                },
+                lblPerfilCpf,
+                lblPerfilProfissao,
+                lblPerfilContato,
+                lblPerfilFone,
+                lblPerfilEndereco,
+                new BoxView { HeightRequest = 1, Color = ProClubesTheme.BorderDefault, Margin = new Thickness(0, 4) },
+                lblPerfilAuditoria,
+                btnEditarMeusDados
+            }
+        });
+
         // 6. Ações de Sessão
         var btnSincronizar = new Button
         {
@@ -595,6 +659,7 @@ public sealed class InicioMobilePage : ContentPage
                     secaoAcessoRapido,
                     secaoCompromisso,
                     secaoDependentes,
+                    secaoMeuCadastro,
                     acoesContaGrid
                 }
             }
@@ -666,7 +731,15 @@ public sealed class InicioMobilePage : ContentPage
         {
             if (somenteTitular && !_vm.IsTitularPagante)
             {
-                await DisplayAlertAsync("Acesso Restrito", "Este módulo é exclusivo para associados titulares pagantes.", "OK");
+                if (_vm.PossuiContratoPendente)
+                {
+                    await DisplayAlertAsync("Contrato Pendente", "Leia e aceite seu contrato de adesão para liberar todas as funcionalidades do clube.", "Abrir Contrato");
+                    AbrirPopupContrato();
+                }
+                else
+                {
+                    await DisplayAlertAsync("Acesso Restrito", "Este módulo é exclusivo para associados titulares pagantes.", "OK");
+                }
                 return;
             }
             if (Shell.Current is not null)
@@ -886,9 +959,274 @@ public sealed class InicioMobilePage : ContentPage
         _popupHost.Show("Sair da Conta", body);
     }
 
+    private void AbrirPopupContrato()
+    {
+        var contrato = _vm.ContratoAtual;
+        if (contrato is null)
+        {
+            _ = DisplayAlertAsync("Contrato", "Nenhum contrato vinculado foi encontrado no momento.", "OK");
+            return;
+        }
+
+        var body = new VerticalStackLayout
+        {
+            Spacing = 12,
+            Children =
+            {
+                ProClubesTheme.CreateStatusBanner(),
+                new Border
+                {
+                    BackgroundColor = ProClubesTheme.SurfaceApp,
+                    Stroke = ProClubesTheme.BorderDefault,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+                    Padding = new Thickness(12),
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 4,
+                        Children =
+                        {
+                            new Label { Text = $"Contrato Nº {contrato.NumeroContrato} • v{contrato.VersaoTermos}", FontSize = 13, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandPrimary },
+                            new Label { Text = $"{contrato.UnidadeNome} • Categoria: {contrato.CategoriaNome}", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
+                            new Label { Text = $"Contribuição: {contrato.ValorFormatado}", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandSecondary },
+                            new Label { Text = $"Status: {contrato.Status} • Emitido em {contrato.GeradoEm:dd/MM/yyyy HH:mm}", FontSize = 11, TextColor = ProClubesTheme.TextMuted }
+                        }
+                    }
+                },
+                new Label
+                {
+                    Text = contrato.Titulo,
+                    FontSize = 15,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextPrimary
+                },
+                new Border
+                {
+                    BackgroundColor = Colors.White,
+                    Stroke = ProClubesTheme.BorderDefault,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+                    Padding = new Thickness(12),
+                    Content = new Label
+                    {
+                        Text = contrato.Conteudo,
+                        FontSize = 12,
+                        LineHeight = 1.35,
+                        TextColor = ProClubesTheme.TextPrimary
+                    }
+                }
+            }
+        };
+
+        if (contrato.EstaPendente)
+        {
+            var motivoEntry = new Entry
+            {
+                Placeholder = "Motivo da recusa (opcional)",
+                TextColor = ProClubesTheme.TextPrimary,
+                PlaceholderColor = ProClubesTheme.TextMuted,
+                HeightRequest = 40
+            };
+            motivoEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.MotivoRecusaContrato));
+
+            var btnAceitar = new Button
+            {
+                Text = "Aceitar Contrato e Ativar Conta",
+                BackgroundColor = ProClubesTheme.BrandSecondary,
+                TextColor = Colors.White,
+                CornerRadius = 10,
+                FontAttributes = FontAttributes.Bold,
+                HeightRequest = 44
+            };
+            btnAceitar.Clicked += async (_, _) =>
+            {
+                var ok = await _vm.AceitarContratoAsync();
+                if (ok)
+                    _popupHost.Close();
+            };
+
+            var btnRecusar = new Button
+            {
+                Text = "Recusar Contrato",
+                BackgroundColor = ProClubesTheme.StatusDangerBg,
+                TextColor = ProClubesTheme.StatusDanger,
+                BorderColor = ProClubesTheme.StatusDangerBorder,
+                BorderWidth = 1,
+                CornerRadius = 10,
+                FontAttributes = FontAttributes.Bold,
+                HeightRequest = 42
+            };
+            btnRecusar.Clicked += async (_, _) =>
+            {
+                var ok = await _vm.RecusarContratoAsync();
+                if (ok)
+                {
+                    _popupHost.Close();
+                    await DisplayAlertAsync("Contrato Recusado", "Sua recusa foi registrada sem geração de mensalidades. Caso deseje um novo contrato, contate a secretaria.", "OK");
+                }
+            };
+
+            body.Children.Add(ProClubesTheme.CreateFormField("Observação em caso de recusa", motivoEntry));
+            body.Children.Add(btnAceitar);
+            body.Children.Add(btnRecusar);
+        }
+        else if (contrato.RespondidoEm.HasValue)
+        {
+            body.Children.Add(new Label
+            {
+                Text = $"Respondido em {contrato.RespondidoEm.Value:dd/MM/yyyy HH:mm}",
+                FontSize = 12,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = ProClubesTheme.StatusSuccess
+            });
+        }
+
+        var btnFechar = new Button
+        {
+            Text = "Fechar",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.TextSecondary,
+            CornerRadius = 10,
+            HeightRequest = 40
+        };
+        btnFechar.Clicked += (_, _) => _popupHost.Close();
+        body.Children.Add(btnFechar);
+
+        _popupHost.Show($"Contrato {contrato.NumeroContrato}", body);
+    }
+
+    private async Task AbrirPopupEditarMeusDadosAsync()
+    {
+        if (_vm.IsOffline)
+        {
+            await DisplayAlertAsync("Modo Offline", "A edição cadastral exige conexão com a internet.", "OK");
+            return;
+        }
+
+        await _vm.PrepararEdicaoMeusDadosAsync();
+
+        var nomeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        nomeEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditNomeCompleto));
+
+        var cpfEntry = new Entry
+        {
+            IsReadOnly = true,
+            IsEnabled = false,
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.TextMuted,
+            HeightRequest = 42
+        };
+        cpfEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditCpfSomenteLeitura));
+
+        var sexoPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            ItemsSource = _vm.OpcoesSexo.ToList()
+        };
+        sexoPicker.SetBinding(Picker.SelectedItemProperty, nameof(InicioViewModel.EditSexo));
+
+        var estadoCivilPicker = new Picker
+        {
+            Title = "-- Selecione --",
+            TextColor = ProClubesTheme.TextPrimary,
+            ItemsSource = _vm.OpcoesEstadoCivil.ToList()
+        };
+        estadoCivilPicker.SetBinding(Picker.SelectedItemProperty, nameof(InicioViewModel.EditEstadoCivil));
+
+        var dataNascPicker = new DatePicker
+        {
+            Format = "dd/MM/yyyy",
+            MaximumDate = DateTime.Today,
+            MinimumDate = new DateTime(1920, 1, 1),
+            TextColor = ProClubesTheme.TextPrimary,
+            HeightRequest = 42
+        };
+        dataNascPicker.SetBinding(DatePicker.DateProperty, nameof(InicioViewModel.EditDataNascimento));
+
+        var profissaoEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        profissaoEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditProfissao));
+
+        var telEntry = new Entry { Keyboard = Keyboard.Telephone, MaxLength = 15, TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        telEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditTelefone));
+
+        var emailEntry = new Entry { Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        emailEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditEmail));
+
+        var logradouroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        logradouroEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditLogradouro));
+
+        var numeroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        numeroEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditNumero));
+
+        var bairroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, HeightRequest = 42 };
+        bairroEntry.SetBinding(Entry.TextProperty, nameof(InicioViewModel.EditBairro));
+
+        var localidadesSection = ProClubesTheme.CreateLocalidadePickers(_vm.EditLocalidades);
+
+        var btnSalvar = new Button
+        {
+            Text = "Salvar Alterações",
+            BackgroundColor = ProClubesTheme.BrandSecondary,
+            TextColor = Colors.White,
+            CornerRadius = 10,
+            FontAttributes = FontAttributes.Bold,
+            HeightRequest = 44
+        };
+        btnSalvar.Clicked += async (_, _) =>
+        {
+            var ok = await _vm.SalvarMeusDadosAsync();
+            if (ok)
+                _popupHost.Close();
+        };
+
+        var btnCancelar = new Button
+        {
+            Text = "Cancelar",
+            BackgroundColor = ProClubesTheme.SurfaceSubtle,
+            TextColor = ProClubesTheme.TextSecondary,
+            CornerRadius = 10,
+            HeightRequest = 40
+        };
+        btnCancelar.Clicked += (_, _) =>
+        {
+            _vm.ErrorMessage = null;
+            _popupHost.Close();
+        };
+
+        var body = new VerticalStackLayout
+        {
+            Spacing = 10,
+            Children =
+            {
+                ProClubesTheme.CreateStatusBanner(),
+                ProClubesTheme.CreateFormField("CPF (não alterável)", cpfEntry),
+                ProClubesTheme.CreateFormField("Nome Completo *", nomeEntry),
+                ProClubesTheme.CreateFormField("Sexo *", sexoPicker),
+                ProClubesTheme.CreateFormField("Estado Civil *", estadoCivilPicker),
+                ProClubesTheme.CreateFormField("Data de Nascimento *", dataNascPicker),
+                ProClubesTheme.CreateFormField("Profissão *", profissaoEntry),
+                ProClubesTheme.CreateFormField("Telefone *", telEntry),
+                ProClubesTheme.CreateFormField("E-mail *", emailEntry),
+                ProClubesTheme.CreateFormField("Logradouro", logradouroEntry),
+                ProClubesTheme.CreateFormField("Número", numeroEntry),
+                ProClubesTheme.CreateFormField("Bairro", bairroEntry),
+                localidadesSection,
+                btnSalvar,
+                btnCancelar
+            }
+        };
+
+        _popupHost.Show("Editar Meus Dados Cadastrais", body, () => _vm.ErrorMessage = null);
+    }
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
         await _vm.CarregarAsync();
+        if (_vm.PossuiContratoPendente && _vm.ContratoAtual is not null)
+        {
+            AbrirPopupContrato();
+        }
     }
 }

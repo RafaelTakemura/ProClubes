@@ -1,6 +1,7 @@
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
+using ProClubesApp.Models;
 using ProClubesApp.ViewModels;
 
 namespace ProClubesApp.Views;
@@ -344,6 +345,72 @@ public static class ProClubesTheme
         grid.Add(stack, 0, 0);
         grid.Add(iconTile, 1, 0);
         return grid;
+    }
+
+    public static VerticalStackLayout CreateFormField(string rotulo, View controle)
+    {
+        return new VerticalStackLayout
+        {
+            Spacing = 3,
+            Children =
+            {
+                new Label
+                {
+                    Text = rotulo,
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = TextPrimary
+                },
+                controle
+            }
+        };
+    }
+
+    public static VerticalStackLayout CreateLocalidadePickers(LocalidadesPickerController localidades)
+    {
+        var estadoPicker = new Picker
+        {
+            Title = "-- Selecione o Estado --",
+            TextColor = TextPrimary,
+            TitleColor = TextMuted,
+            ItemDisplayBinding = new Binding(nameof(EstadoMobileDto.Exibicao))
+        };
+        estadoPicker.SetBinding(Picker.ItemsSourceProperty, nameof(LocalidadesPickerController.EstadosDisponiveis));
+        estadoPicker.SetBinding(Picker.SelectedItemProperty, nameof(LocalidadesPickerController.EstadoSelecionado));
+
+        var cidadePicker = new Picker
+        {
+            Title = "-- Selecione a Cidade --",
+            TextColor = TextPrimary,
+            TitleColor = TextMuted,
+            ItemDisplayBinding = new Binding(nameof(CidadeMobileDto.Exibicao))
+        };
+        cidadePicker.SetBinding(Picker.ItemsSourceProperty, nameof(LocalidadesPickerController.CidadesDisponiveis));
+        cidadePicker.SetBinding(Picker.SelectedItemProperty, nameof(LocalidadesPickerController.CidadeSelecionada));
+
+        var btnLimpar = new Button
+        {
+            Text = "Limpar seleção de Cidade/Estado",
+            BackgroundColor = SurfaceSubtle,
+            TextColor = TextSecondary,
+            CornerRadius = 8,
+            HeightRequest = 34,
+            FontSize = 11,
+            FontAttributes = FontAttributes.Bold
+        };
+        btnLimpar.SetBinding(Button.CommandProperty, nameof(LocalidadesPickerController.LimparSelecaoCommand));
+
+        return new VerticalStackLayout
+        {
+            BindingContext = localidades,
+            Spacing = 8,
+            Children =
+            {
+                CreateFormField("Estado (UF)", estadoPicker),
+                CreateFormField("Cidade", cidadePicker),
+                btnLimpar
+            }
+        };
     }
 }
 

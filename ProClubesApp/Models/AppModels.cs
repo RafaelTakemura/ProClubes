@@ -29,13 +29,45 @@ public record PerfilUsuarioDto(
     string? TitularNome,
     int? UnidadeTitularId,
     string? UnidadeTitularNome,
-    IReadOnlyList<string> Interesses)
+    IReadOnlyList<string> Interesses,
+    string Profissao = "",
+    string EstadoCivil = "",
+    string Sexo = "",
+    DateOnly DataNascimento = default,
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null,
+    string? StatusAssociado = null,
+    bool PossuiContratoPendente = false,
+    int? ContratoPendenteId = null,
+    string? ContratoPendenteNumero = null)
 {
+    public bool AguardandoAceiteContrato =>
+        PossuiContratoPendente || string.Equals(StatusAssociado, "AguardandoAceiteContrato", StringComparison.OrdinalIgnoreCase);
+
     public string UnidadeContextualNome =>
         UnidadeAssociadoNome ?? UnidadeTitularNome ?? UnidadeAdministrativaNome ?? "Sem unidade";
 
     public string CategoriaContextualNome =>
-        EhDependenteAtivo ? $"Dependente (Titular: {TitularNome})" : (CategoriaNome ?? "Visitante");
+        AguardandoAceiteContrato
+            ? "Aguardando Aceite de Contrato"
+            : (EhDependenteAtivo ? $"Dependente (Titular: {TitularNome})" : (CategoriaNome ?? "Visitante"));
+
+    public string AuditoriaResumo
+    {
+        get
+        {
+            var cadastro = CriadoEm.HasValue ? CriadoEm.Value.ToString("dd/MM/yyyy HH:mm") : "Não informado";
+            var alterado = AtualizadoEm.HasValue ? AtualizadoEm.Value.ToString("dd/MM/yyyy HH:mm") : "Sem alterações";
+            var usuario = string.IsNullOrWhiteSpace(UltimaAlteracaoPorNome) ? "Cadastro inicial" : UltimaAlteracaoPorNome;
+            return $"Cadastro: {cadastro} • Última alteração: {alterado} • Por: {usuario}";
+        }
+    }
 }
 
 public record StatusCadastroResponse(
@@ -67,7 +99,8 @@ public record SolicitarCadastroRequest(
     int UnidadePretendidaId,
     string Senha,
     IReadOnlyList<int>? InteressesIds = null,
-    string? CodigoCategoriaPretendida = null);
+    string? CodigoCategoriaPretendida = null,
+    string Profissao = "Não informada");
 
 public record ReenviarSolicitacaoCadastroRequest(
     string NomeCompleto,
@@ -83,7 +116,101 @@ public record ReenviarSolicitacaoCadastroRequest(
     string Email,
     int UnidadePretendidaId,
     IReadOnlyList<int>? InteressesIds = null,
-    string? CodigoCategoriaPretendida = null);
+    string? CodigoCategoriaPretendida = null,
+    string Profissao = "Não informada");
+
+public record EstadoMobileDto(int Id, string Nome, string UF, bool Ativo = true)
+{
+    public string Exibicao => $"{Nome} ({UF})";
+}
+
+public record CidadeMobileDto(int Id, string Nome, int EstadoId, string EstadoNome, string EstadoUF, bool Ativa = true)
+{
+    public string Exibicao => $"{Nome} ({EstadoUF})";
+}
+
+public static class LocalidadesMobileHelper
+{
+    public static IReadOnlyList<EstadoMobileDto> FiltrarEstadosPorCidade(
+        IReadOnlyList<EstadoMobileDto> todosEstados,
+        IReadOnlyList<CidadeMobileDto> todasCidades,
+        string? cidadeNome)
+    {
+        if (string.IsNullOrWhiteSpace(cidadeNome))
+            return todosEstados;
+
+        var ufs = todasCidades
+            .Where(c => string.Equals(c.Nome, cidadeNome.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.EstadoUF)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (ufs.Count == 0)
+            return todosEstados;
+
+        return todosEstados.Where(e => ufs.Contains(e.UF)).ToList();
+    }
+
+    public static IReadOnlyList<CidadeMobileDto> FiltrarCidadesPorEstado(
+        IReadOnlyList<CidadeMobileDto> todasCidades,
+        string? uf)
+    {
+        if (string.IsNullOrWhiteSpace(uf))
+            return todasCidades;
+
+        return todasCidades
+            .Where(c => string.Equals(c.EstadoUF, uf.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+}
+
+public record AtualizarDadosCadastraisMobileRequest(
+    string NomeCompleto,
+    string Sexo,
+    string EstadoCivil,
+    DateOnly DataNascimento,
+    string Profissao,
+    string Fone,
+    string Email,
+    string Logradouro,
+    string Bairro,
+    string Numero,
+    string Cidade,
+    string UF,
+    string? TipoVinculo = null);
+
+public record ContratoAssociadoMobileDto(
+    int Id,
+    string NumeroContrato,
+    int AssociadoId,
+    int PessoaId,
+    string AssociadoNome,
+    string AssociadoCpfMascarado,
+    string AssociadoEmail,
+    int? SolicitacaoCadastroId,
+    int UnidadeId,
+    string UnidadeNome,
+    int CategoriaAssociadoId,
+    string CategoriaCodigo,
+    string CategoriaNome,
+    string Titulo,
+    string Conteudo,
+    string VersaoTermos,
+    decimal ValorMensalidadeReferencia,
+    string Status,
+    DateTimeOffset GeradoEm,
+    DateTimeOffset AtualizadoEm,
+    DateTimeOffset? RespondidoEm = null,
+    string? JustificativaRecusa = null,
+    string? ObservacoesAdmin = null,
+    string? GeradoPorNome = null,
+    string? UltimaAlteracaoPorNome = null,
+    string? RespondidoPorNome = null)
+{
+    public bool EstaPendente => string.Equals(Status, "PendenteAceite", StringComparison.OrdinalIgnoreCase);
+    public string ValorFormatado => ValorMensalidadeReferencia > 0 ? $"R$ {ValorMensalidadeReferencia:N2}/mês" : "Isento de mensalidade";
+}
+
+public record ResponderContratoMobileRequest(string? Motivo = null);
 
 public record UnidadePublicaDto(
     int Id,
@@ -291,7 +418,18 @@ public record DependenteMobileDto(
     DateOnly DataNascimento = default,
     string Email = "",
     string Fone = "",
-    bool PendenteAprovacao = false)
+    bool PendenteAprovacao = false,
+    string Sexo = "",
+    string EstadoCivil = "",
+    string Profissao = "",
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null)
 {
     public string Iniciais
     {
@@ -306,10 +444,24 @@ public record DependenteMobileDto(
 
     public string VinculoFormatado => TipoVinculo == "Conjuge" ? "Cônjuge" : "Filho(a)";
 
+    public string ProfissaoFormatada =>
+        string.IsNullOrWhiteSpace(Profissao) ? "Profissão não informada" : Profissao;
+
     public string SubtituloFormatado =>
         DataNascimento != default
             ? $"{VinculoFormatado} • {CpfMascarado} • Nasc.: {DataNascimento:dd/MM/yyyy}"
             : $"{VinculoFormatado} • {CpfMascarado}";
+
+    public string AuditoriaResumo
+    {
+        get
+        {
+            var cadastro = CriadoEm.HasValue ? CriadoEm.Value.ToString("dd/MM/yyyy HH:mm") : "Não informado";
+            var alterado = AtualizadoEm.HasValue ? AtualizadoEm.Value.ToString("dd/MM/yyyy HH:mm") : "Sem alterações";
+            var usuario = string.IsNullOrWhiteSpace(UltimaAlteracaoPorNome) ? "Cadastro inicial" : UltimaAlteracaoPorNome;
+            return $"Cadastro: {cadastro} • Última alt.: {alterado} • Por: {usuario}";
+        }
+    }
 
     public string StatusTexto =>
         PendenteAprovacao ? "Pendente de Aprovação" : (Ativo ? "Ativo" : "Encerrado");
@@ -353,7 +505,10 @@ public record CadastrarDependenteMobileRequest(
     string UF,
     string Fone,
     string Email,
-    string TipoVinculo);
+    string TipoVinculo,
+    string? SenhaContaPropria = null,
+    IReadOnlyList<int>? InteressesIds = null,
+    string Profissao = "Não informada");
 
 public record AlterarStatusDependenteMobileRequest(bool Ativo);
 

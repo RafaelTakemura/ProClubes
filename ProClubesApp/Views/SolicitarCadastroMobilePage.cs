@@ -76,6 +76,9 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         };
         dataNascPicker.SetBinding(DatePicker.DateProperty, nameof(LoginCadastroViewModel.DataNascimento));
 
+        var profissaoEntry = new Entry { Placeholder = "Ex.: Engenheiro(a), Estudante...", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
+        profissaoEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Profissao));
+
         var telEntry = new Entry { Keyboard = Keyboard.Telephone, MaxLength = 15, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         telEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Telefone));
 
@@ -95,11 +98,7 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
         var bairroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
         bairroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Bairro));
 
-        var cidadeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
-        cidadeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cidade));
-
-        var ufEntry = new Entry { MaxLength = 2, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted, HeightRequest = 44 };
-        ufEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.UF));
+        var localidadesSection = ProClubesTheme.CreateLocalidadePickers(_vm.Localidades);
 
         var btnEnviarCadastro = new Button
         {
@@ -149,6 +148,7 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
                 CriarCampo("Sexo *", sexoPicker),
                 CriarCampo("Estado Civil *", estadoCivilPicker),
                 CriarCampo("Data de Nascimento *", dataNascPicker),
+                CriarCampo("Profissão *", profissaoEntry),
                 CriarCampo("Telefone *", telEntry),
                 CriarCampo("E-mail *", emailCadEntry),
                 CriarCampo("Senha Inicial (mín. 6 caracteres) *", senhaCadEntry),
@@ -164,8 +164,7 @@ public sealed class SolicitarCadastroMobilePage : ContentPage
                 CriarCampo("Logradouro", logradouroEntry),
                 CriarCampo("Número", numeroEntry),
                 CriarCampo("Bairro", bairroEntry),
-                CriarCampo("Cidade", cidadeEntry),
-                CriarCampo("UF (2 letras)", ufEntry),
+                localidadesSection,
                 btnEnviarCadastro,
                 btnVoltarLogin
             }

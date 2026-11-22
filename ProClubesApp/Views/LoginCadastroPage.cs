@@ -188,7 +188,7 @@ public sealed class LoginCadastroPage : ContentPage
             CornerRadius = 10,
             FontAttributes = FontAttributes.Bold
         };
-        btnAbrirPopupReenvio.Clicked += (_, _) => AbrirPopupReenvioCadastro();
+        btnAbrirPopupReenvio.Clicked += async (_, _) => await AbrirPopupReenvioCadastroAsync();
 
         var btnSairRestrito = new Button
         {
@@ -226,9 +226,9 @@ public sealed class LoginCadastroPage : ContentPage
         Content = _popupHost.RootLayout;
     }
 
-    private void AbrirPopupReenvioCadastro()
+    private async Task AbrirPopupReenvioCadastroAsync()
     {
-        _vm.PrepararReenvioCadastro();
+        await _vm.PrepararReenvioCadastroAsync();
 
         var lblMotivo = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.StatusDanger };
         lblMotivo.SetBinding(Label.TextProperty, "StatusCadastroAtual.JustificativaRejeicao", stringFormat: "Orientação da Secretaria: {0}");
@@ -282,6 +282,9 @@ public sealed class LoginCadastroPage : ContentPage
         };
         dataNascPicker.SetBinding(DatePicker.DateProperty, nameof(LoginCadastroViewModel.DataNascimento));
 
+        var profissaoEntry = new Entry { Placeholder = "Ex.: Engenheiro(a), Estudante...", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
+        profissaoEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Profissao));
+
         var emailEntry = new Entry { Keyboard = Keyboard.Email, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         emailEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Email));
 
@@ -297,11 +300,7 @@ public sealed class LoginCadastroPage : ContentPage
         var bairroEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         bairroEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Bairro));
 
-        var cidadeEntry = new Entry { TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
-        cidadeEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.Cidade));
-
-        var ufEntry = new Entry { MaxLength = 2, TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
-        ufEntry.SetBinding(Entry.TextProperty, nameof(LoginCadastroViewModel.UF));
+        var localidadesSection = ProClubesTheme.CreateLocalidadePickers(_vm.Localidades);
 
         var btnConfirmarReenvio = new Button
         {
@@ -333,15 +332,7 @@ public sealed class LoginCadastroPage : ContentPage
             _popupHost.Close();
         };
 
-        static VerticalStackLayout CriarCampoReenvio(string rotulo, View controle) => new()
-        {
-            Spacing = 2,
-            Children =
-            {
-                new Label { Text = rotulo, FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                controle
-            }
-        };
+        static VerticalStackLayout CriarCampoReenvio(string rotulo, View controle) => ProClubesTheme.CreateFormField(rotulo, controle);
 
         var body = new VerticalStackLayout
         {
@@ -357,13 +348,13 @@ public sealed class LoginCadastroPage : ContentPage
                 CriarCampoReenvio("Sexo *", sexoPicker),
                 CriarCampoReenvio("Estado Civil *", estadoCivilPicker),
                 CriarCampoReenvio("Data de Nascimento *", dataNascPicker),
+                CriarCampoReenvio("Profissão *", profissaoEntry),
                 CriarCampoReenvio("E-mail *", emailEntry),
                 CriarCampoReenvio("Telefone *", telEntry),
                 CriarCampoReenvio("Logradouro", logradouroEntry),
                 CriarCampoReenvio("Número", numeroEntry),
                 CriarCampoReenvio("Bairro", bairroEntry),
-                CriarCampoReenvio("Cidade", cidadeEntry),
-                CriarCampoReenvio("UF (2 letras)", ufEntry),
+                localidadesSection,
                 btnConfirmarReenvio,
                 btnCancelar
             }
