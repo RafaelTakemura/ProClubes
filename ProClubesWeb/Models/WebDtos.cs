@@ -19,7 +19,16 @@ public enum EstadoConta : byte
 public enum StatusAssociado : byte
 {
     Ativo = 1,
-    Inativo = 2
+    Inativo = 2,
+    AguardandoAceiteContrato = 3
+}
+
+public enum StatusContrato : byte
+{
+    PendenteAceite = 1,
+    Aceito = 2,
+    Recusado = 3,
+    Cancelado = 4
 }
 
 public enum TipoVinculoDependente : byte
@@ -163,7 +172,23 @@ public record PerfilUsuarioDto(
     string? TitularNome,
     int? UnidadeTitularId,
     string? UnidadeTitularNome,
-    IReadOnlyList<string> Interesses);
+    IReadOnlyList<string> Interesses,
+    string Profissao = "",
+    string EstadoCivil = "",
+    string Sexo = "",
+    DateOnly DataNascimento = default,
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null,
+    StatusAssociado? StatusAssociado = null,
+    bool PossuiContratoPendente = false,
+    int? ContratoPendenteId = null,
+    string? ContratoPendenteNumero = null);
 
 public record UnidadeDto(
     int Id,
@@ -197,6 +222,37 @@ public record CriarOuAtualizarUnidadeRequest(
 
 public record DesignarRoleUnidadeRequest(int? UsuarioId, RoleAdministrativa Role);
 
+public record EstadoDto(
+    int Id,
+    string Nome,
+    string UF,
+    bool Ativo,
+    int QuantidadeCidades,
+    DateTimeOffset CriadoEm,
+    DateTimeOffset AtualizadoEm,
+    string? UltimaAlteracaoPorNome = null);
+
+public record CriarOuAtualizarEstadoRequest(
+    string Nome,
+    string UF,
+    bool Ativo = true);
+
+public record CidadeDto(
+    int Id,
+    string Nome,
+    int EstadoId,
+    string EstadoNome,
+    string EstadoUF,
+    bool Ativa,
+    DateTimeOffset CriadaEm,
+    DateTimeOffset AtualizadaEm,
+    string? UltimaAlteracaoPorNome = null);
+
+public record CriarOuAtualizarCidadeRequest(
+    string Nome,
+    int EstadoId,
+    bool Ativa = true);
+
 public record SolicitacaoCadastroListItemDto(
     int Id,
     int PessoaId,
@@ -218,7 +274,11 @@ public record SolicitacaoCadastroListItemDto(
     string Bairro = "",
     string Numero = "",
     string Cidade = "",
-    string UF = "");
+    string UF = "",
+    string Profissao = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null);
 
 public record AprovarSolicitacaoRequest(string CodigoCategoria);
 public record RejeitarSolicitacaoRequest(string Justificativa);
@@ -249,7 +309,13 @@ public record AssociadoDto(
     DateOnly? DataInicioCobranca,
     RoleAdministrativa RoleAdministrativa,
     IReadOnlyList<string> Interesses,
-    IReadOnlyList<DependenteDto> Dependentes);
+    IReadOnlyList<DependenteDto> Dependentes,
+    string Profissao = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null,
+    string? NumeroContratoAtual = null,
+    StatusContrato? StatusContratoAtual = null);
 
 public record CriarAssociadoAdminRequest(
     string NomeCompleto,
@@ -268,7 +334,8 @@ public record CriarAssociadoAdminRequest(
     string CodigoCategoria,
     string SenhaInicial,
     IReadOnlyList<int>? InteressesIds = null,
-    RoleAdministrativa RoleInicial = RoleAdministrativa.Nenhuma);
+    RoleAdministrativa RoleInicial = RoleAdministrativa.Nenhuma,
+    string Profissao = "Não informada");
 
 public record AlterarCategoriaAssociadoRequest(string NovoCodigoCategoria, string? Motivo = null);
 public record TransferirAssociadoUnidadeRequest(int UnidadeDestinoId);
@@ -290,7 +357,17 @@ public record DependenteDto(
     DateOnly? DataFim,
     MotivoFimDependencia? MotivoFim,
     bool Ativo,
-    bool PendenteAprovacao = false);
+    bool PendenteAprovacao = false,
+    string EstadoCivil = "",
+    string Profissao = "",
+    string Logradouro = "",
+    string Bairro = "",
+    string Numero = "",
+    string Cidade = "",
+    string UF = "",
+    DateTimeOffset? CriadoEm = null,
+    DateTimeOffset? AtualizadoEm = null,
+    string? UltimaAlteracaoPorNome = null);
 
 public record CadastrarDependenteRequest(
     string NomeCompleto,
@@ -307,9 +384,63 @@ public record CadastrarDependenteRequest(
     string Email,
     TipoVinculoDependente TipoVinculo,
     string? SenhaContaPropria = null,
-    IReadOnlyList<int>? InteressesIds = null);
+    IReadOnlyList<int>? InteressesIds = null,
+    string Profissao = "Não informada");
 
 public record AlterarStatusDependenteRequest(bool Ativo);
+
+public record AtualizarDadosCadastraisRequest(
+    string NomeCompleto,
+    string Sexo,
+    string EstadoCivil,
+    DateOnly DataNascimento,
+    string Profissao,
+    string Fone,
+    string Email,
+    string Logradouro,
+    string Bairro,
+    string Numero,
+    string Cidade,
+    string UF,
+    TipoVinculoDependente? TipoVinculo = null);
+
+public record ContratoAssociadoDto(
+    int Id,
+    string NumeroContrato,
+    int AssociadoId,
+    int PessoaId,
+    string AssociadoNome,
+    string AssociadoCpfMascarado,
+    string AssociadoEmail,
+    int? SolicitacaoCadastroId,
+    int UnidadeId,
+    string UnidadeNome,
+    int CategoriaAssociadoId,
+    string CategoriaCodigo,
+    string CategoriaNome,
+    string Titulo,
+    string Conteudo,
+    string VersaoTermos,
+    decimal ValorMensalidadeReferencia,
+    StatusContrato Status,
+    DateTimeOffset GeradoEm,
+    DateTimeOffset AtualizadoEm,
+    DateTimeOffset? RespondidoEm,
+    string? JustificativaRecusa,
+    string? ObservacoesAdmin,
+    string? GeradoPorNome,
+    string? UltimaAlteracaoPorNome,
+    string? RespondidoPorNome);
+
+public record AtualizarContratoRequest(
+    string Titulo,
+    string Conteudo,
+    string? VersaoTermos = null,
+    string? ObservacoesAdmin = null);
+
+public record ResponderContratoRequest(string? Motivo = null);
+
+public record RegerarContratoRequest(string? ObservacoesAdmin = null);
 
 public record ConfiguracaoFinanceiraDto(
     byte DiaGeracao,
@@ -650,4 +781,38 @@ public static class WebFormatHelpers
 
         return partes.Count > 0 ? string.Join(" — ", partes) : "Não informado";
     }
+
+    public static string ObterRotuloStatusAssociado(StatusAssociado status) => status switch
+    {
+        StatusAssociado.Ativo => "Ativo",
+        StatusAssociado.Inativo => "Inativo",
+        StatusAssociado.AguardandoAceiteContrato => "Aguardando Aceite de Contrato",
+        _ => status.ToString()
+    };
+
+    public static string ObterVarianteStatusAssociado(StatusAssociado status) => status switch
+    {
+        StatusAssociado.Ativo => "ativo",
+        StatusAssociado.Inativo => "inativo",
+        StatusAssociado.AguardandoAceiteContrato => "pendente",
+        _ => "info"
+    };
+
+    public static string ObterRotuloStatusContrato(StatusContrato status) => status switch
+    {
+        StatusContrato.PendenteAceite => "Pendente de Aceite",
+        StatusContrato.Aceito => "Aceito",
+        StatusContrato.Recusado => "Recusado",
+        StatusContrato.Cancelado => "Cancelado",
+        _ => status.ToString()
+    };
+
+    public static string ObterVarianteStatusContrato(StatusContrato status) => status switch
+    {
+        StatusContrato.PendenteAceite => "pendente",
+        StatusContrato.Aceito => "ativo",
+        StatusContrato.Recusado => "danger",
+        StatusContrato.Cancelado => "neutral",
+        _ => "info"
+    };
 }

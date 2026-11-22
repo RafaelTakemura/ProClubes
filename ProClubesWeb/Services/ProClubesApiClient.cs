@@ -217,6 +217,28 @@ public class ProClubesApiClient
         }
     }
 
+    public async Task<string?> DeleteAsync(string relativeUrl)
+    {
+        try
+        {
+            using var req = CreateRequest(HttpMethod.Delete, relativeUrl);
+            var resp = await _http.SendAsync(req);
+            if (resp.StatusCode == System.Net.HttpStatusCode.Unauthorized && await TryRefreshTokenAsync())
+            {
+                using var retryReq = CreateRequest(HttpMethod.Delete, relativeUrl);
+                resp = await _http.SendAsync(retryReq);
+            }
+            if (!resp.IsSuccessStatusCode)
+                return await ExtractProblemDetailAsync(resp);
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"Erro ao comunicar com a API: {ex.Message}";
+        }
+    }
+
     private async Task<bool> TryRefreshTokenAsync()
     {
         if (string.IsNullOrWhiteSpace(_session.RefreshToken))

@@ -149,6 +149,10 @@ else
                             <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.EstadoCivil) ? "Não informado" : _solicitacaoDetalhes.EstadoCivil)</strong>
                         </div>
                         <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Profissão</small>
+                            <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.Profissao) ? "Não informada" : _solicitacaoDetalhes.Profissao)</strong>
+                        </div>
+                        <div>
                             <small style="color: var(--pc-text-secondary); display: block;">Telefone</small>
                             <strong>@(string.IsNullOrWhiteSpace(_solicitacaoDetalhes.Fone) ? "Não informado" : _solicitacaoDetalhes.Fone)</strong>
                         </div>
@@ -173,12 +177,20 @@ else
                             <strong>@WebFormatHelpers.FormatarEndereco(_solicitacaoDetalhes.Logradouro, _solicitacaoDetalhes.Numero, _solicitacaoDetalhes.Bairro, _solicitacaoDetalhes.Cidade, _solicitacaoDetalhes.UF)</strong>
                         </div>
                         <div>
-                            <small style="color: var(--pc-text-secondary); display: block;">Data da Solicitação</small>
-                            <strong>@_solicitacaoDetalhes.SolicitadaEm.ToString("dd/MM/yyyy HH:mm")</strong>
+                            <small style="color: var(--pc-text-secondary); display: block;">Data da Solicitação / Cadastro</small>
+                            <strong>@((_solicitacaoDetalhes.CriadoEm ?? _solicitacaoDetalhes.SolicitadaEm).ToString("dd/MM/yyyy HH:mm"))</strong>
                         </div>
                         <div>
                             <small style="color: var(--pc-text-secondary); display: block;">Data da Decisão</small>
                             <strong>@(_solicitacaoDetalhes.DecididaEm.HasValue ? _solicitacaoDetalhes.DecididaEm.Value.ToString("dd/MM/yyyy HH:mm") : "Aguardando análise")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Última Alteração Cadastral</small>
+                            <strong>@(_solicitacaoDetalhes.AtualizadoEm.HasValue ? _solicitacaoDetalhes.AtualizadoEm.Value.ToString("dd/MM/yyyy HH:mm") : "Sem alterações")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Alterado por</small>
+                            <strong>@(_solicitacaoDetalhes.UltimaAlteracaoPorNome ?? "Próprio solicitante")</strong>
                         </div>
                         @if (!string.IsNullOrWhiteSpace(_solicitacaoDetalhes.JustificativaRejeicao))
                         {
@@ -231,6 +243,9 @@ else
                             <small style="color: var(--pc-text-muted);">Categoria pretendida no cadastro: <strong>@_solicitacaoParaAprovar.CategoriaAprovadaNome</strong></small>
                         </div>
                     }
+                    <div class="pc-alert pc-alert-info" style="margin-top: 12px; margin-bottom: 0; font-size: 13px;">
+                        Ao confirmar, será gerado um <strong>Contrato de Adesão</strong> com número único e o associado ficará com status <strong>Aguardando Aceite de Contrato</strong> (sem permissões ativas nem geração de mensalidades até aceitar no aplicativo).
+                    </div>
                 </div>
             }
         </ChildContent>
@@ -317,7 +332,7 @@ else
         _solicitacaoParaAprovar = null;
         _mensagem = _categoriaAprovacao == "DEPENDENTE"
             ? $"Solicitação #{id} aprovada como Dependente."
-            : $"Solicitação #{id} aprovada na categoria {_categoriaAprovacao}.";
+            : $"Solicitação #{id} aprovada na categoria {_categoriaAprovacao}. Contrato gerado aguardando aceite do associado no aplicativo.";
         await CarregarAsync();
     }
 

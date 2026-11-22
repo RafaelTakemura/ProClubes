@@ -11,9 +11,9 @@
 
     private string CssClass => Variant.ToLowerInvariant() switch
     {
-        "success" or "aprovada" or "paga" or "confirmada" or "aberta_votacao" or "concluida" or "ativo" => "pc-badge-success",
-        "warning" or "pendente" or "ematendimento" => "pc-badge-warning",
-        "danger" or "rejeitada" or "vencida" or "cancelada" or "inativo" => "pc-badge-danger",
+        "success" or "aprovada" or "paga" or "confirmada" or "aberta_votacao" or "concluida" or "ativo" or "aceito" => "pc-badge-success",
+        "warning" or "pendente" or "ematendimento" or "pendenteaceite" or "aguardandoaceitecontrato" => "pc-badge-warning",
+        "danger" or "rejeitada" or "vencida" or "cancelada" or "inativo" or "recusado" or "cancelado" => "pc-badge-danger",
         "superadmin" => "pc-badge-superadmin",
         "admin" => "pc-badge-admin",
         "tesoureiro" => "pc-badge-tesoureiro",

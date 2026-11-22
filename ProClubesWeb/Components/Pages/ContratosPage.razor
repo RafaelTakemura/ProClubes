@@ -1,0 +1,406 @@
+@page "/contratos"
+@implements IDisposable
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Contratos de Associados — ProClubesWeb</PageTitle>
+
+@if (!Session.IsSuperAdmin && !Session.IsAdmin)
+{
+    <div class="pc-alert pc-alert-danger">Acesso restrito a Admin da unidade ou Super Admin.</div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div class="pc-header-titles">
+            <span class="pc-badge-eyebrow">ProClubes Enterprise • Adesão &amp; Compliance</span>
+            <h1 class="pc-title">Contratos de Associados</h1>
+            <p class="pc-subtitle">Acompanhe, revise, edite termos pendentes e gerencie o aceite dos contratos gerados na aprovação de associados.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="pc-alert pc-alert-success" role="status">@_mensagem</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
+    }
+
+    <div class="pc-card">
+        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+            <input class="pc-input" style="min-width: 260px; flex: 1;" placeholder="Buscar por nº contrato, nome, CPF ou e-mail..." @bind="_busca" />
+            <select class="pc-select" @bind="_filtroStatus" @bind:after="CarregarAsync" aria-label="Filtrar contratos por status">
+                <option value="">Todos os status</option>
+                <option value="PendenteAceite">Pendente de Aceite</option>
+                <option value="Aceito">Aceito</option>
+                <option value="Recusado">Recusado</option>
+                <option value="Cancelado">Cancelado</option>
+            </select>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="CarregarAsync">Filtrar</button>
+        </div>
+
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>Nº Contrato</th>
+                        <th>Associado</th>
+                        <th>Unidade / Categoria</th>
+                        <th>Mensalidade Ref.</th>
+                        <th>Emissão / Auditoria</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_contratos.Count == 0)
+                    {
+                        <tr><td colspan="7">Nenhum contrato encontrado para os filtros atuais.</td></tr>
+                    }
+                    @foreach (var c in _contratos)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@c.NumeroContrato</strong>
+                                <div><small style="color: var(--pc-text-muted);">Versão @c.VersaoTermos</small></div>
+                            </td>
+                            <td>
+                                <div class="pc-user-name">@c.AssociadoNome</div>
+                                <div class="pc-user-meta">@c.AssociadoCpfMascarado — @c.AssociadoEmail</div>
+                            </td>
+                            <td>
+                                @c.UnidadeNome
+                                <div><small style="color: var(--pc-text-muted);">@c.CategoriaNome (@c.CategoriaCodigo)</small></div>
+                            </td>
+                            <td>
+                                @(c.ValorMensalidadeReferencia > 0 ? $"R$ {c.ValorMensalidadeReferencia:N2}" : "Isento")
+                            </td>
+                            <td>
+                                <small style="color: var(--pc-text-secondary); display: block;">Emitido: @c.GeradoEm.ToString("dd/MM/yyyy HH:mm")</small>
+                                <small style="color: var(--pc-text-secondary); display: block;">Alterado: @c.AtualizadoEm.ToString("dd/MM/yyyy HH:mm") (@(c.UltimaAlteracaoPorNome ?? c.GeradoPorNome ?? "Sistema"))</small>
+                                @if (c.RespondidoEm.HasValue)
+                                {
+                                    <small style="color: var(--pc-text-muted); display: block;">Respondido: @c.RespondidoEm.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                                }
+                            </td>
+                            <td>
+                                <PcStatusBadge Text="@WebFormatHelpers.ObterRotuloStatusContrato(c.Status)"
+                                               Variant="@WebFormatHelpers.ObterVarianteStatusContrato(c.Status)" />
+                                @if (!string.IsNullOrWhiteSpace(c.JustificativaRecusa))
+                                {
+                                    <div style="margin-top: 4px;"><small style="color: var(--pc-danger);">Motivo recusa: @c.JustificativaRecusa</small></div>
+                                }
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => _contratoVisualizar = c">Visualizar</button>
+                                    @if (c.Status == StatusContrato.PendenteAceite)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirEditarContrato(c)">Editar Termos</button>
+                                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AbrirCancelarContrato(c)">Cancelar</button>
+                                    }
+                                    else if (c.Status == StatusContrato.Recusado || c.Status == StatusContrato.Cancelado)
+                                    {
+                                        <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirRegerarContrato(c)">Regerar Contrato</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <PcModal IsOpen="@(_contratoVisualizar is not null)"
+             Title="@($"Contrato {_contratoVisualizar?.NumeroContrato}")"
+             Subtitle="@($"{_contratoVisualizar?.AssociadoNome} — {_contratoVisualizar?.UnidadeNome} ({_contratoVisualizar?.CategoriaNome})")"
+             MaxWidth="820px"
+             OnClose="() => _contratoVisualizar = null">
+        <ChildContent>
+            @if (_contratoVisualizar is not null)
+            {
+                <div style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+                    <div class="pc-form-grid" style="gap: 10px;">
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Número / Versão</small>
+                            <strong>@_contratoVisualizar.NumeroContrato (v@_contratoVisualizar.VersaoTermos)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Status</small>
+                            <PcStatusBadge Text="@WebFormatHelpers.ObterRotuloStatusContrato(_contratoVisualizar.Status)"
+                                           Variant="@WebFormatHelpers.ObterVarianteStatusContrato(_contratoVisualizar.Status)" />
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Associado</small>
+                            <strong>@_contratoVisualizar.AssociadoNome (@_contratoVisualizar.AssociadoCpfMascarado)</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Valor Mensalidade Referência</small>
+                            <strong>@(_contratoVisualizar.ValorMensalidadeReferencia > 0 ? $"R$ {_contratoVisualizar.ValorMensalidadeReferencia:N2}" : "Isento")</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Gerado em / Por</small>
+                            <strong>@_contratoVisualizar.GeradoEm.ToString("dd/MM/yyyy HH:mm") (@(_contratoVisualizar.GeradoPorNome ?? "Sistema"))</strong>
+                        </div>
+                        <div>
+                            <small style="color: var(--pc-text-secondary); display: block;">Última Alteração / Por</small>
+                            <strong>@_contratoVisualizar.AtualizadoEm.ToString("dd/MM/yyyy HH:mm") (@(_contratoVisualizar.UltimaAlteracaoPorNome ?? "Sistema"))</strong>
+                        </div>
+                        @if (_contratoVisualizar.RespondidoEm.HasValue)
+                        {
+                            <div style="grid-column: 1 / -1;">
+                                <small style="color: var(--pc-text-secondary); display: block;">Respondido pelo Associado</small>
+                                <strong>@_contratoVisualizar.RespondidoEm.Value.ToString("dd/MM/yyyy HH:mm") — @(_contratoVisualizar.RespondidoPorNome ?? _contratoVisualizar.AssociadoNome)</strong>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_contratoVisualizar.ObservacoesAdmin))
+                        {
+                            <div style="grid-column: 1 / -1;">
+                                <small style="color: var(--pc-text-secondary); display: block;">Observações Administrativas</small>
+                                <strong>@_contratoVisualizar.ObservacoesAdmin</strong>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_contratoVisualizar.JustificativaRecusa))
+                        {
+                            <div style="grid-column: 1 / -1;">
+                                <small style="color: var(--pc-danger); display: block;">Justificativa da Recusa</small>
+                                <strong style="color: var(--pc-danger);">@_contratoVisualizar.JustificativaRecusa</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <h4 style="margin: 0 0 8px;">@_contratoVisualizar.Titulo</h4>
+                <div style="background: var(--pc-surface, #fff); border: 1px solid var(--pc-border); border-radius: 10px; padding: 16px; max-height: 380px; overflow-y: auto;">
+                    <pre style="white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.55; margin: 0;">@_contratoVisualizar.Conteudo</pre>
+                </div>
+            }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _contratoVisualizar = null">Fechar</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="@(_contratoEditar is not null)"
+             Title="@($"Editar Contrato {_contratoEditar?.NumeroContrato}")"
+             Subtitle="Disponível apenas enquanto o contrato aguarda aceite do associado"
+             MaxWidth="780px"
+             OnClose="() => _contratoEditar = null">
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_erroModal))
+            {
+                <div class="pc-alert pc-alert-danger">@_erroModal</div>
+            }
+            <div class="pc-form-grid">
+                <div class="pc-field" style="grid-column: 1 / -1;">
+                    <label class="pc-label">Título do Contrato *</label>
+                    <input class="pc-input" @bind="_editTitulo" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Versão dos Termos</label>
+                    <input class="pc-input" @bind="_editVersao" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Observações Administrativas</label>
+                    <input class="pc-input" @bind="_editObservacoes" />
+                </div>
+                <div class="pc-field" style="grid-column: 1 / -1;">
+                    <label class="pc-label">Texto Integral do Contrato e Políticas *</label>
+                    <textarea class="pc-textarea" rows="12" @bind="_editConteudo"></textarea>
+                </div>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _contratoEditar = null">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarEdicaoContratoAsync">Salvar Alterações</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="@(_contratoCancelar is not null)"
+             Title="@($"Cancelar Contrato {_contratoCancelar?.NumeroContrato}")"
+             Subtitle="@($"{_contratoCancelar?.AssociadoNome}")"
+             MaxWidth="540px"
+             OnClose="() => _contratoCancelar = null">
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_erroModal))
+            {
+                <div class="pc-alert pc-alert-danger">@_erroModal</div>
+            }
+            <div class="pc-field">
+                <label class="pc-label">Motivo / Observação do Cancelamento (opcional)</label>
+                <textarea class="pc-textarea" rows="3" @bind="_motivoCancelamento"></textarea>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _contratoCancelar = null">Voltar</button>
+            <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarCancelamentoAsync">Confirmar Cancelamento</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="@(_contratoRegerar is not null)"
+             Title="@($"Regerar Contrato — {_contratoRegerar?.AssociadoNome}")"
+             Subtitle="Será emitido um novo número de contrato com status Pendente de Aceite e enviado ao aplicativo do associado."
+             MaxWidth="540px"
+             OnClose="() => _contratoRegerar = null">
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_erroModal))
+            {
+                <div class="pc-alert pc-alert-danger">@_erroModal</div>
+            }
+            <div class="pc-field">
+                <label class="pc-label">Observações Administrativas (opcional)</label>
+                <textarea class="pc-textarea" rows="3" placeholder="Ex.: Termos atualizados após negociação..." @bind="_obsRegerar"></textarea>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _contratoRegerar = null">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="ConfirmarRegerarContratoAsync">Emitir Novo Contrato</button>
+        </FooterContent>
+    </PcModal>
+}
+
+@code {
+    private IReadOnlyList<ContratoAssociadoDto> _contratos = Array.Empty<ContratoAssociadoDto>();
+    private string _busca = string.Empty;
+    private string _filtroStatus = string.Empty;
+    private string? _erro;
+    private string? _mensagem;
+    private string? _erroModal;
+
+    private ContratoAssociadoDto? _contratoVisualizar;
+    private ContratoAssociadoDto? _contratoEditar;
+    private string _editTitulo = string.Empty;
+    private string _editVersao = string.Empty;
+    private string _editObservacoes = string.Empty;
+    private string _editConteudo = string.Empty;
+
+    private ContratoAssociadoDto? _contratoCancelar;
+    private string _motivoCancelamento = string.Empty;
+
+    private ContratoAssociadoDto? _contratoRegerar;
+    private string _obsRegerar = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.OnChange += HandleContextChanged;
+        if (Session.IsSuperAdmin || Session.IsAdmin)
+            await CarregarAsync();
+    }
+
+    private async void HandleContextChanged()
+    {
+        await CarregarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var q = new List<string> { "page=1", "pageSize=50" };
+        if (Session.UnidadeContextoId.HasValue) q.Add($"unidadeId={Session.UnidadeContextoId.Value}");
+        if (!string.IsNullOrWhiteSpace(_filtroStatus)) q.Add($"status={_filtroStatus}");
+        if (!string.IsNullOrWhiteSpace(_busca)) q.Add($"busca={Uri.EscapeDataString(_busca.Trim())}");
+
+        var (data, err) = await Api.GetAsync<PagedResponse<ContratoAssociadoDto>>($"api/v1/admin/contratos?{string.Join("&", q)}");
+        if (data is not null) _contratos = data.Items;
+        _erro = err;
+    }
+
+    private void AbrirEditarContrato(ContratoAssociadoDto c)
+    {
+        _erroModal = null;
+        _contratoEditar = c;
+        _editTitulo = c.Titulo;
+        _editVersao = c.VersaoTermos;
+        _editObservacoes = c.ObservacoesAdmin ?? string.Empty;
+        _editConteudo = c.Conteudo;
+    }
+
+    private async Task SalvarEdicaoContratoAsync()
+    {
+        if (_contratoEditar is null) return;
+        _erroModal = _mensagem = null;
+        if (string.IsNullOrWhiteSpace(_editTitulo) || string.IsNullOrWhiteSpace(_editConteudo))
+        {
+            _erroModal = "Título e conteúdo do contrato são obrigatórios.";
+            return;
+        }
+
+        var req = new AtualizarContratoRequest(
+            _editTitulo.Trim(),
+            _editConteudo.Trim(),
+            string.IsNullOrWhiteSpace(_editVersao) ? null : _editVersao.Trim(),
+            string.IsNullOrWhiteSpace(_editObservacoes) ? null : _editObservacoes.Trim());
+
+        var (_, err) = await Api.PutAsync<ContratoAssociadoDto>($"api/v1/admin/contratos/{_contratoEditar.Id}", req);
+        if (err is not null)
+        {
+            _erroModal = err;
+            return;
+        }
+
+        _mensagem = $"Contrato {_contratoEditar.NumeroContrato} atualizado com sucesso.";
+        _contratoEditar = null;
+        await CarregarAsync();
+    }
+
+    private void AbrirCancelarContrato(ContratoAssociadoDto c)
+    {
+        _erroModal = null;
+        _contratoCancelar = c;
+        _motivoCancelamento = string.Empty;
+    }
+
+    private async Task ConfirmarCancelamentoAsync()
+    {
+        if (_contratoCancelar is null) return;
+        _erroModal = _mensagem = null;
+        var (_, err) = await Api.PostAsync<ContratoAssociadoDto>(
+            $"api/v1/admin/contratos/{_contratoCancelar.Id}/cancelar",
+            new ResponderContratoRequest(string.IsNullOrWhiteSpace(_motivoCancelamento) ? null : _motivoCancelamento.Trim()));
+
+        if (err is not null)
+        {
+            _erroModal = err;
+            return;
+        }
+
+        _mensagem = $"Contrato {_contratoCancelar.NumeroContrato} cancelado.";
+        _contratoCancelar = null;
+        await CarregarAsync();
+    }
+
+    private void AbrirRegerarContrato(ContratoAssociadoDto c)
+    {
+        _erroModal = null;
+        _contratoRegerar = c;
+        _obsRegerar = string.Empty;
+    }
+
+    private async Task ConfirmarRegerarContratoAsync()
+    {
+        if (_contratoRegerar is null) return;
+        _erroModal = _mensagem = null;
+        var (novo, err) = await Api.PostAsync<ContratoAssociadoDto>(
+            $"api/v1/admin/associados/{_contratoRegerar.AssociadoId}/contratos/regerar",
+            new RegerarContratoRequest(string.IsNullOrWhiteSpace(_obsRegerar) ? null : _obsRegerar.Trim()));
+
+        if (err is not null)
+        {
+            _erroModal = err;
+            return;
+        }
+
+        _mensagem = $"Novo contrato {novo?.NumeroContrato} gerado para {_contratoRegerar.AssociadoNome} e enviado para aceite.";
+        _contratoRegerar = null;
+        await CarregarAsync();
+    }
+
+    public void Dispose()
+    {
+        Session.OnChange -= HandleContextChanged;
+    }
+}

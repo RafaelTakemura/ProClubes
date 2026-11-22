@@ -1,0 +1,465 @@
+@page "/localidades"
+@inject ProClubesApiClient Api
+@inject WebSessionState Session
+
+<PageTitle>Estados e Cidades — ProClubesWeb</PageTitle>
+
+@if (!Session.IsSuperAdmin && !Session.IsAdmin)
+{
+    <div class="pc-alert pc-alert-danger">Acesso restrito a Admin da unidade ou Super Admin.</div>
+}
+else
+{
+    <div class="pc-page-header">
+        <div class="pc-header-titles">
+            <span class="pc-badge-eyebrow">ProClubes Enterprise • Base de Localidades</span>
+            <h1 class="pc-title">Estados e Cidades</h1>
+            <p class="pc-subtitle">Cadastre, edite e exclua estados e gerencie as cidades vinculadas a cada estado.</p>
+        </div>
+        <div class="pc-header-actions">
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="AbrirNovoEstado">
+                + Novo Estado
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_mensagem))
+    {
+        <div class="pc-alert pc-alert-success" role="status">@_mensagem</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
+    }
+
+    <div class="pc-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <h3 style="margin: 0;">Estados Cadastrados (@_estados.Count)</h3>
+        </div>
+        <div class="pc-table-wrap">
+            <table class="pc-table">
+                <thead>
+                    <tr>
+                        <th>UF</th>
+                        <th>Nome do Estado</th>
+                        <th>Cidades Vinculadas</th>
+                        <th>Status</th>
+                        <th>Auditoria</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_estados.Count == 0)
+                    {
+                        <tr><td colspan="6">Nenhum estado cadastrado.</td></tr>
+                    }
+                    @foreach (var est in _estados)
+                    {
+                        <tr>
+                            <td><strong>@est.UF</strong></td>
+                            <td>@est.Nome</td>
+                            <td>@est.QuantidadeCidades</td>
+                            <td>
+                                <PcStatusBadge Text="@(est.Ativo ? "Ativo" : "Inativo")" Variant="@(est.Ativo ? "ativo" : "inativo")" />
+                            </td>
+                            <td>
+                                <small style="color: var(--pc-text-secondary); display: block;">Cadastro: @est.CriadoEm.ToString("dd/MM/yyyy HH:mm")</small>
+                                <small style="color: var(--pc-text-secondary); display: block;">Última alt.: @est.AtualizadoEm.ToString("dd/MM/yyyy HH:mm")</small>
+                                <small style="color: var(--pc-text-muted);">Por: @(est.UltimaAlteracaoPorNome ?? "Sistema / Seed inicial")</small>
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirEditarEstado(est)">Editar</button>
+                                    <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="() => AbrirGerenciarCidades(est)">Gerenciar Cidades</button>
+                                    <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AbrirConfirmarExclusaoEstado(est)">Excluir</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <PcModal IsOpen="_exibirModalEstado"
+             Title="@(_estadoEditandoId.HasValue ? "Editar Estado" : "Cadastrar Novo Estado")"
+             Subtitle="Informe nome completo, UF (2 letras) e status de disponibilidade"
+             MaxWidth="520px"
+             OnClose="() => _exibirModalEstado = false">
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_erroModalEstado))
+            {
+                <div class="pc-alert pc-alert-danger">@_erroModalEstado</div>
+            }
+            <div class="pc-form-grid">
+                <div class="pc-field">
+                    <label class="pc-label">Nome do Estado *</label>
+                    <input class="pc-input" placeholder="Ex.: Paraná" @bind="_estadoNome" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">UF (2 letras) *</label>
+                    <input class="pc-input" maxlength="2" placeholder="PR" @bind="_estadoUf" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Situação</label>
+                    <select class="pc-select" @bind="_estadoAtivoStr">
+                        <option value="true">Ativo</option>
+                        <option value="false">Inativo</option>
+                    </select>
+                </div>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalEstado = false">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarEstadoAsync">Salvar Estado</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="@(_estadoCidades is not null)"
+             Title="@($"Gerenciar Cidades — {_estadoCidades?.Nome} ({_estadoCidades?.UF})")"
+             Subtitle="Cadastre, edite ou exclua cidades pertencentes a este estado"
+             MaxWidth="820px"
+             OnClose="FecharGerenciarCidades">
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_mensagemModalCidades))
+            {
+                <div class="pc-alert pc-alert-success" role="status">@_mensagemModalCidades</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_erroModalCidades))
+            {
+                <div class="pc-alert pc-alert-danger" role="alert">@_erroModalCidades</div>
+            }
+
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+                <input class="pc-input" style="min-width: 240px; flex: 1;" placeholder="Filtrar cidades deste estado..." @bind="_filtroCidadeModal" @bind:event="oninput" />
+                <button type="button" class="pc-btn pc-btn-primary pc-btn-sm" @onclick="AbrirNovaCidadeDoEstado">
+                    + Cadastrar Nova Cidade
+                </button>
+            </div>
+
+            <div class="pc-table-wrap">
+                <table class="pc-table">
+                    <thead>
+                        <tr>
+                            <th>Cidade</th>
+                            <th>Status</th>
+                            <th>Auditoria</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!CidadesDoEstadoModal.Any())
+                        {
+                            <tr><td colspan="4">Nenhuma cidade cadastrada para este estado.</td></tr>
+                        }
+                        @foreach (var cid in CidadesDoEstadoModal)
+                        {
+                            <tr>
+                                <td><strong>@cid.Nome</strong></td>
+                                <td>
+                                    <PcStatusBadge Text="@(cid.Ativa ? "Ativa" : "Inativa")" Variant="@(cid.Ativa ? "ativo" : "inativo")" />
+                                </td>
+                                <td>
+                                    <small style="color: var(--pc-text-secondary); display: block;">Cadastro: @cid.CriadaEm.ToString("dd/MM/yyyy HH:mm")</small>
+                                    <small style="color: var(--pc-text-secondary); display: block;">Última alt.: @cid.AtualizadaEm.ToString("dd/MM/yyyy HH:mm")</small>
+                                    <small style="color: var(--pc-text-muted);">Por: @(cid.UltimaAlteracaoPorNome ?? "Sistema / Seed inicial")</small>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                        <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirEditarCidadeDoEstado(cid)">Editar</button>
+                                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" @onclick="() => AbrirConfirmarExclusaoCidade(cid)">Excluir</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="FecharGerenciarCidades">Fechar</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="_exibirModalCidade"
+             Title="@(_cidadeEditandoId.HasValue ? "Editar Cidade" : "Cadastrar Nova Cidade")"
+             Subtitle="@($"Estado vinculado: {_estadoCidades?.Nome} ({_estadoCidades?.UF})")"
+             MaxWidth="520px"
+             OnClose="() => _exibirModalCidade = false">
+        <ChildContent>
+            @if (!string.IsNullOrWhiteSpace(_erroModalCidade))
+            {
+                <div class="pc-alert pc-alert-danger">@_erroModalCidade</div>
+            }
+            <div class="pc-form-grid">
+                <div class="pc-field">
+                    <label class="pc-label">Estado (somente leitura)</label>
+                    <input class="pc-input" value="@($"{_estadoCidades?.Nome} ({_estadoCidades?.UF})")" disabled readonly />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Nome da Cidade *</label>
+                    <input class="pc-input" placeholder="Ex.: Cascavel" @bind="_cidadeNome" />
+                </div>
+                <div class="pc-field">
+                    <label class="pc-label">Situação</label>
+                    <select class="pc-select" @bind="_cidadeAtivaStr">
+                        <option value="true">Ativa</option>
+                        <option value="false">Inativa</option>
+                    </select>
+                </div>
+            </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _exibirModalCidade = false">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-primary" @onclick="SalvarCidadeAsync">Salvar Cidade</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="@(_estadoExcluir is not null)"
+             Title="Confirmar Exclusão de Estado"
+             Subtitle="@($"{_estadoExcluir?.Nome} ({_estadoExcluir?.UF})")"
+             MaxWidth="480px"
+             OnClose="() => _estadoExcluir = null">
+        <ChildContent>
+            <p style="margin: 0;">
+                Deseja excluir o estado <strong>@_estadoExcluir?.Nome (@_estadoExcluir?.UF)</strong>?
+                @if (_estadoExcluir?.QuantidadeCidades > 0)
+                {
+                    <span> As <strong>@_estadoExcluir.QuantidadeCidades</strong> cidade(s) vinculadas também serão removidas (caso não existam cadastros vinculados).</span>
+                }
+            </p>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _estadoExcluir = null">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarExclusaoEstadoAsync">Confirmar Exclusão</button>
+        </FooterContent>
+    </PcModal>
+
+    <PcModal IsOpen="@(_cidadeExcluir is not null)"
+             Title="Confirmar Exclusão de Cidade"
+             Subtitle="@($"{_cidadeExcluir?.Nome}/{_cidadeExcluir?.EstadoUF}")"
+             MaxWidth="480px"
+             OnClose="() => _cidadeExcluir = null">
+        <ChildContent>
+            <p style="margin: 0;">
+                Deseja excluir a cidade <strong>@_cidadeExcluir?.Nome (@_cidadeExcluir?.EstadoUF)</strong>?
+            </p>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _cidadeExcluir = null">Cancelar</button>
+            <button type="button" class="pc-btn pc-btn-danger" @onclick="ConfirmarExclusaoCidadeAsync">Confirmar Exclusão</button>
+        </FooterContent>
+    </PcModal>
+}
+
+@code {
+    private IReadOnlyList<EstadoDto> _estados = Array.Empty<EstadoDto>();
+    private IReadOnlyList<CidadeDto> _cidades = Array.Empty<CidadeDto>();
+    private string? _erro;
+    private string? _mensagem;
+
+    private bool _exibirModalEstado;
+    private int? _estadoEditandoId;
+    private string _estadoNome = string.Empty;
+    private string _estadoUf = string.Empty;
+    private string _estadoAtivoStr = "true";
+    private string? _erroModalEstado;
+
+    private EstadoDto? _estadoCidades;
+    private string _filtroCidadeModal = string.Empty;
+    private string? _mensagemModalCidades;
+    private string? _erroModalCidades;
+
+    private bool _exibirModalCidade;
+    private int? _cidadeEditandoId;
+    private string _cidadeNome = string.Empty;
+    private string _cidadeAtivaStr = "true";
+    private string? _erroModalCidade;
+
+    private EstadoDto? _estadoExcluir;
+    private CidadeDto? _cidadeExcluir;
+
+    private IEnumerable<CidadeDto> CidadesDoEstadoModal => _estadoCidades is null
+        ? Enumerable.Empty<CidadeDto>()
+        : _cidades.Where(c =>
+            c.EstadoId == _estadoCidades.Id
+            && (string.IsNullOrWhiteSpace(_filtroCidadeModal)
+                || c.Nome.Contains(_filtroCidadeModal.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.IsSuperAdmin || Session.IsAdmin)
+            await CarregarAsync();
+    }
+
+    private async Task CarregarAsync()
+    {
+        _erro = null;
+        var (estados, errEst) = await Api.GetAsync<IReadOnlyList<EstadoDto>>("api/v1/localidades/estados?apenasAtivos=false");
+        var (cidades, errCid) = await Api.GetAsync<IReadOnlyList<CidadeDto>>("api/v1/localidades/cidades?apenasAtivas=false");
+        if (estados is not null) _estados = estados;
+        if (cidades is not null) _cidades = cidades;
+        _erro = errEst ?? errCid;
+
+        if (_estadoCidades is not null)
+            _estadoCidades = _estados.FirstOrDefault(e => e.Id == _estadoCidades.Id);
+    }
+
+    private void AbrirNovoEstado()
+    {
+        _erroModalEstado = null;
+        _estadoEditandoId = null;
+        _estadoNome = string.Empty;
+        _estadoUf = string.Empty;
+        _estadoAtivoStr = "true";
+        _exibirModalEstado = true;
+    }
+
+    private void AbrirEditarEstado(EstadoDto est)
+    {
+        _erroModalEstado = null;
+        _estadoEditandoId = est.Id;
+        _estadoNome = est.Nome;
+        _estadoUf = est.UF;
+        _estadoAtivoStr = est.Ativo ? "true" : "false";
+        _exibirModalEstado = true;
+    }
+
+    private async Task SalvarEstadoAsync()
+    {
+        _erroModalEstado = _mensagem = null;
+        if (string.IsNullOrWhiteSpace(_estadoNome) || string.IsNullOrWhiteSpace(_estadoUf) || _estadoUf.Trim().Length != 2)
+        {
+            _erroModalEstado = "Informe o nome do estado e a UF com exatamente 2 letras.";
+            return;
+        }
+
+        var req = new CriarOuAtualizarEstadoRequest(_estadoNome.Trim(), _estadoUf.Trim().ToUpperInvariant(), _estadoAtivoStr == "true");
+        var res = _estadoEditandoId.HasValue
+            ? await Api.PutAsync<EstadoDto>($"api/v1/admin/localidades/estados/{_estadoEditandoId.Value}", req)
+            : await Api.PostAsync<EstadoDto>("api/v1/admin/localidades/estados", req);
+
+        if (res.Error is not null)
+        {
+            _erroModalEstado = res.Error;
+            return;
+        }
+
+        _exibirModalEstado = false;
+        _mensagem = _estadoEditandoId.HasValue ? "Estado atualizado com sucesso." : "Estado cadastrado com sucesso.";
+        await CarregarAsync();
+    }
+
+    private void AbrirGerenciarCidades(EstadoDto est)
+    {
+        _estadoCidades = est;
+        _filtroCidadeModal = string.Empty;
+        _mensagemModalCidades = null;
+        _erroModalCidades = null;
+        _exibirModalCidade = false;
+        _cidadeExcluir = null;
+    }
+
+    private void FecharGerenciarCidades()
+    {
+        _estadoCidades = null;
+        _exibirModalCidade = false;
+        _cidadeExcluir = null;
+        _mensagemModalCidades = null;
+        _erroModalCidades = null;
+    }
+
+    private void AbrirNovaCidadeDoEstado()
+    {
+        if (_estadoCidades is null) return;
+        _erroModalCidade = _mensagemModalCidades = _erroModalCidades = null;
+        _cidadeEditandoId = null;
+        _cidadeNome = string.Empty;
+        _cidadeAtivaStr = "true";
+        _exibirModalCidade = true;
+    }
+
+    private void AbrirEditarCidadeDoEstado(CidadeDto cid)
+    {
+        if (_estadoCidades is null) return;
+        _erroModalCidade = _mensagemModalCidades = _erroModalCidades = null;
+        _cidadeEditandoId = cid.Id;
+        _cidadeNome = cid.Nome;
+        _cidadeAtivaStr = cid.Ativa ? "true" : "false";
+        _exibirModalCidade = true;
+    }
+
+    private async Task SalvarCidadeAsync()
+    {
+        if (_estadoCidades is null) return;
+        _erroModalCidade = _mensagemModalCidades = _erroModalCidades = null;
+        if (string.IsNullOrWhiteSpace(_cidadeNome))
+        {
+            _erroModalCidade = "Informe o nome da cidade.";
+            return;
+        }
+
+        var req = new CriarOuAtualizarCidadeRequest(_cidadeNome.Trim(), _estadoCidades.Id, _cidadeAtivaStr == "true");
+        var res = _cidadeEditandoId.HasValue
+            ? await Api.PutAsync<CidadeDto>($"api/v1/admin/localidades/cidades/{_cidadeEditandoId.Value}", req)
+            : await Api.PostAsync<CidadeDto>("api/v1/admin/localidades/cidades", req);
+
+        if (res.Error is not null)
+        {
+            _erroModalCidade = res.Error;
+            return;
+        }
+
+        _exibirModalCidade = false;
+        _mensagemModalCidades = _cidadeEditandoId.HasValue ? "Cidade atualizada com sucesso." : "Cidade cadastrada com sucesso.";
+        await CarregarAsync();
+    }
+
+    private void AbrirConfirmarExclusaoEstado(EstadoDto est)
+    {
+        _erro = _mensagem = null;
+        _estadoExcluir = est;
+    }
+
+    private async Task ConfirmarExclusaoEstadoAsync()
+    {
+        if (_estadoExcluir is null) return;
+        var alvo = _estadoExcluir;
+        _estadoExcluir = null;
+        _erro = _mensagem = null;
+
+        var err = await Api.DeleteAsync($"api/v1/admin/localidades/estados/{alvo.Id}");
+        if (err is not null)
+        {
+            _erro = err;
+            return;
+        }
+
+        _mensagem = $"Estado {alvo.Nome} ({alvo.UF}) excluído com sucesso.";
+        await CarregarAsync();
+    }
+
+    private void AbrirConfirmarExclusaoCidade(CidadeDto cid)
+    {
+        _erroModalCidades = _mensagemModalCidades = null;
+        _cidadeExcluir = cid;
+    }
+
+    private async Task ConfirmarExclusaoCidadeAsync()
+    {
+        if (_cidadeExcluir is null) return;
+        var alvo = _cidadeExcluir;
+        _cidadeExcluir = null;
+        _erroModalCidades = _mensagemModalCidades = null;
+
+        var err = await Api.DeleteAsync($"api/v1/admin/localidades/cidades/{alvo.Id}");
+        if (err is not null)
+        {
+            _erroModalCidades = err;
+            return;
+        }
+
+        _mensagemModalCidades = $"Cidade {alvo.Nome} excluída com sucesso.";
+        await CarregarAsync();
+    }
+}
