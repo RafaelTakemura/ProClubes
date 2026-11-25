@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Components.Forms;
+
 namespace ProClubesWeb.Models;
 
 public enum RoleAdministrativa : byte
@@ -133,6 +135,12 @@ public enum EstadoVotacao : byte
     Aberta = 1,
     Encerrada = 2,
     Cancelada = 3
+}
+
+public enum TipoLocacaoEspaco : byte
+{
+    PorHora = 1,
+    PorDia = 2
 }
 
 public record PagedResponse<T>(
@@ -506,6 +514,39 @@ public record PagamentoMensalidadeDto(
 
 public record RegistrarPagamentoMensalidadeRequest(DateOnly DataPagamento, FormaPagamento FormaPagamento);
 
+public record FotoItemDto(
+    int Id,
+    string NomeArquivo,
+    string ContentType,
+    string UrlRelativa,
+    int Ordem,
+    DateTimeOffset CriadaEm);
+
+public record UploadFotoRequest(
+    string NomeArquivo,
+    string ContentType,
+    string ConteudoBase64);
+
+public record SlotAgendaDto(
+    DateTimeOffset Inicio,
+    DateTimeOffset Fim,
+    string Rotulo,
+    bool Disponivel,
+    OrigemOcupacaoEspaco? OrigemOcupacao = null,
+    string? DescricaoOcupacao = null);
+
+public record AgendaEspacoDto(
+    int EspacoId,
+    string EspacoNome,
+    TipoLocacaoEspaco TipoLocacao,
+    decimal ValorReserva,
+    TimeOnly HoraAbertura,
+    TimeOnly HoraFechamento,
+    DateOnly DataInicioConsulta,
+    DateOnly DataFimConsulta,
+    IReadOnlyList<SlotAgendaDto> Slots,
+    IReadOnlyList<OcupacaoEspacoDto> Ocupacoes);
+
 public record EventoDto(
     int Id,
     int UnidadeOrganizadoraId,
@@ -521,7 +562,9 @@ public record EventoDto(
     IReadOnlyList<int> UnidadesParticipantesIds,
     IReadOnlyList<string> UnidadesParticipantesNomes,
     IReadOnlyList<int> EspacosOcupadosIds,
-    IReadOnlyList<string> EspacosOcupadosNomes);
+    IReadOnlyList<string> EspacosOcupadosNomes,
+    decimal ValorReservaEspaco = 0m,
+    IReadOnlyList<FotoItemDto>? Fotos = null);
 
 public record CriarEventoRequest(
     int UnidadeOrganizadoraId,
@@ -563,7 +606,10 @@ public record EspacoDto(
     TimeOnly HoraAbertura,
     TimeOnly HoraFechamento,
     int DuracaoMaximaMinutos,
-    int AntecedenciaMaximaDias);
+    int AntecedenciaMaximaDias,
+    TipoLocacaoEspaco TipoLocacao = TipoLocacaoEspaco.PorHora,
+    decimal ValorReserva = 0m,
+    IReadOnlyList<FotoItemDto>? Fotos = null);
 
 public record CriarOuAtualizarEspacoRequest(
     int UnidadeId,
@@ -573,7 +619,9 @@ public record CriarOuAtualizarEspacoRequest(
     TimeOnly HoraAbertura,
     TimeOnly HoraFechamento,
     int DuracaoMaximaMinutos = 240,
-    int AntecedenciaMaximaDias = 90);
+    int AntecedenciaMaximaDias = 90,
+    TipoLocacaoEspaco TipoLocacao = TipoLocacaoEspaco.PorHora,
+    decimal ValorReserva = 0m);
 
 public record CriarBloqueioManutencaoRequest(
     int EspacoId,
@@ -604,7 +652,9 @@ public record ReservaEspacoDto(
     StatusReserva Status,
     DateTimeOffset CriadaEm,
     DateTimeOffset? CanceladaEm,
-    string? JustificativaCancelamento);
+    string? JustificativaCancelamento,
+    TipoLocacaoEspaco TipoLocacao = TipoLocacaoEspaco.PorHora,
+    decimal ValorTotal = 0m);
 
 public record CancelarReservaRequest(string? Justificativa = null);
 
@@ -815,4 +865,49 @@ public static class WebFormatHelpers
         StatusContrato.Cancelado => "neutral",
         _ => "info"
     };
+
+    public static string ObterRotuloTipoLocacao(TipoLocacaoEspaco tipo) => tipo switch
+    {
+        TipoLocacaoEspaco.PorDia => "Por Dia",
+        _ => "Por Hora"
+    };
+
+    public static string ObterSufixoValorLocacao(TipoLocacaoEspaco tipo) => tipo switch
+    {
+        TipoLocacaoEspaco.PorDia => "/dia",
+        _ => "/hora"
+    };
+
+    public static string FormatarPeriodoPorTipo(TipoLocacaoEspaco tipo, DateTimeOffset inicio, DateTimeOffset fim)
+    {
+        if (tipo == TipoLocacaoEspaco.PorDia)
+        {
+            var dataIni = inicio.Date;
+            var dataFim = fim.TimeOfDay == TimeSpan.Zero && fim.Date > dataIni ? fim.Date.AddDays(-1) : fim.Date;
+            return dataIni == dataFim
+                ? $"{dataIni:dd/MM/yyyy} (Dia inteiro)"
+                : $"{dataIni:dd/MM/yyyy} até {dataFim:dd/MM/yyyy}";
+        }
+
+        return inicio.Date == fim.Date
+            ? $"{inicio:dd/MM/yyyy HH:mm} — {fim:HH:mm}"
+            : $"{inicio:dd/MM/yyyy HH:mm} até {fim:dd/MM/yyyy HH:mm}";
+    }
+
+    public static async Task<(UploadFotoRequest? Request, string? Error)> LerArquivoFotoAsync(IBrowserFile file)
+    {
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Size <= 0 || file.Size > maxBytes)
+            return (null, $"A imagem '{file.Name}' deve ter no máximo 5 MB.");
+
+        var contentType = (file.ContentType ?? string.Empty).Trim().ToLowerInvariant();
+        if (contentType != "image/jpeg" && contentType != "image/jpg" && contentType != "image/png" && contentType != "image/webp")
+            return (null, $"Formato inválido para '{file.Name}'. Utilize JPG, PNG ou WEBP.");
+
+        await using var stream = file.OpenReadStream(maxBytes);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        return (new UploadFotoRequest(file.Name, contentType, base64), null);
+    }
 }

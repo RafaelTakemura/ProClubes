@@ -70,6 +70,17 @@ public class ProClubesApiClient
         _session = session;
     }
 
+    public string ResolveMediaUrl(string? relativeUrl)
+    {
+        if (string.IsNullOrWhiteSpace(relativeUrl))
+            return string.Empty;
+        if (Uri.TryCreate(relativeUrl, UriKind.Absolute, out var abs))
+            return abs.ToString();
+        if (_http.BaseAddress is not null)
+            return new Uri(_http.BaseAddress, relativeUrl.TrimStart('/')).ToString();
+        return relativeUrl;
+    }
+
     public async Task<(bool Ok, string? ErrorMessage)> LoginAsync(string identificador, string senha)
     {
         try

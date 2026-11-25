@@ -9,10 +9,10 @@
     <div class="pc-header-titles">
         <span class="pc-badge-eyebrow">ProClubes Enterprise • Agenda Cultural &amp; Social</span>
         <h1 class="pc-title">Eventos e Taxas de Participação</h1>
-        <p class="pc-subtitle">Eventos públicos ou restritos a associados, compartilhamento entre unidades e registro manual de taxas.</p>
+        <p class="pc-subtitle">Eventos vinculados a espaços disponíveis da unidade, agenda unificada com reservas e galeria de fotos.</p>
     </div>
     <div class="pc-header-actions">
-        <button type="button" class="pc-btn pc-btn-primary" @onclick="() => _exibirForm = !_exibirForm">
+        <button type="button" class="pc-btn pc-btn-primary" @onclick="AbrirNovoEventoAsync">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -24,24 +24,28 @@
 
 @if (!string.IsNullOrWhiteSpace(_mensagem))
 {
-    <div class="pc-alert pc-alert-success">@_mensagem</div>
+    <div class="pc-alert pc-alert-success" role="status">@_mensagem</div>
 }
 @if (!string.IsNullOrWhiteSpace(_erro))
 {
-    <div class="pc-alert pc-alert-danger">@_erro</div>
+    <div class="pc-alert pc-alert-danger" role="alert">@_erro</div>
 }
 
 <PcModal IsOpen="_exibirForm"
          Title="Cadastrar Evento"
-         Subtitle="Eventos públicos ou exclusivos para associados e dependentes"
-         MaxWidth="720px"
+         Subtitle="Escolha data e horário para listar apenas os espaços disponíveis na unidade"
+         MaxWidth="860px"
          OnClose="() => _exibirForm = false">
     <ChildContent>
+        @if (!string.IsNullOrWhiteSpace(_erroModalEvento))
+        {
+            <div class="pc-alert pc-alert-danger">@_erroModalEvento</div>
+        }
         <div class="pc-form-grid">
             <div class="pc-field"><label class="pc-label">Nome do Evento *</label><input class="pc-input" @bind="_nome" /></div>
             <div class="pc-field">
                 <label class="pc-label">Unidade Organizadora *</label>
-                <select class="pc-select" disabled="@(!Session.IsSuperAdmin)" @bind="_unidadeOrgId">
+                <select class="pc-select" disabled="@(!Session.IsSuperAdmin)" @bind="_unidadeOrgId" @bind:after="OnPeriodoOuUnidadeChangedAsync">
                     @foreach (var u in _unidades)
                     {
                         <option value="@u.Id">@u.Nome (@u.Sigla)</option>
@@ -55,9 +59,83 @@
                     <option value="@PublicoAlvoEvento.Associados">Somente Associados e Dependentes</option>
                 </select>
             </div>
-            <div class="pc-field"><label class="pc-label">Taxa de Participação (R$)</label><input type="number" step="0.01" class="pc-input" @bind="_taxa" /></div>
-            <div class="pc-field"><label class="pc-label">Limite Informativo de Participantes</label><input type="number" class="pc-input" @bind="_limiteInformativo" /></div>
+            <div class="pc-field"><label class="pc-label">Taxa de Participação (R$)</label><input type="number" step="0.01" min="0" class="pc-input" @bind="_taxa" /></div>
+            <div class="pc-field"><label class="pc-label">Limite Informativo de Participantes</label><input type="number" min="1" class="pc-input" @bind="_limiteInformativo" /></div>
             <div class="pc-field"><label class="pc-label">Descrição</label><input class="pc-input" @bind="_descricao" /></div>
+
+            <div class="pc-field">
+                <label class="pc-label">Data de Início *</label>
+                <input type="date" class="pc-input" @bind="_dataInicio" @bind:after="OnDataInicioChangedAsync" />
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Horário de Início *</label>
+                <input type="time" class="pc-input" @bind="_horaInicio" @bind:after="OnPeriodoOuUnidadeChangedAsync" />
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Data de Término *</label>
+                <input type="date" class="pc-input" @bind="_dataFim" @bind:after="OnPeriodoOuUnidadeChangedAsync" disabled="@(EspacoSelecionado?.TipoLocacao == TipoLocacaoEspaco.PorHora)" />
+            </div>
+            <div class="pc-field">
+                <label class="pc-label">Horário de Término *</label>
+                <input type="time" class="pc-input" @bind="_horaFim" @bind:after="OnPeriodoOuUnidadeChangedAsync" />
+            </div>
+
+            <div class="pc-field" style="grid-column: 1 / -1;">
+                <label class="pc-label">Espaço Disponível para o Período *</label>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <select class="pc-select" style="flex: 1;" @bind="_espacoSelecionadoId" @bind:after="CarregarAgendaEspacoEventoAsync">
+                        <option value="0">-- Selecione um espaço disponível --</option>
+                        @foreach (var esp in _espacosDisponiveis)
+                        {
+                            <option value="@esp.Id">
+                                @esp.Nome — @WebFormatHelpers.ObterRotuloTipoLocacao(esp.TipoLocacao) (R$ @esp.ValorReserva.ToString("N2")@WebFormatHelpers.ObterSufixoValorLocacao(esp.TipoLocacao))
+                            </option>
+                        }
+                    </select>
+                    <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="OnPeriodoOuUnidadeChangedAsync">Atualizar Disponibilidade</button>
+                </div>
+                @if (_espacosDisponiveis.Count == 0)
+                {
+                    <small style="color: var(--pc-danger); display: block; margin-top: 4px;">
+                        Nenhum espaço disponível encontrado na unidade para esta data/horário (ou período incompatível com os espaços por hora).
+                    </small>
+                }
+                else if (EspacoSelecionado is not null)
+                {
+                    <small style="color: var(--pc-text-secondary); display: block; margin-top: 4px;">
+                        Locação estimada do espaço: <strong>R$ @CalcularValorEstimadoEspaco().ToString("N2")</strong> (@WebFormatHelpers.ObterRotuloTipoLocacao(EspacoSelecionado.TipoLocacao)) • Funcionamento: @EspacoSelecionado.HoraAbertura.ToString("HH:mm") às @EspacoSelecionado.HoraFechamento.ToString("HH:mm")
+                    </small>
+                }
+            </div>
+
+            @if (_agendaPreview is not null)
+            {
+                <div class="pc-field" style="grid-column: 1 / -1; background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 12px;">
+                    <label class="pc-label">
+                        Agenda do Espaço: @_agendaPreview.EspacoNome (@WebFormatHelpers.ObterRotuloTipoLocacao(_agendaPreview.TipoLocacao)) — @(_agendaPreview.TipoLocacao == TipoLocacaoEspaco.PorDia ? $"{_agendaPreview.DataInicioConsulta:dd/MM/yyyy} a {_agendaPreview.DataFimConsulta:dd/MM/yyyy}" : $"Dia {_agendaPreview.DataInicioConsulta:dd/MM/yyyy}")
+                    </label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px;">
+                        @foreach (var slot in _agendaPreview.Slots.Take(14))
+                        {
+                            <div style="border: 1px solid @(slot.Disponivel ? "#BBF7D0" : "#FECACA"); background: @(slot.Disponivel ? "#F0FDF4" : "#FEF2F2"); border-radius: 6px; padding: 6px 8px; font-size: 12px;">
+                                <strong>@slot.Rotulo</strong><br />
+                                <span style="color: @(slot.Disponivel ? "#15803D" : "#B91C1C");">@(slot.Disponivel ? "Livre" : slot.DescricaoOcupacao)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="pc-field" style="grid-column: 1 / -1;">
+                <label class="pc-label">Fotos do Evento (opcional — JPG, PNG ou WEBP até 5 MB)</label>
+                <InputFile multiple accept=".jpg,.jpeg,.png,.webp" OnChange="OnSelecionarFotosNovoEventoAsync" class="pc-input" />
+                @if (_fotosNovoEvento.Count > 0)
+                {
+                    <div style="margin-top: 6px;">
+                        <small style="color: var(--pc-text-secondary);">@_fotosNovoEvento.Count foto(s) pronta(s) para envio: @string.Join(", ", _fotosNovoEvento.Select(f => f.NomeArquivo))</small>
+                    </div>
+                }
+            </div>
         </div>
     </ChildContent>
     <FooterContent>
@@ -71,23 +149,48 @@
         <table class="pc-table">
             <thead>
                 <tr>
+                    <th>Foto</th>
                     <th>Evento</th>
-                    <th>Unidade Organizadora / Compartilhadas</th>
+                    <th>Espaço Vinculado</th>
+                    <th>Unidade / Compartilhadas</th>
                     <th>Período</th>
                     <th>Público-Alvo</th>
-                    <th>Taxa / Limite Informativo</th>
+                    <th>Taxa / Locação Espaço</th>
                     <th>Ações</th>
                 </tr>
             </thead>
             <tbody>
                 @if (_eventos.Count == 0)
                 {
-                    <tr><td colspan="6">Nenhum evento programado.</td></tr>
+                    <tr><td colspan="8">Nenhum evento programado.</td></tr>
                 }
                 @foreach (var ev in _eventos)
                 {
+                    var fotos = ev.Fotos ?? Array.Empty<FotoItemDto>();
                     <tr>
+                        <td>
+                            @if (fotos.Count > 0)
+                            {
+                                <img src="@Api.ResolveMediaUrl(fotos[0].UrlRelativa)"
+                                     alt="@ev.Nome"
+                                     style="width: 56px; height: 42px; object-fit: cover; border-radius: 8px; border: 1px solid var(--pc-border);" />
+                            }
+                            else
+                            {
+                                <small style="color: var(--pc-text-muted);">Sem foto</small>
+                            }
+                        </td>
                         <td><strong>@ev.Nome</strong><br /><small>@ev.Descricao</small></td>
+                        <td>
+                            @if (ev.EspacosOcupadosNomes.Count > 0)
+                            {
+                                <strong>@string.Join(", ", ev.EspacosOcupadosNomes)</strong>
+                            }
+                            else
+                            {
+                                <small style="color: var(--pc-text-muted);">Sem espaço vinculado</small>
+                            }
+                        </td>
                         <td>
                             @ev.UnidadeOrganizadoraNome
                             @if (ev.UnidadesParticipantesNomes.Count > 1)
@@ -101,14 +204,18 @@
                                            Variant="@(ev.PublicoAlvo == PublicoAlvoEvento.Publico ? "info" : "success")" />
                         </td>
                         <td>
-                            R$ @ev.TaxaParticipacao.ToString("N2")
+                            Taxa: R$ @ev.TaxaParticipacao.ToString("N2")
+                            <div><small style="color: var(--pc-text-secondary);">Locação espaço: R$ @ev.ValorReservaEspaco.ToString("N2")</small></div>
                             @if (ev.LimiteParticipantes.HasValue)
                             {
-                                <div><small>Capacidade ref.: @ev.LimiteParticipantes pessoas (informativo)</small></div>
+                                <div><small>Capacidade ref.: @ev.LimiteParticipantes pessoas</small></div>
                             }
                         </td>
                         <td>
-                            <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => SelecionarEventoPagamentosAsync(ev)">Taxas / Pagamentos</button>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => AbrirModalFotosEvento(ev)">Fotos (@fotos.Count)</button>
+                                <button type="button" class="pc-btn pc-btn-outline pc-btn-sm" @onclick="() => SelecionarEventoPagamentosAsync(ev)">Taxas / Pagamentos</button>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -116,6 +223,50 @@
         </table>
     </div>
 </div>
+
+<PcModal IsOpen="@(_eventoFotos is not null)"
+         Title="@($"Fotos do Evento — {_eventoFotos?.Nome}")"
+         Subtitle="Adicione ou remova fotos promocionais e registros do evento"
+         MaxWidth="780px"
+         OnClose="() => _eventoFotos = null">
+    <ChildContent>
+        @if (!string.IsNullOrWhiteSpace(_erroModalFotos))
+        {
+            <div class="pc-alert pc-alert-danger">@_erroModalFotos</div>
+        }
+        <div class="pc-field" style="background: var(--pc-bg); border: 1px solid var(--pc-border); border-radius: 10px; padding: 14px;">
+            <label class="pc-label">Enviar nova foto do evento</label>
+            <InputFile OnChange="OnUploadFotoEventoModalAsync" accept=".jpg,.jpeg,.png,.webp" class="pc-input" />
+            <small style="color: var(--pc-text-muted);">Selecione um arquivo JPG, PNG ou WEBP até 5 MB.</small>
+        </div>
+
+        @{
+            var listaFotosEvento = _eventoFotos?.Fotos ?? Array.Empty<FotoItemDto>();
+        }
+        @if (listaFotosEvento.Count == 0)
+        {
+            <p style="color: var(--pc-text-muted);">Nenhuma foto cadastrada para este evento.</p>
+        }
+        else
+        {
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
+                @foreach (var f in listaFotosEvento)
+                {
+                    <div style="border: 1px solid var(--pc-border); border-radius: 10px; padding: 8px; background: var(--pc-bg);">
+                        <img src="@Api.ResolveMediaUrl(f.UrlRelativa)"
+                             alt="@f.NomeArquivo"
+                             style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 6px;" />
+                        <div style="font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;" title="@f.NomeArquivo">@f.NomeArquivo</div>
+                        <button type="button" class="pc-btn pc-btn-danger pc-btn-sm" style="width: 100%;" @onclick="() => RemoverFotoEventoAsync(f.Id)">Excluir</button>
+                    </div>
+                }
+            </div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="pc-btn pc-btn-outline" @onclick="() => _eventoFotos = null">Fechar</button>
+    </FooterContent>
+</PcModal>
 
 <PcModal IsOpen="@(_eventoSelecionado is not null)"
          Title="@($"Pagamentos Manuais de Taxa — {_eventoSelecionado?.Nome}")"
@@ -176,7 +327,10 @@
 @code {
     private IReadOnlyList<UnidadeDto> _unidades = Array.Empty<UnidadeDto>();
     private IReadOnlyList<EventoDto> _eventos = Array.Empty<EventoDto>();
+    private IReadOnlyList<EspacoDto> _espacosDisponiveis = Array.Empty<EspacoDto>();
+    private AgendaEspacoDto? _agendaPreview;
     private EventoDto? _eventoSelecionado;
+    private EventoDto? _eventoFotos;
     private IReadOnlyList<PagamentoEventoDto> _pagamentosEvento = Array.Empty<PagamentoEventoDto>();
 
     private bool _exibirForm;
@@ -186,13 +340,23 @@
     private PublicoAlvoEvento _publicoAlvo = PublicoAlvoEvento.Publico;
     private decimal _taxa = 50m;
     private int? _limiteInformativo = 150;
+    private DateOnly _dataInicio = DateOnly.FromDateTime(DateTime.Now.AddDays(14));
+    private TimeOnly _horaInicio = new(14, 0);
+    private DateOnly _dataFim = DateOnly.FromDateTime(DateTime.Now.AddDays(14));
+    private TimeOnly _horaFim = new(18, 0);
+    private int _espacoSelecionadoId;
+    private readonly List<UploadFotoRequest> _fotosNovoEvento = new();
 
     private string _nomePagador = string.Empty;
     private decimal _valorPagoEvento = 50m;
     private FormaPagamento _formaPgtoEvento = FormaPagamento.Pix;
 
     private string? _erro;
+    private string? _erroModalEvento;
+    private string? _erroModalFotos;
     private string? _mensagem;
+
+    private EspacoDto? EspacoSelecionado => _espacosDisponiveis.FirstOrDefault(e => e.Id == _espacoSelecionadoId);
 
     protected override async Task OnInitializedAsync()
     {
@@ -216,20 +380,222 @@
 
         var url = Session.UnidadeContextoId.HasValue ? $"api/v1/eventos?unidadeId={Session.UnidadeContextoId.Value}" : "api/v1/eventos";
         var (data, err) = await Api.GetAsync<IReadOnlyList<EventoDto>>(url);
-        if (data is not null) _eventos = data;
+        if (data is not null)
+        {
+            _eventos = data;
+            if (_eventoFotos is not null)
+                _eventoFotos = _eventos.FirstOrDefault(x => x.Id == _eventoFotos.Id);
+        }
         _erro = err;
+    }
+
+    private async Task AbrirNovoEventoAsync()
+    {
+        _erroModalEvento = null;
+        _nome = string.Empty;
+        _descricao = string.Empty;
+        _unidadeOrgId = Session.UnidadeContextoId ?? Session.Usuario?.UnidadeAdministrativaId ?? (_unidades.FirstOrDefault()?.Id ?? 1);
+        _publicoAlvo = PublicoAlvoEvento.Publico;
+        _taxa = 50m;
+        _limiteInformativo = 150;
+        _dataInicio = DateOnly.FromDateTime(DateTime.Now.AddDays(14));
+        _dataFim = _dataInicio;
+        _horaInicio = new TimeOnly(14, 0);
+        _horaFim = new TimeOnly(18, 0);
+        _espacoSelecionadoId = 0;
+        _agendaPreview = null;
+        _fotosNovoEvento.Clear();
+        _exibirForm = true;
+        await OnPeriodoOuUnidadeChangedAsync();
+    }
+
+    private (DateTimeOffset Inicio, DateTimeOffset Fim) ObterPeriodoSelecionado()
+    {
+        var offset = TimeSpan.FromHours(-3);
+        var ini = new DateTimeOffset(_dataInicio.ToDateTime(_horaInicio), offset);
+        var fim = new DateTimeOffset(_dataFim.ToDateTime(_horaFim), offset);
+        return (ini, fim);
+    }
+
+    private async Task OnDataInicioChangedAsync()
+    {
+        if (EspacoSelecionado?.TipoLocacao == TipoLocacaoEspaco.PorHora || _dataFim < _dataInicio)
+            _dataFim = _dataInicio;
+
+        await OnPeriodoOuUnidadeChangedAsync();
+    }
+
+    private async Task OnPeriodoOuUnidadeChangedAsync()
+    {
+        _erroModalEvento = null;
+        var (ini, fim) = ObterPeriodoSelecionado();
+        if (fim <= ini)
+        {
+            _espacosDisponiveis = Array.Empty<EspacoDto>();
+            _espacoSelecionadoId = 0;
+            _agendaPreview = null;
+            _erroModalEvento = "A data/horário de término deve ser posterior ao início.";
+            return;
+        }
+
+        var url = $"api/v1/espacos/disponiveis?unidadeId={_unidadeOrgId}&inicio={Uri.EscapeDataString(ini.ToString("O"))}&fim={Uri.EscapeDataString(fim.ToString("O"))}";
+        var (disps, err) = await Api.GetAsync<IReadOnlyList<EspacoDto>>(url);
+        if (err is not null)
+        {
+            _erroModalEvento = err;
+            _espacosDisponiveis = Array.Empty<EspacoDto>();
+            _espacoSelecionadoId = 0;
+            _agendaPreview = null;
+            return;
+        }
+
+        _espacosDisponiveis = disps ?? Array.Empty<EspacoDto>();
+        if (!_espacosDisponiveis.Any(e => e.Id == _espacoSelecionadoId))
+            _espacoSelecionadoId = _espacosDisponiveis.FirstOrDefault()?.Id ?? 0;
+
+        await CarregarAgendaEspacoEventoAsync();
+    }
+
+    private async Task CarregarAgendaEspacoEventoAsync()
+    {
+        if (_espacoSelecionadoId <= 0)
+        {
+            _agendaPreview = null;
+            return;
+        }
+
+        var esp = EspacoSelecionado;
+        if (esp?.TipoLocacao == TipoLocacaoEspaco.PorHora && _dataFim != _dataInicio)
+            _dataFim = _dataInicio;
+
+        var dtFimQuery = esp?.TipoLocacao == TipoLocacaoEspaco.PorDia ? _dataInicio.AddDays(13) : _dataInicio;
+        var url = $"api/v1/espacos/{_espacoSelecionadoId}/agenda?dataInicio={_dataInicio:yyyy-MM-dd}&dataFim={dtFimQuery:yyyy-MM-dd}";
+        var (agenda, _) = await Api.GetAsync<AgendaEspacoDto>(url);
+        _agendaPreview = agenda;
+    }
+
+    private decimal CalcularValorEstimadoEspaco()
+    {
+        if (EspacoSelecionado is null) return 0m;
+        var (ini, fim) = ObterPeriodoSelecionado();
+        if (fim <= ini) return 0m;
+
+        if (EspacoSelecionado.TipoLocacao == TipoLocacaoEspaco.PorDia)
+        {
+            var dias = Math.Max(1, _dataFim.DayNumber - _dataInicio.DayNumber + 1);
+            return Math.Round(EspacoSelecionado.ValorReserva * dias, 2);
+        }
+
+        var horas = (decimal)(fim - ini).TotalHours;
+        return Math.Round(EspacoSelecionado.ValorReserva * horas, 2);
+    }
+
+    private async Task OnSelecionarFotosNovoEventoAsync(InputFileChangeEventArgs args)
+    {
+        _erroModalEvento = null;
+        _fotosNovoEvento.Clear();
+        foreach (var file in args.GetMultipleFiles(10))
+        {
+            var (req, err) = await WebFormatHelpers.LerArquivoFotoAsync(file);
+            if (err is not null || req is null)
+            {
+                _erroModalEvento = err;
+                return;
+            }
+            _fotosNovoEvento.Add(req);
+        }
     }
 
     private async Task CriarEventoAsync()
     {
-        _erro = _mensagem = null;
-        var ini = DateTimeOffset.Now.AddDays(14);
-        var fim = ini.AddHours(4);
-        var req = new CriarEventoRequest(_unidadeOrgId, _nome, _descricao, _publicoAlvo, ini, fim, _limiteInformativo, _taxa);
-        var (_, err) = await Api.PostAsync<EventoDto>("api/v1/admin/eventos", req);
-        if (err is not null) { _erro = err; return; }
+        _erro = _mensagem = _erroModalEvento = null;
+        if (string.IsNullOrWhiteSpace(_nome))
+        {
+            _erroModalEvento = "O nome do evento é obrigatório.";
+            return;
+        }
+
+        if (_espacoSelecionadoId <= 0)
+        {
+            _erroModalEvento = "Selecione um espaço disponível para realizar o evento.";
+            return;
+        }
+
+        var (ini, fim) = ObterPeriodoSelecionado();
+        var req = new CriarEventoRequest(
+            _unidadeOrgId,
+            _nome.Trim(),
+            _descricao,
+            _publicoAlvo,
+            ini,
+            fim,
+            _limiteInformativo,
+            _taxa,
+            null,
+            new[] { _espacoSelecionadoId });
+
+        var (criado, err) = await Api.PostAsync<EventoDto>("api/v1/admin/eventos", req);
+        if (err is not null || criado is null)
+        {
+            _erroModalEvento = err ?? "Falha ao criar evento.";
+            return;
+        }
+
+        foreach (var fotoReq in _fotosNovoEvento)
+        {
+            var (_, fotoErr) = await Api.PostAsync<FotoItemDto>($"api/v1/admin/eventos/{criado.Id}/fotos", fotoReq);
+            if (fotoErr is not null)
+                _erro = $"Evento criado, mas houve erro ao enviar a foto '{fotoReq.NomeArquivo}': {fotoErr}";
+        }
+
         _exibirForm = false;
-        _mensagem = "Evento criado com sucesso.";
+        _fotosNovoEvento.Clear();
+        _mensagem = $"Evento '{criado.Nome}' criado com sucesso (locação do espaço: R$ {criado.ValorReservaEspaco:N2}).";
+        await CarregarAsync();
+    }
+
+    private void AbrirModalFotosEvento(EventoDto ev)
+    {
+        _erroModalFotos = null;
+        _eventoFotos = ev;
+    }
+
+    private async Task OnUploadFotoEventoModalAsync(InputFileChangeEventArgs args)
+    {
+        if (_eventoFotos is null) return;
+        _erroModalFotos = _mensagem = null;
+
+        var (uploadReq, fileErr) = await WebFormatHelpers.LerArquivoFotoAsync(args.File);
+        if (fileErr is not null || uploadReq is null)
+        {
+            _erroModalFotos = fileErr;
+            return;
+        }
+
+        var (_, apiErr) = await Api.PostAsync<FotoItemDto>($"api/v1/admin/eventos/{_eventoFotos.Id}/fotos", uploadReq);
+        if (apiErr is not null)
+        {
+            _erroModalFotos = apiErr;
+            return;
+        }
+
+        _mensagem = $"Foto '{uploadReq.NomeArquivo}' adicionada ao evento.";
+        await CarregarAsync();
+    }
+
+    private async Task RemoverFotoEventoAsync(int fotoId)
+    {
+        if (_eventoFotos is null) return;
+        _erroModalFotos = _mensagem = null;
+
+        var err = await Api.DeleteAsync($"api/v1/admin/eventos/{_eventoFotos.Id}/fotos/{fotoId}");
+        if (err is not null)
+        {
+            _erroModalFotos = err;
+            return;
+        }
+
+        _mensagem = "Foto removida do evento.";
         await CarregarAsync();
     }
 
