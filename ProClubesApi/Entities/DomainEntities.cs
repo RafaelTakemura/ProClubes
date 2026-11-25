@@ -274,6 +274,7 @@ public class Evento
     public DateTime DataHoraFimUtc { get; set; }
     public int? LimiteParticipantes { get; set; }
     public decimal TaxaParticipacao { get; set; }
+    public decimal ValorReservaEspaco { get; set; }
     public StatusEvento Status { get; set; }
     public int CriadoPorUsuarioId { get; set; }
     public Usuario CriadoPorUsuario { get; set; } = null!;
@@ -281,6 +282,7 @@ public class Evento
 
     public ICollection<EventoUnidade> UnidadesParticipantes { get; set; } = new List<EventoUnidade>();
     public ICollection<OcupacaoEspaco> OcupacoesEspaco { get; set; } = new List<OcupacaoEspaco>();
+    public ICollection<FotoEvento> Fotos { get; set; } = new List<FotoEvento>();
 }
 
 // 18. EventoUnidade — Eventos
@@ -322,6 +324,10 @@ public class Espaco
     public TimeOnly HoraFechamento { get; set; }
     public int DuracaoMaximaMinutos { get; set; } = 240;
     public int AntecedenciaMaximaDias { get; set; } = 90;
+    public TipoLocacaoEspaco TipoLocacao { get; set; } = TipoLocacaoEspaco.PorHora;
+    public decimal ValorReserva { get; set; }
+
+    public ICollection<FotoEspaco> Fotos { get; set; } = new List<FotoEspaco>();
 }
 
 // 21. ReservaEspaco — Reservas
@@ -334,6 +340,7 @@ public class ReservaEspaco
     public Associado Associado { get; set; } = null!;
     public DateTime InicioUtc { get; set; }
     public DateTime FimUtc { get; set; }
+    public decimal ValorTotal { get; set; }
     public StatusReserva Status { get; set; }
     public DateTime CriadaEmUtc { get; set; }
     public DateTime? CanceladaEmUtc { get; set; }
@@ -569,4 +576,34 @@ public class ContratoAssociado
     public Usuario? UltimaAlteracaoPorUsuario { get; set; }
     public int? RespondidoPorUsuarioId { get; set; }
     public Usuario? RespondidoPorUsuario { get; set; }
+}
+
+// 36. FotoEspaco — Mídia de Espaços
+public class FotoEspaco
+{
+    public int Id { get; set; }
+    public int EspacoId { get; set; }
+    public Espaco Espaco { get; set; } = null!;
+    public string NomeArquivo { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public string CaminhoRelativo { get; set; } = string.Empty;
+    public int Ordem { get; set; }
+    public DateTime CriadaEmUtc { get; set; }
+    public int? CriadaPorUsuarioId { get; set; }
+    public Usuario? CriadaPorUsuario { get; set; }
+}
+
+// 37. FotoEvento — Mídia de Eventos
+public class FotoEvento
+{
+    public int Id { get; set; }
+    public int EventoId { get; set; }
+    public Evento Evento { get; set; } = null!;
+    public string NomeArquivo { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public string CaminhoRelativo { get; set; } = string.Empty;
+    public int Ordem { get; set; }
+    public DateTime CriadaEmUtc { get; set; }
+    public int? CriadaPorUsuarioId { get; set; }
+    public Usuario? CriadaPorUsuario { get; set; }
 }

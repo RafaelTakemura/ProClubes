@@ -135,6 +135,12 @@ public enum EstadoVotacao : byte
     Cancelada = 3
 }
 
+public enum TipoLocacaoEspaco : byte
+{
+    PorHora = 1,
+    PorDia = 2
+}
+
 public enum EstadoExecucaoRotina : byte
 {
     EmExecucao = 0,

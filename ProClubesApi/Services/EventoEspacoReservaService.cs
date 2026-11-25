@@ -9,23 +9,35 @@ namespace ProClubesApi.Services;
 
 public class EventoEspacoReservaService
 {
+    private const long TamanhoMaximoFotoBytes = 5 * 1024 * 1024;
+    private static readonly TimeSpan OffsetSaoPaulo = TimeSpan.FromHours(-3);
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> EspacoLocks = new();
+    private static readonly Dictionary<string, string> ExtensoesPermitidas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["image/jpeg"] = ".jpg",
+        ["image/jpg"] = ".jpg",
+        ["image/png"] = ".png",
+        ["image/webp"] = ".webp"
+    };
 
     private readonly ProClubesDbContext _db;
     private readonly CurrentUserService _currentUser;
     private readonly AuditoriaService _auditoria;
     private readonly NotificacaoService _notificacao;
+    private readonly IWebHostEnvironment _env;
 
     public EventoEspacoReservaService(
         ProClubesDbContext db,
         CurrentUserService currentUser,
         AuditoriaService auditoria,
-        NotificacaoService notificacao)
+        NotificacaoService notificacao,
+        IWebHostEnvironment env)
     {
         _db = db;
         _currentUser = currentUser;
         _auditoria = auditoria;
         _notificacao = notificacao;
+        _env = env;
     }
 
     // ==================== EVENTOS ====================
@@ -39,6 +51,7 @@ public class EventoEspacoReservaService
                 .ThenInclude(eu => eu.Unidade)
             .Include(e => e.OcupacoesEspaco)
                 .ThenInclude(o => o.Espaco)
+            .Include(e => e.Fotos)
             .Where(e => e.PublicoAlvo == PublicoAlvoEvento.Publico && e.Status == StatusEvento.Programado);
 
         if (unidadeId.HasValue)
@@ -64,6 +77,7 @@ public class EventoEspacoReservaService
                 .ThenInclude(eu => eu.Unidade)
             .Include(e => e.OcupacoesEspaco)
                 .ThenInclude(o => o.Espaco)
+            .Include(e => e.Fotos)
             .AsQueryable();
 
         if (user.Role == RoleAdministrativa.SuperAdmin)
@@ -85,12 +99,10 @@ public class EventoEspacoReservaService
         }
         else if (user.CategoriaCodigo == CodigosCategoriaAssociado.Simpatizante && !user.EhDependenteAtivo)
         {
-            // Regra 5.2 e 8.1: Simpatizantes consultam somente eventos abertos ao público
             query = query.Where(e => e.PublicoAlvo == PublicoAlvoEvento.Publico && e.Status == StatusEvento.Programado);
         }
         else if (user.EhDependenteAtivo && user.UnidadeTitularId.HasValue)
         {
-            // Regra 5.3 e 8.1: Dependente consulta eventos públicos e eventos restritos da unidade do titular
             var unidTitular = user.UnidadeTitularId.Value;
             query = query.Where(e =>
                 e.Status == StatusEvento.Programado
@@ -126,13 +138,15 @@ public class EventoEspacoReservaService
         if (string.IsNullOrWhiteSpace(req.Nome))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O nome do evento é obrigatório.");
 
-        var inicioUtc = req.Inicio.UtcDateTime;
-        var fimUtc = req.Fim.UtcDateTime;
-        if (fimUtc <= inicioUtc)
+        if (req.Fim <= req.Inicio)
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A data/hora final do evento deve ser posterior ao início.");
 
         if (req.TaxaParticipacao < 0 || (req.LimiteParticipantes.HasValue && req.LimiteParticipantes.Value <= 0))
             throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Taxa não pode ser negativa e o limite de participantes, quando informado, deve ser positivo.");
+
+        var espacosIds = req.EspacosIds?.Distinct().OrderBy(x => x).ToList() ?? new List<int>();
+        if (espacosIds.Count == 0)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Selecione ao menos um espaço disponível da unidade para realizar o evento.");
 
         var unidadesIds = new HashSet<int> { req.UnidadeOrganizadoraId };
         if (req.UnidadesCompartilhadasIds is { Count: > 0 })
@@ -141,14 +155,12 @@ public class EventoEspacoReservaService
                 unidadesIds.Add(uId);
         }
 
-        // Regra D6: Somente o Super Admin define compartilhamento de eventos entre unidades
         if (unidadesIds.Any(id => id != req.UnidadeOrganizadoraId) && user.Role != RoleAdministrativa.SuperAdmin)
         {
             throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.UnidadeSemPermissao,
                 "Somente o Super Admin pode compartilhar eventos entre diferentes unidades.");
         }
 
-        var espacosIds = req.EspacosIds?.Distinct().OrderBy(x => x).ToList() ?? new List<int>();
         var acquiredLocks = new List<SemaphoreSlim>();
 
         try
@@ -161,6 +173,9 @@ public class EventoEspacoReservaService
             }
 
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            var nowUtc = DateTime.UtcNow;
+            var ocupacoesPlanejadas = new List<(int EspacoId, DateTime InicioUtc, DateTime FimUtc)>();
+            var valorReservaTotal = 0m;
 
             foreach (var espId in espacosIds)
             {
@@ -168,11 +183,22 @@ public class EventoEspacoReservaService
                 var espaco = await _db.Espacos.FirstOrDefaultAsync(e => e.Id == espId && e.Ativo, ct)
                     ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, $"Espaço #{espId} não encontrado ou inativo.");
 
+                if (espaco.UnidadeId != req.UnidadeOrganizadoraId)
+                    throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.DadosInvalidos, $"O espaço '{espaco.Nome}' não pertence à unidade organizadora do evento.");
+
+                var periodo = NormalizarEValidarPeriodo(espaco, req.Inicio, req.Fim, aplicarRegrasReservaParticular: false, nowUtc);
+
                 var conflito = await _db.OcupacoesEspaco
-                    .AnyAsync(o => o.EspacoId == espId && o.Ativa && o.InicioUtc < fimUtc && o.FimUtc > inicioUtc, ct);
+                    .AnyAsync(o => o.EspacoId == espId && o.Ativa && o.InicioUtc < periodo.FimUtc && o.FimUtc > periodo.InicioUtc, ct);
                 if (conflito)
-                    throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.ReservaHorarioOcupado, $"O espaço '{espaco.Nome}' já possui ocupação no período selecionado.");
+                    throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.ReservaHorarioOcupado, $"O espaço '{espaco.Nome}' já possui ocupação na agenda para o período selecionado.");
+
+                ocupacoesPlanejadas.Add((espId, periodo.InicioUtc, periodo.FimUtc));
+                valorReservaTotal += periodo.ValorTotal;
             }
+
+            var eventoInicioUtc = ocupacoesPlanejadas.Min(o => o.InicioUtc);
+            var eventoFimUtc = ocupacoesPlanejadas.Max(o => o.FimUtc);
 
             var evento = new Evento
             {
@@ -180,13 +206,14 @@ public class EventoEspacoReservaService
                 Nome = req.Nome.Trim(),
                 Descricao = req.Descricao?.Trim(),
                 PublicoAlvo = req.PublicoAlvo,
-                DataHoraInicioUtc = inicioUtc,
-                DataHoraFimUtc = fimUtc,
+                DataHoraInicioUtc = eventoInicioUtc,
+                DataHoraFimUtc = eventoFimUtc,
                 LimiteParticipantes = req.LimiteParticipantes,
                 TaxaParticipacao = Math.Round(req.TaxaParticipacao, 2),
+                ValorReservaEspaco = Math.Round(valorReservaTotal, 2),
                 Status = StatusEvento.Programado,
                 CriadoPorUsuarioId = user.UsuarioId,
-                CriadoEmUtc = DateTime.UtcNow
+                CriadoEmUtc = nowUtc
             };
 
             _db.Eventos.Add(evento);
@@ -201,13 +228,13 @@ public class EventoEspacoReservaService
                 });
             }
 
-            foreach (var espId in espacosIds)
+            foreach (var oc in ocupacoesPlanejadas)
             {
                 _db.OcupacoesEspaco.Add(new OcupacaoEspaco
                 {
-                    EspacoId = espId,
-                    InicioUtc = inicioUtc,
-                    FimUtc = fimUtc,
+                    EspacoId = oc.EspacoId,
+                    InicioUtc = oc.InicioUtc,
+                    FimUtc = oc.FimUtc,
                     Origem = OrigemOcupacaoEspaco.Evento,
                     EventoId = evento.Id,
                     Ativa = true,
@@ -216,7 +243,7 @@ public class EventoEspacoReservaService
             }
 
             _auditoria.Registrar(user.UsuarioId, req.UnidadeOrganizadoraId, "CRIAR_EVENTO", nameof(Evento), evento.Id,
-                $"Evento '{evento.Nome}' criado ({evento.PublicoAlvo}).");
+                $"Evento '{evento.Nome}' criado ({evento.PublicoAlvo}) vinculando {espacosIds.Count} espaço(s).");
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -228,6 +255,7 @@ public class EventoEspacoReservaService
                     .ThenInclude(eu => eu.Unidade)
                 .Include(e => e.OcupacoesEspaco)
                     .ThenInclude(o => o.Espaco)
+                .Include(e => e.Fotos)
                 .FirstAsync(e => e.Id == evento.Id, ct);
 
             return ToEventoDto(completo);
@@ -237,6 +265,70 @@ public class EventoEspacoReservaService
             foreach (var sem in acquiredLocks)
                 sem.Release();
         }
+    }
+
+    public async Task<FotoItemDto> AdicionarFotoEventoAsync(
+        AuthenticatedUserInfo user,
+        int eventoId,
+        UploadFotoRequest req,
+        CancellationToken ct = default)
+    {
+        var evento = await _db.Eventos
+            .Include(e => e.Fotos)
+            .FirstOrDefaultAsync(e => e.Id == eventoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Evento não encontrado.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, evento.UnidadeOrganizadoraId);
+
+        var (nomeArquivo, contentType, caminhoRelativo) = await SalvarFotoBase64Async("eventos", req, ct);
+        var ordem = evento.Fotos.Count == 0 ? 1 : evento.Fotos.Max(f => f.Ordem) + 1;
+
+        var foto = new FotoEvento
+        {
+            EventoId = evento.Id,
+            NomeArquivo = nomeArquivo,
+            ContentType = contentType,
+            CaminhoRelativo = caminhoRelativo,
+            Ordem = ordem,
+            CriadaEmUtc = DateTime.UtcNow,
+            CriadaPorUsuarioId = user.UsuarioId
+        };
+        _db.FotosEvento.Add(foto);
+        await _db.SaveChangesAsync(ct);
+
+        _auditoria.Registrar(user.UsuarioId, evento.UnidadeOrganizadoraId, "ADICIONAR_FOTO_EVENTO", nameof(Evento), evento.Id,
+            $"Foto '{nomeArquivo}' adicionada ao evento #{evento.Id}.");
+        await _db.SaveChangesAsync(ct);
+
+        return ToFotoEventoDto(foto);
+    }
+
+    public async Task RemoverFotoEventoAsync(
+        AuthenticatedUserInfo user,
+        int eventoId,
+        int fotoId,
+        CancellationToken ct = default)
+    {
+        var foto = await _db.FotosEvento
+            .Include(f => f.Evento)
+            .FirstOrDefaultAsync(f => f.Id == fotoId && f.EventoId == eventoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Foto do evento não encontrada.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, foto.Evento.UnidadeOrganizadoraId);
+
+        var caminho = foto.CaminhoRelativo;
+        _db.FotosEvento.Remove(foto);
+        _auditoria.Registrar(user.UsuarioId, foto.Evento.UnidadeOrganizadoraId, "REMOVER_FOTO_EVENTO", nameof(Evento), eventoId,
+            $"Foto #{fotoId} removida do evento #{eventoId}.");
+        await _db.SaveChangesAsync(ct);
+        ExcluirArquivoSeguro(caminho);
+    }
+
+    public async Task<(string CaminhoAbsoluto, string ContentType)> ObterArquivoFotoEventoAsync(int fotoId, CancellationToken ct = default)
+    {
+        var foto = await _db.FotosEvento.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fotoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Foto não encontrada.");
+        return ResolverCaminhoFotoExistente(foto.CaminhoRelativo, foto.ContentType);
     }
 
     public async Task<PagamentoEventoDto> RegistrarPagamentoEventoAsync(
@@ -337,6 +429,7 @@ public class EventoEspacoReservaService
         var query = _db.Espacos
             .AsNoTracking()
             .Include(e => e.Unidade)
+            .Include(e => e.Fotos)
             .AsQueryable();
 
         if (user.Role == RoleAdministrativa.SuperAdmin)
@@ -358,9 +451,60 @@ public class EventoEspacoReservaService
         }
 
         var items = await query.OrderBy(e => e.Unidade.Nome).ThenBy(e => e.Nome).ToListAsync(ct);
-        return items.Select(e => new EspacoDto(
-            e.Id, e.UnidadeId, e.Unidade.Nome, e.Nome, e.Descricao, e.Ativo,
-            e.HoraAbertura, e.HoraFechamento, e.DuracaoMaximaMinutos, e.AntecedenciaMaximaDias)).ToList();
+        return items.Select(ToEspacoDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<EspacoDto>> ListarEspacosDisponiveisAsync(
+        AuthenticatedUserInfo user,
+        int unidadeId,
+        DateTimeOffset inicio,
+        DateTimeOffset fim,
+        CancellationToken ct = default)
+    {
+        if (fim <= inicio)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A data/hora final deve ser posterior ao início.");
+
+        EnsureAcessoUnidadeEspaco(user, unidadeId);
+
+        var espacosAtivos = await _db.Espacos
+            .AsNoTracking()
+            .Include(e => e.Unidade)
+            .Include(e => e.Fotos)
+            .Where(e => e.UnidadeId == unidadeId && e.Ativo)
+            .OrderBy(e => e.Nome)
+            .ToListAsync(ct);
+
+        if (espacosAtivos.Count == 0)
+            return Array.Empty<EspacoDto>();
+
+        var espacosIds = espacosAtivos.Select(e => e.Id).ToList();
+        var janelaInicioUtc = inicio.UtcDateTime.AddDays(-2);
+        var janelaFimUtc = fim.UtcDateTime.AddDays(2);
+
+        var ocupacoesJanela = await _db.OcupacoesEspaco
+            .AsNoTracking()
+            .Where(o => espacosIds.Contains(o.EspacoId) && o.Ativa && o.InicioUtc < janelaFimUtc && o.FimUtc > janelaInicioUtc)
+            .ToListAsync(ct);
+
+        var nowUtc = DateTime.UtcNow;
+        var disponiveis = new List<EspacoDto>();
+
+        foreach (var espaco in espacosAtivos)
+        {
+            try
+            {
+                var periodo = NormalizarEValidarPeriodo(espaco, inicio, fim, aplicarRegrasReservaParticular: false, nowUtc);
+                var ocupado = ocupacoesJanela.Any(o => o.EspacoId == espaco.Id && o.InicioUtc < periodo.FimUtc && o.FimUtc > periodo.InicioUtc);
+                if (!ocupado)
+                    disponiveis.Add(ToEspacoDto(espaco));
+            }
+            catch (ApiException)
+            {
+                // Espaço incompatível com o período informado (ex.: período multi-dia para espaço PorHora) não aparece como disponível
+            }
+        }
+
+        return disponiveis;
     }
 
     public async Task<EspacoDto> CriarEspacoAsync(
@@ -369,12 +513,14 @@ public class EventoEspacoReservaService
         CancellationToken ct = default)
     {
         _currentUser.EnsureAdminOrSuperAdminForUnit(user, req.UnidadeId);
-
-        if (string.IsNullOrWhiteSpace(req.Nome) || req.DuracaoMaximaMinutos < 60 || req.AntecedenciaMaximaDias < 1 || req.HoraFechamento <= req.HoraAbertura)
-            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Dados do espaço inválidos (duração mínima 60 min e fechamento após abertura).");
+        ValidarRequestEspaco(req);
 
         var unidade = await _db.Unidades.FirstOrDefaultAsync(u => u.Id == req.UnidadeId, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Unidade não encontrada.");
+
+        var duracaoMax = req.TipoLocacao == TipoLocacaoEspaco.PorDia && req.DuracaoMaximaMinutos < 60
+            ? 1440
+            : req.DuracaoMaximaMinutos;
 
         var espaco = new Espaco
         {
@@ -384,17 +530,129 @@ public class EventoEspacoReservaService
             Ativo = req.Ativo,
             HoraAbertura = req.HoraAbertura,
             HoraFechamento = req.HoraFechamento,
-            DuracaoMaximaMinutos = req.DuracaoMaximaMinutos,
-            AntecedenciaMaximaDias = req.AntecedenciaMaximaDias
+            DuracaoMaximaMinutos = duracaoMax,
+            AntecedenciaMaximaDias = req.AntecedenciaMaximaDias,
+            TipoLocacao = req.TipoLocacao,
+            ValorReserva = Math.Round(req.ValorReserva, 2)
         };
 
         _db.Espacos.Add(espaco);
-        _auditoria.Registrar(user.UsuarioId, req.UnidadeId, "CRIAR_ESPACO", nameof(Espaco), null, $"Espaço '{espaco.Nome}' cadastrado.");
         await _db.SaveChangesAsync(ct);
 
-        return new EspacoDto(
-            espaco.Id, espaco.UnidadeId, unidade.Nome, espaco.Nome, espaco.Descricao, espaco.Ativo,
-            espaco.HoraAbertura, espaco.HoraFechamento, espaco.DuracaoMaximaMinutos, espaco.AntecedenciaMaximaDias);
+        _auditoria.Registrar(user.UsuarioId, req.UnidadeId, "CRIAR_ESPACO", nameof(Espaco), espaco.Id,
+            $"Espaço '{espaco.Nome}' cadastrado ({espaco.TipoLocacao}, R$ {espaco.ValorReserva:N2}).");
+        await _db.SaveChangesAsync(ct);
+
+        espaco.Unidade = unidade;
+        return ToEspacoDto(espaco);
+    }
+
+    public async Task<EspacoDto> AtualizarEspacoAsync(
+        AuthenticatedUserInfo user,
+        int espacoId,
+        CriarOuAtualizarEspacoRequest req,
+        CancellationToken ct = default)
+    {
+        var espaco = await _db.Espacos
+            .Include(e => e.Unidade)
+            .Include(e => e.Fotos)
+            .FirstOrDefaultAsync(e => e.Id == espacoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Espaço não encontrado.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, espaco.UnidadeId);
+        if (req.UnidadeId != espaco.UnidadeId)
+            _currentUser.EnsureAdminOrSuperAdminForUnit(user, req.UnidadeId);
+
+        ValidarRequestEspaco(req);
+
+        var unidade = req.UnidadeId == espaco.UnidadeId
+            ? espaco.Unidade
+            : await _db.Unidades.FirstOrDefaultAsync(u => u.Id == req.UnidadeId, ct)
+                ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Unidade não encontrada.");
+
+        espaco.UnidadeId = unidade.Id;
+        espaco.Unidade = unidade;
+        espaco.Nome = req.Nome.Trim();
+        espaco.Descricao = req.Descricao?.Trim();
+        espaco.Ativo = req.Ativo;
+        espaco.HoraAbertura = req.HoraAbertura;
+        espaco.HoraFechamento = req.HoraFechamento;
+        espaco.DuracaoMaximaMinutos = req.TipoLocacao == TipoLocacaoEspaco.PorDia && req.DuracaoMaximaMinutos < 60
+            ? 1440
+            : req.DuracaoMaximaMinutos;
+        espaco.AntecedenciaMaximaDias = req.AntecedenciaMaximaDias;
+        espaco.TipoLocacao = req.TipoLocacao;
+        espaco.ValorReserva = Math.Round(req.ValorReserva, 2);
+
+        _auditoria.Registrar(user.UsuarioId, espaco.UnidadeId, "ATUALIZAR_ESPACO", nameof(Espaco), espaco.Id,
+            $"Espaço '{espaco.Nome}' atualizado ({espaco.TipoLocacao}, R$ {espaco.ValorReserva:N2}).");
+        await _db.SaveChangesAsync(ct);
+
+        return ToEspacoDto(espaco);
+    }
+
+    public async Task<FotoItemDto> AdicionarFotoEspacoAsync(
+        AuthenticatedUserInfo user,
+        int espacoId,
+        UploadFotoRequest req,
+        CancellationToken ct = default)
+    {
+        var espaco = await _db.Espacos
+            .Include(e => e.Fotos)
+            .FirstOrDefaultAsync(e => e.Id == espacoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Espaço não encontrado.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, espaco.UnidadeId);
+
+        var (nomeArquivo, contentType, caminhoRelativo) = await SalvarFotoBase64Async("espacos", req, ct);
+        var ordem = espaco.Fotos.Count == 0 ? 1 : espaco.Fotos.Max(f => f.Ordem) + 1;
+
+        var foto = new FotoEspaco
+        {
+            EspacoId = espaco.Id,
+            NomeArquivo = nomeArquivo,
+            ContentType = contentType,
+            CaminhoRelativo = caminhoRelativo,
+            Ordem = ordem,
+            CriadaEmUtc = DateTime.UtcNow,
+            CriadaPorUsuarioId = user.UsuarioId
+        };
+        _db.FotosEspaco.Add(foto);
+        await _db.SaveChangesAsync(ct);
+
+        _auditoria.Registrar(user.UsuarioId, espaco.UnidadeId, "ADICIONAR_FOTO_ESPACO", nameof(Espaco), espaco.Id,
+            $"Foto '{nomeArquivo}' adicionada ao espaço #{espaco.Id}.");
+        await _db.SaveChangesAsync(ct);
+
+        return ToFotoEspacoDto(foto);
+    }
+
+    public async Task RemoverFotoEspacoAsync(
+        AuthenticatedUserInfo user,
+        int espacoId,
+        int fotoId,
+        CancellationToken ct = default)
+    {
+        var foto = await _db.FotosEspaco
+            .Include(f => f.Espaco)
+            .FirstOrDefaultAsync(f => f.Id == fotoId && f.EspacoId == espacoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Foto do espaço não encontrada.");
+
+        _currentUser.EnsureAdminOrSuperAdminForUnit(user, foto.Espaco.UnidadeId);
+
+        var caminho = foto.CaminhoRelativo;
+        _db.FotosEspaco.Remove(foto);
+        _auditoria.Registrar(user.UsuarioId, foto.Espaco.UnidadeId, "REMOVER_FOTO_ESPACO", nameof(Espaco), espacoId,
+            $"Foto #{fotoId} removida do espaço #{espacoId}.");
+        await _db.SaveChangesAsync(ct);
+        ExcluirArquivoSeguro(caminho);
+    }
+
+    public async Task<(string CaminhoAbsoluto, string ContentType)> ObterArquivoFotoEspacoAsync(int fotoId, CancellationToken ct = default)
+    {
+        var foto = await _db.FotosEspaco.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fotoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Foto não encontrada.");
+        return ResolverCaminhoFotoExistente(foto.CaminhoRelativo, foto.ContentType);
     }
 
     public async Task<OcupacaoEspacoDto> CriarBloqueioManutencaoAsync(
@@ -418,6 +676,13 @@ public class EventoEspacoReservaService
                 ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Espaço não encontrado.");
 
             _currentUser.EnsureAdminOrSuperAdminForUnit(user, espaco.UnidadeId);
+
+            if (espaco.TipoLocacao == TipoLocacaoEspaco.PorDia)
+            {
+                var periodoDia = NormalizarEValidarPeriodo(espaco, req.Inicio, req.Fim, aplicarRegrasReservaParticular: false, DateTime.UtcNow);
+                inicioUtc = periodoDia.InicioUtc;
+                fimUtc = periodoDia.FimUtc;
+            }
 
             var conflito = await _db.OcupacoesEspaco
                 .AnyAsync(o => o.EspacoId == espaco.Id && o.Ativa && o.InicioUtc < fimUtc && o.FimUtc > inicioUtc, ct);
@@ -463,45 +728,88 @@ public class EventoEspacoReservaService
         var espaco = await _db.Espacos.AsNoTracking().FirstOrDefaultAsync(e => e.Id == espacoId, ct)
             ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Espaço não encontrado.");
 
-        if (user.Role != RoleAdministrativa.SuperAdmin
-            && user.UnidadeAdministrativaId != espaco.UnidadeId
-            && user.UnidadeAssociadoId != espaco.UnidadeId)
-        {
-            throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.UnidadeSemPermissao, "Você não possui acesso à agenda deste espaço.");
-        }
+        EnsureAcessoUnidadeEspaco(user, espaco.UnidadeId);
 
-        var query = _db.OcupacoesEspaco
-            .AsNoTracking()
-            .Include(o => o.Evento)
-            .Where(o => o.EspacoId == espacoId && o.Ativa);
+        return await ConsultarOcupacoesInternoAsync(espaco, dataInicio, dataFim, ct);
+    }
 
-        if (dataInicio.HasValue)
-        {
-            var dtIni = dataInicio.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc).AddHours(-3);
-            query = query.Where(o => o.FimUtc >= dtIni);
-        }
-        if (dataFim.HasValue)
-        {
-            var dtFim = dataFim.Value.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc).AddHours(3);
-            query = query.Where(o => o.InicioUtc <= dtFim);
-        }
+    public async Task<AgendaEspacoDto> ConsultarAgendaEspacoAsync(
+        AuthenticatedUserInfo user,
+        int espacoId,
+        DateOnly? dataInicio = null,
+        DateOnly? dataFim = null,
+        CancellationToken ct = default)
+    {
+        var espaco = await _db.Espacos.AsNoTracking().FirstOrDefaultAsync(e => e.Id == espacoId, ct)
+            ?? throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Espaço não encontrado.");
 
-        var list = await query.OrderBy(o => o.InicioUtc).ToListAsync(ct);
-        return list.Select(o =>
+        EnsureAcessoUnidadeEspaco(user, espaco.UnidadeId);
+
+        var hoje = TimeZoneHelper.TodaySaoPaulo();
+        var ini = dataInicio ?? hoje;
+        var fim = espaco.TipoLocacao == TipoLocacaoEspaco.PorDia
+            ? (dataFim ?? ini.AddDays(29))
+            : ini;
+
+        if (fim < ini)
+            fim = ini;
+
+        if (espaco.TipoLocacao == TipoLocacaoEspaco.PorDia && fim.DayNumber - ini.DayNumber > 90)
+            fim = ini.AddDays(90);
+
+        var ocupacoesDto = await ConsultarOcupacoesInternoAsync(espaco, ini, fim, ct);
+        var slots = new List<SlotAgendaDto>();
+
+        if (espaco.TipoLocacao == TipoLocacaoEspaco.PorDia)
         {
-            var desc = o.Origem switch
+            for (var d = ini; d <= fim; d = d.AddDays(1))
             {
-                OrigemOcupacaoEspaco.Reserva => "Reservado por associado",
-                OrigemOcupacaoEspaco.Evento => o.Evento?.Nome ?? "Evento do clube",
-                OrigemOcupacaoEspaco.Manutencao => o.DescricaoBloqueio ?? "Bloqueio de manutenção",
-                _ => "Ocupado"
-            };
-            return new OcupacaoEspacoDto(
-                o.Id, espaco.Id, espaco.Nome,
-                TimeZoneHelper.ToSaoPauloOffset(o.InicioUtc),
-                TimeZoneHelper.ToSaoPauloOffset(o.FimUtc),
-                o.Origem, desc, o.Ativa);
-        }).ToList();
+                var slotIni = new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), OffsetSaoPaulo);
+                var slotFim = new DateTimeOffset(d.AddDays(1).ToDateTime(TimeOnly.MinValue), OffsetSaoPaulo);
+                var conflito = ocupacoesDto.FirstOrDefault(o => o.Inicio < slotFim && o.Fim > slotIni);
+
+                slots.Add(new SlotAgendaDto(
+                    slotIni,
+                    slotFim,
+                    d.ToString("dd/MM/yyyy"),
+                    conflito is null,
+                    conflito?.Origem,
+                    conflito?.DescricaoPublica));
+            }
+        }
+        else
+        {
+            var horaCursor = espaco.HoraAbertura;
+            while (horaCursor.AddHours(1) <= espaco.HoraFechamento && horaCursor.AddHours(1) > horaCursor)
+            {
+                var horaProx = horaCursor.AddHours(1);
+                var slotIni = new DateTimeOffset(ini.ToDateTime(horaCursor), OffsetSaoPaulo);
+                var slotFim = new DateTimeOffset(ini.ToDateTime(horaProx), OffsetSaoPaulo);
+                var conflito = ocupacoesDto.FirstOrDefault(o => o.Inicio < slotFim && o.Fim > slotIni);
+
+                slots.Add(new SlotAgendaDto(
+                    slotIni,
+                    slotFim,
+                    $"{horaCursor:HH\\:mm} - {horaProx:HH\\:mm}",
+                    conflito is null,
+                    conflito?.Origem,
+                    conflito?.DescricaoPublica));
+
+                horaCursor = horaProx;
+            }
+        }
+
+        return new AgendaEspacoDto(
+            espaco.Id,
+            espaco.Nome,
+            espaco.TipoLocacao,
+            espaco.ValorReserva,
+            espaco.HoraAbertura,
+            espaco.HoraFechamento,
+            ini,
+            fim,
+            slots,
+            ocupacoesDto);
     }
 
     public async Task<ReservaEspacoDto> CriarReservaAsync(
@@ -509,28 +817,13 @@ public class EventoEspacoReservaService
         CriarReservaRequest req,
         CancellationToken ct = default)
     {
-        // Regra 9.1, D2 e 5.2: Apenas associado titular pagante (Associado, Fundador, Convidado) pode reservar espaços de sua própria unidade
         if (user.EhDependenteAtivo || !user.AssociadoId.HasValue || user.CategoriaCodigo == CodigosCategoriaAssociado.Simpatizante)
         {
             throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.RecursoSemPermissao,
                 "Apenas associados titulares autorizados podem realizar reservas de espaços.");
         }
 
-        var inicioUtc = req.Inicio.UtcDateTime;
-        var fimUtc = req.Fim.UtcDateTime;
         var nowUtc = DateTime.UtcNow;
-
-        if (fimUtc <= inicioUtc)
-            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O horário final da reserva deve ser posterior ao início.");
-
-        if (inicioUtc <= nowUtc)
-            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco, "Reservas só podem ser criadas para horários futuros.");
-
-        var duracaoMinutos = (fimUtc - inicioUtc).TotalMinutes;
-        if (duracaoMinutos < 60)
-            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco, "A duração mínima de uma reserva é de 60 minutos (1 hora).");
-
-        // Serializa concorrência por EspacoId (em processo + SELECT FOR UPDATE no MySQL)
         var sem = EspacoLocks.GetOrAdd(req.EspacoId, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct);
         try
@@ -546,45 +839,21 @@ public class EventoEspacoReservaService
             if (espaco.UnidadeId != user.UnidadeAssociadoId)
                 throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.UnidadeSemPermissao, "Você só pode reservar espaços da sua própria unidade.");
 
-            if (duracaoMinutos > espaco.DuracaoMaximaMinutos)
-            {
-                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
-                    $"A duração máxima permitida para este espaço é de {espaco.DuracaoMaximaMinutos} minutos.");
-            }
+            var periodo = NormalizarEValidarPeriodo(espaco, req.Inicio, req.Fim, aplicarRegrasReservaParticular: true, nowUtc);
 
-            var inicioLocal = TimeZoneHelper.ToSaoPauloOffset(inicioUtc);
-            var fimLocal = TimeZoneHelper.ToSaoPauloOffset(fimUtc);
-            var hojeLocal = TimeZoneHelper.TodaySaoPaulo(nowUtc);
-
-            if (DateOnly.FromDateTime(inicioLocal.DateTime).DayNumber - hojeLocal.DayNumber > espaco.AntecedenciaMaximaDias)
-            {
-                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
-                    $"A antecedência máxima para reservar este espaço é de {espaco.AntecedenciaMaximaDias} dias.");
-            }
-
-            var horaIniLocal = TimeOnly.FromDateTime(inicioLocal.DateTime);
-            var horaFimLocal = TimeOnly.FromDateTime(fimLocal.DateTime);
-            if (DateOnly.FromDateTime(inicioLocal.DateTime) != DateOnly.FromDateTime(fimLocal.DateTime)
-                || horaIniLocal < espaco.HoraAbertura
-                || horaFimLocal > espaco.HoraFechamento)
-            {
-                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
-                    $"O horário da reserva deve estar dentro do funcionamento do espaço ({espaco.HoraAbertura:HH\\:mm} às {espaco.HoraFechamento:HH\\:mm}).");
-            }
-
-            // Verifica sobreposição (períodos adjacentes onde FimUtc == inicioUtc ou InicioUtc == fimUtc são permitidos!)
             var conflito = await _db.OcupacoesEspaco
-                .AnyAsync(o => o.EspacoId == espaco.Id && o.Ativa && o.InicioUtc < fimUtc && o.FimUtc > inicioUtc, ct);
+                .AnyAsync(o => o.EspacoId == espaco.Id && o.Ativa && o.InicioUtc < periodo.FimUtc && o.FimUtc > periodo.InicioUtc, ct);
 
             if (conflito)
-                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.ReservaHorarioOcupado, "Este espaço já está ocupado no período selecionado.");
+                throw new ApiException(StatusCodes.Status409Conflict, CodigosErro.ReservaHorarioOcupado, "Este espaço já está ocupado na agenda para o período selecionado.");
 
             var reserva = new ReservaEspaco
             {
                 EspacoId = espaco.Id,
                 AssociadoId = user.AssociadoId.Value,
-                InicioUtc = inicioUtc,
-                FimUtc = fimUtc,
+                InicioUtc = periodo.InicioUtc,
+                FimUtc = periodo.FimUtc,
+                ValorTotal = periodo.ValorTotal,
                 Status = StatusReserva.Confirmada,
                 CriadaEmUtc = nowUtc
             };
@@ -594,8 +863,8 @@ public class EventoEspacoReservaService
             var ocupacao = new OcupacaoEspaco
             {
                 EspacoId = espaco.Id,
-                InicioUtc = inicioUtc,
-                FimUtc = fimUtc,
+                InicioUtc = periodo.InicioUtc,
+                FimUtc = periodo.FimUtc,
                 Origem = OrigemOcupacaoEspaco.Reserva,
                 ReservaEspacoId = reserva.Id,
                 Ativa = true,
@@ -623,7 +892,9 @@ public class EventoEspacoReservaService
                 reserva.Status,
                 TimeZoneHelper.ToSaoPauloOffset(reserva.CriadaEmUtc),
                 null,
-                null);
+                null,
+                espaco.TipoLocacao,
+                reserva.ValorTotal);
         }
         finally
         {
@@ -666,7 +937,6 @@ public class EventoEspacoReservaService
 
             if (canceladoPeloProprioTitular)
             {
-                // Regra 9.2: O associado poderá cancelar até 24 horas antes do início
                 if ((reserva.InicioUtc - nowUtc).TotalHours < 24)
                 {
                     throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaCancelamentoForaPrazo,
@@ -715,20 +985,7 @@ public class EventoEspacoReservaService
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            return new ReservaEspacoDto(
-                reserva.Id,
-                reserva.EspacoId,
-                reserva.Espaco.Nome,
-                reserva.Espaco.UnidadeId,
-                reserva.Espaco.Unidade.Nome,
-                reserva.AssociadoId,
-                reserva.Associado.Pessoa.NomeCompleto,
-                TimeZoneHelper.ToSaoPauloOffset(reserva.InicioUtc),
-                TimeZoneHelper.ToSaoPauloOffset(reserva.FimUtc),
-                reserva.Status,
-                TimeZoneHelper.ToSaoPauloOffset(reserva.CriadaEmUtc),
-                TimeZoneHelper.ToSaoPauloOffset(nowUtc),
-                reserva.JustificativaCancelamento);
+            return ToReservaDto(reserva);
         }
         finally
         {
@@ -768,20 +1025,240 @@ public class EventoEspacoReservaService
         }
 
         var items = await query.OrderByDescending(r => r.InicioUtc).ToListAsync(ct);
-        return items.Select(r => new ReservaEspacoDto(
-            r.Id,
-            r.EspacoId,
-            r.Espaco.Nome,
-            r.Espaco.UnidadeId,
-            r.Espaco.Unidade.Nome,
-            r.AssociadoId,
-            r.Associado.Pessoa.NomeCompleto,
-            TimeZoneHelper.ToSaoPauloOffset(r.InicioUtc),
-            TimeZoneHelper.ToSaoPauloOffset(r.FimUtc),
-            r.Status,
-            TimeZoneHelper.ToSaoPauloOffset(r.CriadaEmUtc),
-            r.CanceladaEmUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(r.CanceladaEmUtc.Value) : null,
-            r.JustificativaCancelamento)).ToList();
+        return items.Select(ToReservaDto).ToList();
+    }
+
+    // ==================== HELPERS ====================
+
+    private async Task<IReadOnlyList<OcupacaoEspacoDto>> ConsultarOcupacoesInternoAsync(
+        Espaco espaco,
+        DateOnly? dataInicio,
+        DateOnly? dataFim,
+        CancellationToken ct)
+    {
+        var query = _db.OcupacoesEspaco
+            .AsNoTracking()
+            .Include(o => o.Evento)
+            .Where(o => o.EspacoId == espaco.Id && o.Ativa);
+
+        if (dataInicio.HasValue)
+        {
+            var dtIni = new DateTimeOffset(dataInicio.Value.ToDateTime(TimeOnly.MinValue), OffsetSaoPaulo).UtcDateTime;
+            query = query.Where(o => o.FimUtc > dtIni);
+        }
+        if (dataFim.HasValue)
+        {
+            var dtFim = new DateTimeOffset(dataFim.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), OffsetSaoPaulo).UtcDateTime;
+            query = query.Where(o => o.InicioUtc < dtFim);
+        }
+
+        var list = await query.OrderBy(o => o.InicioUtc).ToListAsync(ct);
+        return list.Select(o =>
+        {
+            var desc = o.Origem switch
+            {
+                OrigemOcupacaoEspaco.Reserva => "Reservado por associado",
+                OrigemOcupacaoEspaco.Evento => o.Evento?.Nome ?? "Evento do clube",
+                OrigemOcupacaoEspaco.Manutencao => o.DescricaoBloqueio ?? "Bloqueio de manutenção",
+                _ => "Ocupado"
+            };
+            return new OcupacaoEspacoDto(
+                o.Id, espaco.Id, espaco.Nome,
+                TimeZoneHelper.ToSaoPauloOffset(o.InicioUtc),
+                TimeZoneHelper.ToSaoPauloOffset(o.FimUtc),
+                o.Origem, desc, o.Ativa);
+        }).ToList();
+    }
+
+    private static void EnsureAcessoUnidadeEspaco(AuthenticatedUserInfo user, int unidadeId)
+    {
+        if (user.Role == RoleAdministrativa.SuperAdmin)
+            return;
+        if (user.Role is RoleAdministrativa.Admin or RoleAdministrativa.Tesoureiro && user.UnidadeAdministrativaId == unidadeId)
+            return;
+        if (user.UnidadeAssociadoId == unidadeId)
+            return;
+
+        throw new ApiException(StatusCodes.Status403Forbidden, CodigosErro.UnidadeSemPermissao, "Você não possui acesso aos espaços desta unidade.");
+    }
+
+    private static void ValidarRequestEspaco(CriarOuAtualizarEspacoRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Nome))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O nome do espaço é obrigatório.");
+
+        if (!Enum.IsDefined(req.TipoLocacao))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Tipo de locação do espaço inválido.");
+
+        if (req.ValorReserva < 0)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O valor da reserva não pode ser negativo.");
+
+        if (req.HoraFechamento <= req.HoraAbertura)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O horário de fechamento deve ser posterior à abertura.");
+
+        if (req.AntecedenciaMaximaDias < 1)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A antecedência máxima deve ser de pelo menos 1 dia.");
+
+        if (req.TipoLocacao == TipoLocacaoEspaco.PorHora && req.DuracaoMaximaMinutos < 60)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A duração máxima mínima para locação por hora é de 60 minutos.");
+    }
+
+    private static (DateTime InicioUtc, DateTime FimUtc, decimal ValorTotal) NormalizarEValidarPeriodo(
+        Espaco espaco,
+        DateTimeOffset inicioReq,
+        DateTimeOffset fimReq,
+        bool aplicarRegrasReservaParticular,
+        DateTime nowUtc)
+    {
+        var inicioUtc = inicioReq.UtcDateTime;
+        var fimUtc = fimReq.UtcDateTime;
+
+        if (fimUtc <= inicioUtc)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "O período final deve ser posterior ao início.");
+
+        var inicioLocal = TimeZoneHelper.ToSaoPauloOffset(inicioUtc);
+        var fimLocal = TimeZoneHelper.ToSaoPauloOffset(fimUtc);
+        var hojeLocal = TimeZoneHelper.TodaySaoPaulo(nowUtc);
+        var dataIni = DateOnly.FromDateTime(inicioLocal.DateTime);
+        var dataFim = DateOnly.FromDateTime(fimLocal.DateTime);
+
+        if (espaco.TipoLocacao == TipoLocacaoEspaco.PorDia)
+        {
+            if (fimLocal.TimeOfDay == TimeSpan.Zero && dataFim > dataIni)
+                dataFim = dataFim.AddDays(-1);
+
+            if (dataFim < dataIni)
+                throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A data final deve ser igual ou posterior à data inicial.");
+
+            var inicioDiaUtc = new DateTimeOffset(dataIni.ToDateTime(TimeOnly.MinValue), inicioLocal.Offset).UtcDateTime;
+            var fimDiaUtc = new DateTimeOffset(dataFim.AddDays(1).ToDateTime(TimeOnly.MinValue), inicioLocal.Offset).UtcDateTime;
+
+            if (aplicarRegrasReservaParticular)
+            {
+                if (dataIni < hojeLocal || fimDiaUtc <= nowUtc)
+                    throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco, "Reservas por dia só podem ser criadas para datas vigentes ou futuras.");
+
+                if (dataIni.DayNumber - hojeLocal.DayNumber > espaco.AntecedenciaMaximaDias)
+                {
+                    throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
+                        $"A antecedência máxima para reservar este espaço é de {espaco.AntecedenciaMaximaDias} dias.");
+                }
+            }
+
+            var dias = dataFim.DayNumber - dataIni.DayNumber + 1;
+            var valorDia = Math.Round(espaco.ValorReserva * dias, 2);
+            return (inicioDiaUtc, fimDiaUtc, valorDia);
+        }
+
+        // TipoLocacaoEspaco.PorHora
+        var duracaoMinutos = (fimUtc - inicioUtc).TotalMinutes;
+
+        if (aplicarRegrasReservaParticular)
+        {
+            if (inicioUtc <= nowUtc)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco, "Reservas só podem ser criadas para horários futuros.");
+
+            if (duracaoMinutos < 60)
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco, "A duração mínima de uma reserva por hora é de 60 minutos.");
+
+            if (duracaoMinutos > espaco.DuracaoMaximaMinutos)
+            {
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
+                    $"A duração máxima permitida para este espaço é de {espaco.DuracaoMaximaMinutos} minutos.");
+            }
+
+            if (dataIni.DayNumber - hojeLocal.DayNumber > espaco.AntecedenciaMaximaDias)
+            {
+                throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
+                    $"A antecedência máxima para reservar este espaço é de {espaco.AntecedenciaMaximaDias} dias.");
+            }
+        }
+
+        var horaIniLocal = TimeOnly.FromDateTime(inicioLocal.DateTime);
+        var horaFimLocal = TimeOnly.FromDateTime(fimLocal.DateTime);
+        if (dataIni != dataFim || horaIniLocal < espaco.HoraAbertura || horaFimLocal > espaco.HoraFechamento)
+        {
+            throw new ApiException(StatusCodes.Status422UnprocessableEntity, CodigosErro.ReservaForaRegrasEspaco,
+                $"Este espaço é locado por horário: informe início e término no mesmo dia dentro de {espaco.HoraAbertura:HH\\:mm} às {espaco.HoraFechamento:HH\\:mm}.");
+        }
+
+        var horas = (decimal)(fimUtc - inicioUtc).TotalHours;
+        var valorHora = Math.Round(espaco.ValorReserva * horas, 2);
+        return (inicioUtc, fimUtc, valorHora);
+    }
+
+    private async Task<(string NomeArquivo, string ContentType, string CaminhoRelativo)> SalvarFotoBase64Async(
+        string pasta,
+        UploadFotoRequest req,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.NomeArquivo) || string.IsNullOrWhiteSpace(req.ConteudoBase64))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Nome do arquivo e conteúdo da foto são obrigatórios.");
+
+        var contentType = (req.ContentType ?? string.Empty).Trim().ToLowerInvariant();
+        if (contentType == "image/jpg")
+            contentType = "image/jpeg";
+
+        if (!ExtensoesPermitidas.TryGetValue(contentType, out var ext))
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Formato de imagem não suportado. Utilize JPG, PNG ou WEBP.");
+
+        var base64 = req.ConteudoBase64.Trim();
+        var commaIdx = base64.IndexOf(',');
+        if (base64.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && commaIdx >= 0)
+            base64 = base64[(commaIdx + 1)..];
+
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(base64);
+        }
+        catch (FormatException)
+        {
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "Conteúdo da imagem em Base64 inválido.");
+        }
+
+        if (bytes.Length == 0 || bytes.Length > TamanhoMaximoFotoBytes)
+            throw new ApiException(StatusCodes.Status400BadRequest, CodigosErro.DadosInvalidos, "A foto deve possuir entre 1 byte e 5 MB.");
+
+        var nomeSeguro = Path.GetFileName(req.NomeArquivo.Trim());
+        if (nomeSeguro.Length > 200)
+            nomeSeguro = nomeSeguro[^200..];
+
+        var arquivoDisco = $"{Guid.NewGuid():N}{ext}";
+        var dirRelativo = Path.Combine("uploads", pasta);
+        var dirAbsoluto = Path.Combine(_env.ContentRootPath, dirRelativo);
+        Directory.CreateDirectory(dirAbsoluto);
+
+        var caminhoRelativo = Path.Combine(dirRelativo, arquivoDisco);
+        var caminhoAbsoluto = Path.Combine(_env.ContentRootPath, caminhoRelativo);
+        await File.WriteAllBytesAsync(caminhoAbsoluto, bytes, ct);
+
+        return (nomeSeguro, contentType, caminhoRelativo.Replace('\\', '/'));
+    }
+
+    private (string CaminhoAbsoluto, string ContentType) ResolverCaminhoFotoExistente(string caminhoRelativo, string contentType)
+    {
+        var uploadsRoot = Path.GetFullPath(Path.Combine(_env.ContentRootPath, "uploads"));
+        var fullPath = Path.GetFullPath(Path.Combine(_env.ContentRootPath, caminhoRelativo));
+        if (!fullPath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+            throw new ApiException(StatusCodes.Status404NotFound, CodigosErro.RecursoNaoEncontrado, "Arquivo de foto não encontrado.");
+
+        return (fullPath, contentType);
+    }
+
+    private void ExcluirArquivoSeguro(string caminhoRelativo)
+    {
+        try
+        {
+            var uploadsRoot = Path.GetFullPath(Path.Combine(_env.ContentRootPath, "uploads"));
+            var fullPath = Path.GetFullPath(Path.Combine(_env.ContentRootPath, caminhoRelativo));
+            if (fullPath.StartsWith(uploadsRoot, StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath))
+                File.Delete(fullPath);
+        }
+        catch
+        {
+            // Ignora falha ao remover arquivo órfão
+        }
     }
 
     private async Task LockEspacoRowIfMySqlAsync(int espacoId, CancellationToken ct)
@@ -791,6 +1268,44 @@ public class EventoEspacoReservaService
             await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT Id FROM Espaco WHERE Id = {espacoId} FOR UPDATE", ct);
         }
     }
+
+    private static FotoItemDto ToFotoEspacoDto(FotoEspaco f) => new(
+        f.Id, f.NomeArquivo, f.ContentType, $"api/v1/midia/espacos/{f.Id}", f.Ordem, TimeZoneHelper.ToSaoPauloOffset(f.CriadaEmUtc));
+
+    private static FotoItemDto ToFotoEventoDto(FotoEvento f) => new(
+        f.Id, f.NomeArquivo, f.ContentType, $"api/v1/midia/eventos/{f.Id}", f.Ordem, TimeZoneHelper.ToSaoPauloOffset(f.CriadaEmUtc));
+
+    private static EspacoDto ToEspacoDto(Espaco e) => new(
+        e.Id,
+        e.UnidadeId,
+        e.Unidade.Nome,
+        e.Nome,
+        e.Descricao,
+        e.Ativo,
+        e.HoraAbertura,
+        e.HoraFechamento,
+        e.DuracaoMaximaMinutos,
+        e.AntecedenciaMaximaDias,
+        e.TipoLocacao,
+        e.ValorReserva,
+        e.Fotos.OrderBy(f => f.Ordem).ThenBy(f => f.Id).Select(ToFotoEspacoDto).ToList());
+
+    private static ReservaEspacoDto ToReservaDto(ReservaEspaco r) => new(
+        r.Id,
+        r.EspacoId,
+        r.Espaco.Nome,
+        r.Espaco.UnidadeId,
+        r.Espaco.Unidade.Nome,
+        r.AssociadoId,
+        r.Associado.Pessoa.NomeCompleto,
+        TimeZoneHelper.ToSaoPauloOffset(r.InicioUtc),
+        TimeZoneHelper.ToSaoPauloOffset(r.FimUtc),
+        r.Status,
+        TimeZoneHelper.ToSaoPauloOffset(r.CriadaEmUtc),
+        r.CanceladaEmUtc.HasValue ? TimeZoneHelper.ToSaoPauloOffset(r.CanceladaEmUtc.Value) : null,
+        r.JustificativaCancelamento,
+        r.Espaco.TipoLocacao,
+        r.ValorTotal);
 
     public static EventoDto ToEventoDto(Evento e) => new(
         Id: e.Id,
@@ -807,5 +1322,7 @@ public class EventoEspacoReservaService
         UnidadesParticipantesIds: e.UnidadesParticipantes.Select(u => u.UnidadeId).ToList(),
         UnidadesParticipantesNomes: e.UnidadesParticipantes.Select(u => u.Unidade.Nome).OrderBy(n => n).ToList(),
         EspacosOcupadosIds: e.OcupacoesEspaco.Where(o => o.Ativa).Select(o => o.EspacoId).ToList(),
-        EspacosOcupadosNomes: e.OcupacoesEspaco.Where(o => o.Ativa).Select(o => o.Espaco.Nome).ToList());
+        EspacosOcupadosNomes: e.OcupacoesEspaco.Where(o => o.Ativa).Select(o => o.Espaco.Nome).ToList(),
+        ValorReservaEspaco: e.ValorReservaEspaco,
+        Fotos: e.Fotos.OrderBy(f => f.Ordem).ThenBy(f => f.Id).Select(ToFotoEventoDto).ToList());
 }

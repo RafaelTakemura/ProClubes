@@ -407,6 +407,39 @@ public record RegistrarPagamentoMensalidadeRequest(
     FormaPagamento FormaPagamento);
 
 // ==================== EVENTOS, ESPAÇOS E RESERVAS ====================
+public record FotoItemDto(
+    int Id,
+    string NomeArquivo,
+    string ContentType,
+    string UrlRelativa,
+    int Ordem,
+    DateTimeOffset CriadaEm);
+
+public record UploadFotoRequest(
+    string NomeArquivo,
+    string ContentType,
+    string ConteudoBase64);
+
+public record SlotAgendaDto(
+    DateTimeOffset Inicio,
+    DateTimeOffset Fim,
+    string Rotulo,
+    bool Disponivel,
+    OrigemOcupacaoEspaco? OrigemOcupacao = null,
+    string? DescricaoOcupacao = null);
+
+public record AgendaEspacoDto(
+    int EspacoId,
+    string EspacoNome,
+    TipoLocacaoEspaco TipoLocacao,
+    decimal ValorReserva,
+    TimeOnly HoraAbertura,
+    TimeOnly HoraFechamento,
+    DateOnly DataInicioConsulta,
+    DateOnly DataFimConsulta,
+    IReadOnlyList<SlotAgendaDto> Slots,
+    IReadOnlyList<OcupacaoEspacoDto> Ocupacoes);
+
 public record EventoDto(
     int Id,
     int UnidadeOrganizadoraId,
@@ -422,7 +455,9 @@ public record EventoDto(
     IReadOnlyList<int> UnidadesParticipantesIds,
     IReadOnlyList<string> UnidadesParticipantesNomes,
     IReadOnlyList<int> EspacosOcupadosIds,
-    IReadOnlyList<string> EspacosOcupadosNomes);
+    IReadOnlyList<string> EspacosOcupadosNomes,
+    decimal ValorReservaEspaco = 0m,
+    IReadOnlyList<FotoItemDto>? Fotos = null);
 
 public record CriarEventoRequest(
     int UnidadeOrganizadoraId,
@@ -464,7 +499,10 @@ public record EspacoDto(
     TimeOnly HoraAbertura,
     TimeOnly HoraFechamento,
     int DuracaoMaximaMinutos,
-    int AntecedenciaMaximaDias);
+    int AntecedenciaMaximaDias,
+    TipoLocacaoEspaco TipoLocacao = TipoLocacaoEspaco.PorHora,
+    decimal ValorReserva = 0m,
+    IReadOnlyList<FotoItemDto>? Fotos = null);
 
 public record CriarOuAtualizarEspacoRequest(
     int UnidadeId,
@@ -474,7 +512,9 @@ public record CriarOuAtualizarEspacoRequest(
     TimeOnly HoraAbertura,
     TimeOnly HoraFechamento,
     int DuracaoMaximaMinutos = 240,
-    int AntecedenciaMaximaDias = 90);
+    int AntecedenciaMaximaDias = 90,
+    TipoLocacaoEspaco TipoLocacao = TipoLocacaoEspaco.PorHora,
+    decimal ValorReserva = 0m);
 
 public record CriarBloqueioManutencaoRequest(
     int EspacoId,
@@ -505,7 +545,9 @@ public record ReservaEspacoDto(
     StatusReserva Status,
     DateTimeOffset CriadaEm,
     DateTimeOffset? CanceladaEm,
-    string? JustificativaCancelamento);
+    string? JustificativaCancelamento,
+    TipoLocacaoEspaco TipoLocacao = TipoLocacaoEspaco.PorHora,
+    decimal ValorTotal = 0m);
 
 public record CriarReservaRequest(
     int EspacoId,

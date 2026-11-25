@@ -82,6 +82,8 @@ public class ProClubesDbContext : DbContext
     public DbSet<Estado> Estados => Set<Estado>();
     public DbSet<Cidade> Cidades => Set<Cidade>();
     public DbSet<ContratoAssociado> ContratosAssociado => Set<ContratoAssociado>();
+    public DbSet<FotoEspaco> FotosEspaco => Set<FotoEspaco>();
+    public DbSet<FotoEvento> FotosEvento => Set<FotoEvento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -497,6 +499,7 @@ public class ProClubesDbContext : DbContext
             e.Property(x => x.Nome).HasMaxLength(180).IsRequired();
             e.Property(x => x.PublicoAlvo).HasConversion<byte>().IsRequired();
             e.Property(x => x.TaxaParticipacao).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+            e.Property(x => x.ValorReservaEspaco).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
             e.Property(x => x.Status).HasConversion<byte>().IsRequired();
 
             e.HasIndex(x => new { x.UnidadeOrganizadoraId, x.DataHoraInicioUtc });
@@ -567,6 +570,8 @@ public class ProClubesDbContext : DbContext
             e.Property(x => x.Nome).HasMaxLength(150).IsRequired();
             e.Property(x => x.Ativo).HasDefaultValue(true).IsRequired();
             e.Property(x => x.AntecedenciaMaximaDias).HasDefaultValue(90).IsRequired();
+            e.Property(x => x.TipoLocacao).HasConversion<byte>().HasDefaultValue(TipoLocacaoEspaco.PorHora).IsRequired();
+            e.Property(x => x.ValorReserva).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
 
             e.HasIndex(x => new { x.UnidadeId, x.Nome }).IsUnique();
             e.HasIndex(x => new { x.UnidadeId, x.Ativo });
@@ -582,6 +587,7 @@ public class ProClubesDbContext : DbContext
         {
             e.ToTable("ReservaEspaco");
             e.HasKey(x => x.Id);
+            e.Property(x => x.ValorTotal).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
             e.Property(x => x.Status).HasConversion<byte>().IsRequired();
             e.Property(x => x.JustificativaCancelamento).HasMaxLength(600);
 
@@ -952,6 +958,48 @@ public class ProClubesDbContext : DbContext
             e.HasOne(x => x.RespondidoPorUsuario)
                 .WithMany()
                 .HasForeignKey(x => x.RespondidoPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // 36. FotoEspaco
+        modelBuilder.Entity<FotoEspaco>(e =>
+        {
+            e.ToTable("FotoEspaco");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.NomeArquivo).HasMaxLength(200).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
+            e.Property(x => x.CaminhoRelativo).HasMaxLength(400).IsRequired();
+            e.HasIndex(x => new { x.EspacoId, x.Ordem });
+
+            e.HasOne(x => x.Espaco)
+                .WithMany(es => es.Fotos)
+                .HasForeignKey(x => x.EspacoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.CriadaPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.CriadaPorUsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // 37. FotoEvento
+        modelBuilder.Entity<FotoEvento>(e =>
+        {
+            e.ToTable("FotoEvento");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.NomeArquivo).HasMaxLength(200).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
+            e.Property(x => x.CaminhoRelativo).HasMaxLength(400).IsRequired();
+            e.HasIndex(x => new { x.EventoId, x.Ordem });
+
+            e.HasOne(x => x.Evento)
+                .WithMany(ev => ev.Fotos)
+                .HasForeignKey(x => x.EventoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.CriadaPorUsuario)
+                .WithMany()
+                .HasForeignKey(x => x.CriadaPorUsuarioId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }

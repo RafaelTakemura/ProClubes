@@ -47,6 +47,35 @@ public class EventosEspacosReservasController : ControllerBase
     }
 
     [Authorize]
+    [HttpPost("admin/eventos/{id:int}/fotos")]
+    public async Task<ActionResult<FotoItemDto>> AdicionarFotoEvento(
+        int id,
+        [FromBody] UploadFotoRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        var foto = await _service.AdicionarFotoEventoAsync(user, id, request, ct);
+        return StatusCode(StatusCodes.Status201Created, foto);
+    }
+
+    [Authorize]
+    [HttpDelete("admin/eventos/{id:int}/fotos/{fotoId:int}")]
+    public async Task<IActionResult> RemoverFotoEvento(int id, int fotoId, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        await _service.RemoverFotoEventoAsync(user, id, fotoId, ct);
+        return NoContent();
+    }
+
+    [AllowAnonymous]
+    [HttpGet("midia/eventos/{fotoId:int}")]
+    public async Task<IActionResult> ObterFotoEvento(int fotoId, CancellationToken ct)
+    {
+        var (caminho, contentType) = await _service.ObterArquivoFotoEventoAsync(fotoId, ct);
+        return PhysicalFile(caminho, contentType);
+    }
+
+    [Authorize]
     [HttpPost("admin/eventos/{id:int}/pagamentos")]
     public async Task<ActionResult<PagamentoEventoDto>> RegistrarPagamentoEvento(
         int id,
@@ -75,12 +104,73 @@ public class EventosEspacosReservasController : ControllerBase
     }
 
     [Authorize]
+    [HttpGet("espacos/disponiveis")]
+    public async Task<ActionResult<IReadOnlyList<EspacoDto>>> ListarEspacosDisponiveis(
+        [FromQuery] int unidadeId,
+        [FromQuery] DateTimeOffset inicio,
+        [FromQuery] DateTimeOffset fim,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.ListarEspacosDisponiveisAsync(user, unidadeId, inicio, fim, ct));
+    }
+
+    [Authorize]
+    [HttpGet("espacos/{id:int}/agenda")]
+    public async Task<ActionResult<AgendaEspacoDto>> ConsultarAgendaEspaco(
+        int id,
+        [FromQuery] DateOnly? dataInicio,
+        [FromQuery] DateOnly? dataFim,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.ConsultarAgendaEspacoAsync(user, id, dataInicio, dataFim, ct));
+    }
+
+    [Authorize]
     [HttpPost("admin/espacos")]
     public async Task<ActionResult<EspacoDto>> CriarEspaco([FromBody] CriarOuAtualizarEspacoRequest request, CancellationToken ct)
     {
         var user = await _currentUser.GetRequiredUserAsync(ct: ct);
         var espaco = await _service.CriarEspacoAsync(user, request, ct);
         return StatusCode(StatusCodes.Status201Created, espaco);
+    }
+
+    [Authorize]
+    [HttpPut("admin/espacos/{id:int}")]
+    public async Task<ActionResult<EspacoDto>> AtualizarEspaco(int id, [FromBody] CriarOuAtualizarEspacoRequest request, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        return Ok(await _service.AtualizarEspacoAsync(user, id, request, ct));
+    }
+
+    [Authorize]
+    [HttpPost("admin/espacos/{id:int}/fotos")]
+    public async Task<ActionResult<FotoItemDto>> AdicionarFotoEspaco(
+        int id,
+        [FromBody] UploadFotoRequest request,
+        CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        var foto = await _service.AdicionarFotoEspacoAsync(user, id, request, ct);
+        return StatusCode(StatusCodes.Status201Created, foto);
+    }
+
+    [Authorize]
+    [HttpDelete("admin/espacos/{id:int}/fotos/{fotoId:int}")]
+    public async Task<IActionResult> RemoverFotoEspaco(int id, int fotoId, CancellationToken ct)
+    {
+        var user = await _currentUser.GetRequiredUserAsync(ct: ct);
+        await _service.RemoverFotoEspacoAsync(user, id, fotoId, ct);
+        return NoContent();
+    }
+
+    [AllowAnonymous]
+    [HttpGet("midia/espacos/{fotoId:int}")]
+    public async Task<IActionResult> ObterFotoEspaco(int fotoId, CancellationToken ct)
+    {
+        var (caminho, contentType) = await _service.ObterArquivoFotoEspacoAsync(fotoId, ct);
+        return PhysicalFile(caminho, contentType);
     }
 
     [Authorize]

@@ -364,8 +364,10 @@ public static class DatabaseSeeder
                     Ativo = true,
                     HoraAbertura = new TimeOnly(8, 0),
                     HoraFechamento = new TimeOnly(22, 0),
-                    DuracaoMaximaMinutos = 240,
-                    AntecedenciaMaximaDias = 90
+                    DuracaoMaximaMinutos = 1440,
+                    AntecedenciaMaximaDias = 90,
+                    TipoLocacao = TipoLocacaoEspaco.PorDia,
+                    ValorReserva = 450.00m
                 },
                 new Espaco
                 {
@@ -376,7 +378,9 @@ public static class DatabaseSeeder
                     HoraAbertura = new TimeOnly(9, 0),
                     HoraFechamento = new TimeOnly(21, 0),
                     DuracaoMaximaMinutos = 300,
-                    AntecedenciaMaximaDias = 90
+                    AntecedenciaMaximaDias = 90,
+                    TipoLocacao = TipoLocacaoEspaco.PorHora,
+                    ValorReserva = 60.00m
                 },
                 new Espaco
                 {
@@ -386,8 +390,10 @@ public static class DatabaseSeeder
                     Ativo = true,
                     HoraAbertura = new TimeOnly(8, 0),
                     HoraFechamento = new TimeOnly(22, 0),
-                    DuracaoMaximaMinutos = 240,
-                    AntecedenciaMaximaDias = 90
+                    DuracaoMaximaMinutos = 1440,
+                    AntecedenciaMaximaDias = 90,
+                    TipoLocacao = TipoLocacaoEspaco.PorDia,
+                    ValorReserva = 500.00m
                 });
 
             await db.SaveChangesAsync(ct);
@@ -407,7 +413,13 @@ public static class DatabaseSeeder
                 "CREATE TABLE IF NOT EXISTS Cidade (Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, Nome TEXT NOT NULL, EstadoId INTEGER NOT NULL REFERENCES Estado(Id) ON DELETE RESTRICT, Ativa INTEGER NOT NULL DEFAULT 1, CriadaEmUtc TEXT NOT NULL, AtualizadaEmUtc TEXT NOT NULL, UltimaAlteracaoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL);",
                 "CREATE UNIQUE INDEX IF NOT EXISTS IX_Cidade_EstadoId_Nome ON Cidade (EstadoId, Nome);",
                 "CREATE TABLE IF NOT EXISTS ContratoAssociado (Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, NumeroContrato TEXT NOT NULL, AssociadoId INTEGER NOT NULL REFERENCES Associado(Id) ON DELETE RESTRICT, SolicitacaoCadastroId INTEGER NULL REFERENCES SolicitacaoCadastro(Id) ON DELETE SET NULL, UnidadeId INTEGER NOT NULL REFERENCES Unidade(Id) ON DELETE RESTRICT, CategoriaAssociadoId INTEGER NOT NULL REFERENCES CategoriaAssociado(Id) ON DELETE RESTRICT, Titulo TEXT NOT NULL, Conteudo TEXT NOT NULL, VersaoTermos TEXT NOT NULL, ValorMensalidadeReferencia TEXT NOT NULL DEFAULT '0.00', Status INTEGER NOT NULL, GeradoEmUtc TEXT NOT NULL, AtualizadoEmUtc TEXT NOT NULL, RespondidoEmUtc TEXT NULL, JustificativaRecusa TEXT NULL, ObservacoesAdmin TEXT NULL, GeradoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL, UltimaAlteracaoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL, RespondidoPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL);",
-                "CREATE UNIQUE INDEX IF NOT EXISTS IX_ContratoAssociado_NumeroContrato ON ContratoAssociado (NumeroContrato);"
+                "CREATE UNIQUE INDEX IF NOT EXISTS IX_ContratoAssociado_NumeroContrato ON ContratoAssociado (NumeroContrato);",
+                "ALTER TABLE Espaco ADD COLUMN TipoLocacao INTEGER NOT NULL DEFAULT 1;",
+                "ALTER TABLE Espaco ADD COLUMN ValorReserva TEXT NOT NULL DEFAULT '0.00';",
+                "ALTER TABLE ReservaEspaco ADD COLUMN ValorTotal TEXT NOT NULL DEFAULT '0.00';",
+                "ALTER TABLE Evento ADD COLUMN ValorReservaEspaco TEXT NOT NULL DEFAULT '0.00';",
+                "CREATE TABLE IF NOT EXISTS FotoEspaco (Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, EspacoId INTEGER NOT NULL REFERENCES Espaco(Id) ON DELETE CASCADE, NomeArquivo TEXT NOT NULL, ContentType TEXT NOT NULL, CaminhoRelativo TEXT NOT NULL, Ordem INTEGER NOT NULL DEFAULT 0, CriadaEmUtc TEXT NOT NULL, CriadaPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL);",
+                "CREATE TABLE IF NOT EXISTS FotoEvento (Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, EventoId INTEGER NOT NULL REFERENCES Evento(Id) ON DELETE CASCADE, NomeArquivo TEXT NOT NULL, ContentType TEXT NOT NULL, CaminhoRelativo TEXT NOT NULL, Ordem INTEGER NOT NULL DEFAULT 0, CriadaEmUtc TEXT NOT NULL, CriadaPorUsuarioId INTEGER NULL REFERENCES Usuario(Id) ON DELETE SET NULL);"
             }
             : new[]
             {
@@ -416,7 +428,13 @@ public static class DatabaseSeeder
                 "ALTER TABLE Pessoa ADD CONSTRAINT FK_Pessoa_Usuario_UltimaAlteracao FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL;",
                 "CREATE TABLE IF NOT EXISTS Estado (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, Nome VARCHAR(100) NOT NULL, UF CHAR(2) NOT NULL, Ativo TINYINT(1) NOT NULL DEFAULT 1, CriadoEmUtc DATETIME(6) NOT NULL, AtualizadoEmUtc DATETIME(6) NOT NULL, UltimaAlteracaoPorUsuarioId INT NULL, UNIQUE KEY IX_Estado_UF (UF), CONSTRAINT FK_Estado_Usuario_UltAlt FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;",
                 "CREATE TABLE IF NOT EXISTS Cidade (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, Nome VARCHAR(120) NOT NULL, EstadoId INT NOT NULL, Ativa TINYINT(1) NOT NULL DEFAULT 1, CriadaEmUtc DATETIME(6) NOT NULL, AtualizadaEmUtc DATETIME(6) NOT NULL, UltimaAlteracaoPorUsuarioId INT NULL, UNIQUE KEY IX_Cidade_EstadoId_Nome (EstadoId, Nome), CONSTRAINT FK_Cidade_Estado_EstadoId FOREIGN KEY (EstadoId) REFERENCES Estado(Id) ON DELETE RESTRICT, CONSTRAINT FK_Cidade_Usuario_UltAlt FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;",
-                "CREATE TABLE IF NOT EXISTS ContratoAssociado (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, NumeroContrato VARCHAR(40) NOT NULL, AssociadoId INT NOT NULL, SolicitacaoCadastroId INT NULL, UnidadeId INT NOT NULL, CategoriaAssociadoId INT NOT NULL, Titulo VARCHAR(200) NOT NULL, Conteudo LONGTEXT NOT NULL, VersaoTermos VARCHAR(30) NOT NULL, ValorMensalidadeReferencia DECIMAL(10,2) NOT NULL DEFAULT 0.00, Status TINYINT UNSIGNED NOT NULL, GeradoEmUtc DATETIME(6) NOT NULL, AtualizadoEmUtc DATETIME(6) NOT NULL, RespondidoEmUtc DATETIME(6) NULL, JustificativaRecusa VARCHAR(500) NULL, ObservacoesAdmin VARCHAR(500) NULL, GeradoPorUsuarioId INT NULL, UltimaAlteracaoPorUsuarioId INT NULL, RespondidoPorUsuarioId INT NULL, UNIQUE KEY IX_ContratoAssociado_NumeroContrato (NumeroContrato), CONSTRAINT FK_ContratoAssociado_Associado FOREIGN KEY (AssociadoId) REFERENCES Associado(Id) ON DELETE RESTRICT, CONSTRAINT FK_ContratoAssociado_Solicitacao FOREIGN KEY (SolicitacaoCadastroId) REFERENCES SolicitacaoCadastro(Id) ON DELETE SET NULL, CONSTRAINT FK_ContratoAssociado_Unidade FOREIGN KEY (UnidadeId) REFERENCES Unidade(Id) ON DELETE RESTRICT, CONSTRAINT FK_ContratoAssociado_Categoria FOREIGN KEY (CategoriaAssociadoId) REFERENCES CategoriaAssociado(Id) ON DELETE RESTRICT, CONSTRAINT FK_ContratoAssociado_GeradoPor FOREIGN KEY (GeradoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL, CONSTRAINT FK_ContratoAssociado_UltAlt FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL, CONSTRAINT FK_ContratoAssociado_RespondidoPor FOREIGN KEY (RespondidoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;"
+                "CREATE TABLE IF NOT EXISTS ContratoAssociado (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, NumeroContrato VARCHAR(40) NOT NULL, AssociadoId INT NOT NULL, SolicitacaoCadastroId INT NULL, UnidadeId INT NOT NULL, CategoriaAssociadoId INT NOT NULL, Titulo VARCHAR(200) NOT NULL, Conteudo LONGTEXT NOT NULL, VersaoTermos VARCHAR(30) NOT NULL, ValorMensalidadeReferencia DECIMAL(10,2) NOT NULL DEFAULT 0.00, Status TINYINT UNSIGNED NOT NULL, GeradoEmUtc DATETIME(6) NOT NULL, AtualizadoEmUtc DATETIME(6) NOT NULL, RespondidoEmUtc DATETIME(6) NULL, JustificativaRecusa VARCHAR(500) NULL, ObservacoesAdmin VARCHAR(500) NULL, GeradoPorUsuarioId INT NULL, UltimaAlteracaoPorUsuarioId INT NULL, RespondidoPorUsuarioId INT NULL, UNIQUE KEY IX_ContratoAssociado_NumeroContrato (NumeroContrato), CONSTRAINT FK_ContratoAssociado_Associado FOREIGN KEY (AssociadoId) REFERENCES Associado(Id) ON DELETE RESTRICT, CONSTRAINT FK_ContratoAssociado_Solicitacao FOREIGN KEY (SolicitacaoCadastroId) REFERENCES SolicitacaoCadastro(Id) ON DELETE SET NULL, CONSTRAINT FK_ContratoAssociado_Unidade FOREIGN KEY (UnidadeId) REFERENCES Unidade(Id) ON DELETE RESTRICT, CONSTRAINT FK_ContratoAssociado_Categoria FOREIGN KEY (CategoriaAssociadoId) REFERENCES CategoriaAssociado(Id) ON DELETE RESTRICT, CONSTRAINT FK_ContratoAssociado_GeradoPor FOREIGN KEY (GeradoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL, CONSTRAINT FK_ContratoAssociado_UltAlt FOREIGN KEY (UltimaAlteracaoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL, CONSTRAINT FK_ContratoAssociado_RespondidoPor FOREIGN KEY (RespondidoPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;",
+                "ALTER TABLE Espaco ADD COLUMN TipoLocacao TINYINT UNSIGNED NOT NULL DEFAULT 1;",
+                "ALTER TABLE Espaco ADD COLUMN ValorReserva DECIMAL(12,2) NOT NULL DEFAULT 0.00;",
+                "ALTER TABLE ReservaEspaco ADD COLUMN ValorTotal DECIMAL(12,2) NOT NULL DEFAULT 0.00;",
+                "ALTER TABLE Evento ADD COLUMN ValorReservaEspaco DECIMAL(12,2) NOT NULL DEFAULT 0.00;",
+                "CREATE TABLE IF NOT EXISTS FotoEspaco (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, EspacoId INT NOT NULL, NomeArquivo VARCHAR(200) NOT NULL, ContentType VARCHAR(80) NOT NULL, CaminhoRelativo VARCHAR(400) NOT NULL, Ordem INT NOT NULL DEFAULT 0, CriadaEmUtc DATETIME(6) NOT NULL, CriadaPorUsuarioId INT NULL, KEY IX_FotoEspaco_EspacoId_Ordem (EspacoId, Ordem), CONSTRAINT FK_FotoEspaco_Espaco FOREIGN KEY (EspacoId) REFERENCES Espaco(Id) ON DELETE CASCADE, CONSTRAINT FK_FotoEspaco_Usuario FOREIGN KEY (CriadaPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;",
+                "CREATE TABLE IF NOT EXISTS FotoEvento (Id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, EventoId INT NOT NULL, NomeArquivo VARCHAR(200) NOT NULL, ContentType VARCHAR(80) NOT NULL, CaminhoRelativo VARCHAR(400) NOT NULL, Ordem INT NOT NULL DEFAULT 0, CriadaEmUtc DATETIME(6) NOT NULL, CriadaPorUsuarioId INT NULL, KEY IX_FotoEvento_EventoId_Ordem (EventoId, Ordem), CONSTRAINT FK_FotoEvento_Evento FOREIGN KEY (EventoId) REFERENCES Evento(Id) ON DELETE CASCADE, CONSTRAINT FK_FotoEvento_Usuario FOREIGN KEY (CriadaPorUsuarioId) REFERENCES Usuario(Id) ON DELETE SET NULL) ENGINE=InnoDB;"
             };
 
         foreach (var sql in comandos)
