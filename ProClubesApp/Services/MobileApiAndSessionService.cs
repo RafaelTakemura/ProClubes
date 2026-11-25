@@ -38,6 +38,16 @@ public class MobileSessionAndApiService
         _cache = cache;
     }
 
+    public string ResolveMediaUrl(string? urlRelativa)
+    {
+        if (string.IsNullOrWhiteSpace(urlRelativa)) return string.Empty;
+        if (urlRelativa.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            urlRelativa.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return urlRelativa;
+        if (_http.BaseAddress is null) return urlRelativa;
+        return new Uri(_http.BaseAddress, urlRelativa.TrimStart('/')).ToString();
+    }
+
     public async Task<(bool Ok, string? Error)> LoginAsync(string identificador, string senha)
     {
         try

@@ -1,6 +1,8 @@
+using System.Globalization;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
+using Microsoft.Maui.Layouts;
 using ProClubesApp.Models;
 using ProClubesApp.ViewModels;
 
@@ -10,10 +12,12 @@ public sealed class ReservasMobilePage : ContentPage
 {
     private readonly ReservasViewModel _vm;
     private readonly PopupOverlayHost _popupHost;
+    private readonly MediaUrlImageSourceConverter _mediaConverter;
 
     public ReservasMobilePage(ReservasViewModel vm)
     {
         _vm = vm;
+        _mediaConverter = new MediaUrlImageSourceConverter(vm.ResolveMediaUrl);
         BindingContext = _vm;
         Title = "Reservas";
         BackgroundColor = ProClubesTheme.SurfaceApp;
@@ -21,7 +25,7 @@ public sealed class ReservasMobilePage : ContentPage
         var headerGrid = ProClubesTheme.CreatePageHeader(
             "ESPAÇOS & LAZER",
             "Reservas do Clube",
-            "Consulte agendamentos ou reserve um novo horário",
+            "Consulte fotos, valores, agenda disponível ou faça sua reserva",
             MobileVectorIconKind.Calendar);
 
         var btnNovaReserva = new Button
@@ -35,7 +39,7 @@ public sealed class ReservasMobilePage : ContentPage
             FontAttributes = FontAttributes.Bold
         };
         btnNovaReserva.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.PermiteOperarReserva));
-        btnNovaReserva.Clicked += (_, _) => AbrirPopupNovaReserva();
+        btnNovaReserva.Clicked += (_, _) => _ = AbrirPopupNovaReservaAsync(null);
 
         var btnAtualizar = new Button
         {
@@ -63,7 +67,102 @@ public sealed class ReservasMobilePage : ContentPage
         actionsGrid.Add(btnNovaReserva, 0, 0);
         actionsGrid.Add(btnAtualizar, 1, 0);
 
-        var abrirCancelamentoCmd = new Command<ReservaEspacoDto>(reserva => AbrirPopupCancelarReserva(reserva));
+        var abrirAgendaEspacoCmd = new Command<EspacoDto>(esp => _ = AbrirPopupNovaReservaAsync(esp));
+
+        var espacosCollection = new CollectionView
+        {
+            ItemsSource = _vm.Espacos,
+            HeightRequest = 248,
+            ItemsLayout = new LinearItemsLayout(ItemsLayoutOrientation.Horizontal) { ItemSpacing = 12 },
+            ItemTemplate = new DataTemplate(() =>
+            {
+                var capaImg = new Image
+                {
+                    Aspect = Aspect.AspectFill,
+                    HeightRequest = 92
+                };
+                capaImg.SetBinding(Image.SourceProperty, new Binding(nameof(EspacoDto.PrimeiraFotoUrlRelativa), converter: _mediaConverter));
+
+                var capaBorder = new Border
+                {
+                    StrokeThickness = 0,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+                    HeightRequest = 92,
+                    Margin = new Thickness(0, 0, 0, 4),
+                    Content = capaImg
+                };
+                capaBorder.SetBinding(VisualElement.IsVisibleProperty, nameof(EspacoDto.TemFotos));
+
+                var lblNome = new Label
+                {
+                    FontSize = 14,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.TextPrimary,
+                    LineBreakMode = LineBreakMode.TailTruncation
+                };
+                lblNome.SetBinding(Label.TextProperty, nameof(EspacoDto.Nome));
+
+                var lblTipoValor = new Label
+                {
+                    FontSize = 12,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.BrandSecondary
+                };
+                lblTipoValor.SetBinding(Label.TextProperty, new Binding(nameof(EspacoDto.ValorFormatado), stringFormat: "{0}"));
+
+                var lblTipoTag = new Label
+                {
+                    FontSize = 10,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = ProClubesTheme.BrandPrimary
+                };
+                lblTipoTag.SetBinding(Label.TextProperty, nameof(EspacoDto.TipoLocacaoTexto));
+
+                var tagTipo = ProClubesTheme.CreateSoftTag(
+                    lblTipoTag,
+                    ProClubesTheme.SurfaceSubtle,
+                    ProClubesTheme.BorderDefault,
+                    new Thickness(8, 2));
+
+                var lblHorario = new Label
+                {
+                    FontSize = 11,
+                    TextColor = ProClubesTheme.TextMuted,
+                    LineBreakMode = LineBreakMode.TailTruncation
+                };
+                lblHorario.SetBinding(Label.TextProperty, nameof(EspacoDto.HorarioFuncionamentoTexto));
+
+                var btnVerAgenda = new Button
+                {
+                    Text = "Ver Agenda / Reservar",
+                    BackgroundColor = ProClubesTheme.BrandPrimary,
+                    TextColor = Colors.White,
+                    CornerRadius = 8,
+                    FontSize = 11,
+                    FontAttributes = FontAttributes.Bold,
+                    HeightRequest = 34,
+                    Command = abrirAgendaEspacoCmd
+                };
+                btnVerAgenda.SetBinding(Button.CommandParameterProperty, ".");
+
+                return new Border
+                {
+                    WidthRequest = 232,
+                    BackgroundColor = ProClubesTheme.SurfaceCard,
+                    Stroke = ProClubesTheme.BorderDefault,
+                    StrokeThickness = 1,
+                    StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(14) },
+                    Padding = new Thickness(12),
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 5,
+                        Children = { capaBorder, lblNome, tagTipo, lblTipoValor, lblHorario, btnVerAgenda }
+                    }
+                };
+            })
+        };
+
+        var abrirCancelamentoCmd = new Command<ReservaEspacoDto>(AbrirPopupCancelarReserva);
 
         var minhasList = new CollectionView
         {
@@ -76,7 +175,18 @@ public sealed class ReservasMobilePage : ContentPage
                 var per = new Label { FontSize = 13, TextColor = ProClubesTheme.TextSecondary };
                 per.SetBinding(Label.TextProperty, nameof(ReservaEspacoDto.PeriodoFormatado));
 
-                // Badge verde Soft Tint quando Confirmada
+                var lblTipo = new Label { FontSize = 12, TextColor = ProClubesTheme.TextMuted };
+                lblTipo.SetBinding(Label.TextProperty, nameof(ReservaEspacoDto.TipoLocacaoTexto));
+
+                var lblValor = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.BrandPrimary };
+                lblValor.SetBinding(Label.TextProperty, nameof(ReservaEspacoDto.ValorTotalFormatado));
+
+                var metaRow = new HorizontalStackLayout
+                {
+                    Spacing = 10,
+                    Children = { lblTipo, lblValor }
+                };
+
                 var badgeConfirmada = ProClubesTheme.CreateSoftTag(
                     new Label
                     {
@@ -90,7 +200,6 @@ public sealed class ReservasMobilePage : ContentPage
                     new Thickness(10, 4));
                 badgeConfirmada.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservaEspacoDto.PodeCancelar));
 
-                // Alerta vermelho destacado quando Cancelada
                 var lblMotivo = new Label
                 {
                     FontSize = 12,
@@ -125,7 +234,6 @@ public sealed class ReservasMobilePage : ContentPage
                 };
                 boxCancelada.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservaEspacoDto.EstaCancelada));
 
-                // Botão Cancelar só aparece para reservas ativas/confirmadas e abre o Pop-up de confirmação
                 var btnCancel = new Button
                 {
                     Text = "Cancelar Reserva (mín. 24h)",
@@ -142,7 +250,7 @@ public sealed class ReservasMobilePage : ContentPage
                 return ProClubesTheme.CreateCard(new VerticalStackLayout
                 {
                     Spacing = 6,
-                    Children = { esp, per, badgeConfirmada, boxCancelada, btnCancel }
+                    Children = { esp, per, metaRow, badgeConfirmada, boxCancelada, btnCancel }
                 });
             })
         };
@@ -159,6 +267,8 @@ public sealed class ReservasMobilePage : ContentPage
                     ProClubesTheme.CreateStatusBanner(),
                     headerGrid,
                     actionsGrid,
+                    new Label { Text = "ESPAÇOS DO CLUBE", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextMuted, CharacterSpacing = 1, Margin = new Thickness(0, 4, 0, 0) },
+                    espacosCollection,
                     new Label { Text = "MINHAS RESERVAS", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextMuted, CharacterSpacing = 1, Margin = new Thickness(0, 4, 0, 0) },
                     minhasList
                 }
@@ -169,9 +279,9 @@ public sealed class ReservasMobilePage : ContentPage
         Content = _popupHost.RootLayout;
     }
 
-    private void AbrirPopupNovaReserva()
+    private async Task AbrirPopupNovaReservaAsync(EspacoDto? espacoInicial)
     {
-        _vm.PrepararNovaReserva();
+        _vm.PrepararNovaReserva(espacoInicial);
 
         var espacoPicker = new Picker
         {
@@ -179,18 +289,167 @@ public sealed class ReservasMobilePage : ContentPage
             TextColor = ProClubesTheme.TextPrimary,
             TitleColor = ProClubesTheme.TextMuted,
             ItemsSource = _vm.Espacos,
-            ItemDisplayBinding = new Binding(nameof(EspacoDto.Nome))
+            ItemDisplayBinding = new Binding(nameof(EspacoDto.NomeComDetalhes))
         };
         espacoPicker.SetBinding(Picker.SelectedItemProperty, nameof(ReservasViewModel.EspacoSelecionado));
+        espacoPicker.SelectedIndexChanged += (_, _) => _ = _vm.CarregarAgendaAtualAsync();
 
-        var datePicker = new DatePicker { Format = "dd/MM/yyyy", TextColor = ProClubesTheme.TextPrimary };
-        datePicker.SetBinding(DatePicker.DateProperty, nameof(ReservasViewModel.DataReserva));
+        var previewImg = new Image
+        {
+            Aspect = Aspect.AspectFill,
+            HeightRequest = 140
+        };
+        previewImg.SetBinding(Image.SourceProperty, new Binding(nameof(ReservasViewModel.PrimeiraFotoEspacoSelecionado), converter: _mediaConverter));
+
+        var previewBorder = new Border
+        {
+            Stroke = ProClubesTheme.BorderDefault,
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+            HeightRequest = 140,
+            Content = previewImg
+        };
+        previewBorder.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.EspacoSelecionadoTemFotos));
+
+        var lblResumoEspaco = new Label
+        {
+            FontSize = 12,
+            TextColor = ProClubesTheme.TextSecondary
+        };
+        lblResumoEspaco.SetBinding(Label.TextProperty, nameof(ReservasViewModel.ResumoEspacoSelecionado));
+
+        var datePickerInicio = new DatePicker { Format = "dd/MM/yyyy", TextColor = ProClubesTheme.TextPrimary };
+        datePickerInicio.SetBinding(DatePicker.DateProperty, nameof(ReservasViewModel.DataReserva));
+        datePickerInicio.DateSelected += (_, _) => _ = _vm.CarregarAgendaAtualAsync();
+
+        var datePickerFim = new DatePicker { Format = "dd/MM/yyyy", TextColor = ProClubesTheme.TextPrimary };
+        datePickerFim.SetBinding(DatePicker.DateProperty, nameof(ReservasViewModel.DataFimReserva));
+
+        var blocoPorDia = new VerticalStackLayout
+        {
+            Spacing = 4,
+            Children =
+            {
+                new Label { Text = "Data de Término:", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                datePickerFim
+            }
+        };
+        blocoPorDia.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.EspacoEhPorDia));
 
         var horaIniEntry = new Entry { Placeholder = "Hora início (HH:mm)", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         horaIniEntry.SetBinding(Entry.TextProperty, nameof(ReservasViewModel.HoraInicio));
 
         var horaFimEntry = new Entry { Placeholder = "Hora fim (HH:mm)", TextColor = ProClubesTheme.TextPrimary, PlaceholderColor = ProClubesTheme.TextMuted };
         horaFimEntry.SetBinding(Entry.TextProperty, nameof(ReservasViewModel.HoraFim));
+
+        var blocoPorHora = new VerticalStackLayout
+        {
+            Spacing = 6,
+            Children =
+            {
+                new Label { Text = "Horário de Início e Término:", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                horaIniEntry,
+                horaFimEntry
+            }
+        };
+        blocoPorHora.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.EspacoEhPorHora));
+
+        var lblCabecalhoAgenda = new Label
+        {
+            FontSize = 12,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = ProClubesTheme.BrandPrimary
+        };
+        lblCabecalhoAgenda.SetBinding(Label.TextProperty, nameof(ReservasViewModel.CabecalhoAgenda));
+
+        var slotsFlex = new FlexLayout
+        {
+            Wrap = FlexWrap.Wrap,
+            JustifyContent = FlexJustify.Start,
+            AlignItems = FlexAlignItems.Start
+        };
+        var slotCmd = new Command<SlotAgendaDto>(slot => _vm.SelecionarSlotAgenda(slot));
+        BindableLayout.SetItemsSource(slotsFlex, _vm.SlotsAgenda);
+        BindableLayout.SetItemTemplate(slotsFlex, new DataTemplate(() =>
+        {
+            var lblSlot = new Label
+            {
+                FontSize = 11,
+                FontAttributes = FontAttributes.Bold
+            };
+            lblSlot.SetBinding(Label.TextProperty, new MultiBinding
+            {
+                StringFormat = "{0} • {1}",
+                Bindings =
+                {
+                    new Binding(nameof(SlotAgendaDto.Rotulo)),
+                    new Binding(nameof(SlotAgendaDto.StatusTexto))
+                }
+            });
+            lblSlot.SetBinding(Label.TextColorProperty, nameof(SlotAgendaDto.CorTexto));
+
+            var chip = new Border
+            {
+                StrokeThickness = 1,
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(8) },
+                Padding = new Thickness(9, 6),
+                Margin = new Thickness(0, 0, 6, 6),
+                Content = lblSlot
+            };
+            chip.SetBinding(Border.BackgroundColorProperty, nameof(SlotAgendaDto.CorFundo));
+            chip.SetBinding(Border.StrokeProperty, nameof(SlotAgendaDto.CorBorda));
+
+            var tap = new TapGestureRecognizer { Command = slotCmd };
+            tap.SetBinding(TapGestureRecognizer.CommandParameterProperty, ".");
+            chip.GestureRecognizers.Add(tap);
+
+            return chip;
+        }));
+
+        var agendaBox = new Border
+        {
+            BackgroundColor = ProClubesTheme.SurfaceApp,
+            Stroke = ProClubesTheme.BorderDefault,
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+            Padding = new Thickness(10),
+            Content = new VerticalStackLayout
+            {
+                Spacing = 6,
+                Children =
+                {
+                    lblCabecalhoAgenda,
+                    new Label { Text = "Toque em um horário/dia livre para preencher automaticamente:", FontSize = 11, TextColor = ProClubesTheme.TextMuted },
+                    slotsFlex
+                }
+            }
+        };
+
+        var lblValorEstimado = new Label
+        {
+            FontSize = 13,
+            FontAttributes = FontAttributes.Bold,
+            TextColor = ProClubesTheme.BrandSecondary
+        };
+        lblValorEstimado.SetBinding(Label.TextProperty, nameof(ReservasViewModel.ValorEstimadoTexto));
+
+        var valorBox = new Border
+        {
+            BackgroundColor = ProClubesTheme.StatusSuccessBg,
+            Stroke = ProClubesTheme.StatusSuccessBorder,
+            StrokeThickness = 1,
+            StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(10) },
+            Padding = new Thickness(12, 8),
+            Content = lblValorEstimado
+        };
+
+        var lblSomenteConsulta = new Label
+        {
+            Text = "Apenas titulares pagantes podem efetivar reservas. Você pode consultar os valores e a agenda livre.",
+            FontSize = 12,
+            TextColor = ProClubesTheme.StatusWarning
+        };
+        lblSomenteConsulta.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.NaoPermiteOperarReserva));
 
         var btnConfirmar = new Button
         {
@@ -200,18 +459,17 @@ public sealed class ReservasMobilePage : ContentPage
             CornerRadius = 10,
             FontAttributes = FontAttributes.Bold
         };
+        btnConfirmar.SetBinding(VisualElement.IsVisibleProperty, nameof(ReservasViewModel.PermiteOperarReserva));
         btnConfirmar.Clicked += async (_, _) =>
         {
             var ok = await _vm.CriarReservaAsync();
             if (ok)
-            {
                 _popupHost.Close();
-            }
         };
 
         var btnCancelar = new Button
         {
-            Text = "Cancelar",
+            Text = "Fechar",
             BackgroundColor = ProClubesTheme.SurfaceSubtle,
             TextColor = ProClubesTheme.TextSecondary,
             CornerRadius = 10
@@ -228,20 +486,24 @@ public sealed class ReservasMobilePage : ContentPage
             Children =
             {
                 ProClubesTheme.CreateStatusBanner(),
-                new Label { Text = "Confirmação imediata se o horário estiver livre e dentro das regras do espaço.", FontSize = 12, TextColor = ProClubesTheme.TextSecondary },
                 new Label { Text = "Espaço:", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
                 espacoPicker,
-                new Label { Text = "Data da Reserva:", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                datePicker,
-                new Label { Text = "Horário de Início e Término:", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                horaIniEntry,
-                horaFimEntry,
+                previewBorder,
+                lblResumoEspaco,
+                new Label { Text = "Data de Início / Consulta:", FontSize = 12, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
+                datePickerInicio,
+                blocoPorDia,
+                blocoPorHora,
+                agendaBox,
+                valorBox,
+                lblSomenteConsulta,
                 btnConfirmar,
                 btnCancelar
             }
         };
 
-        _popupHost.Show("Nova Reserva de Espaço", body, () => _vm.ErrorMessage = null);
+        _popupHost.Show("Agenda & Reserva de Espaço", body, () => _vm.ErrorMessage = null);
+        await _vm.CarregarAgendaAtualAsync();
     }
 
     private void AbrirPopupCancelarReserva(ReservaEspacoDto? reserva)
@@ -269,9 +531,7 @@ public sealed class ReservasMobilePage : ContentPage
         {
             var ok = await _vm.CancelarReservaAsync(reserva);
             if (ok)
-            {
                 _popupHost.Close();
-            }
         };
 
         var btnVoltar = new Button
@@ -306,7 +566,7 @@ public sealed class ReservasMobilePage : ContentPage
                         Children =
                         {
                             new Label { Text = reserva.EspacoNome, FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = ProClubesTheme.TextPrimary },
-                            new Label { Text = reserva.PeriodoFormatado, FontSize = 13, TextColor = ProClubesTheme.TextSecondary }
+                            new Label { Text = $"{reserva.PeriodoFormatado} • {reserva.ValorTotalFormatado}", FontSize = 13, TextColor = ProClubesTheme.TextSecondary }
                         }
                     }
                 },
@@ -324,5 +584,27 @@ public sealed class ReservasMobilePage : ContentPage
     {
         base.OnAppearing();
         await _vm.CarregarAsync();
+    }
+
+    private sealed class MediaUrlImageSourceConverter : IValueConverter
+    {
+        private readonly Func<string?, string> _resolveUrl;
+
+        public MediaUrlImageSourceConverter(Func<string?, string> resolveUrl)
+        {
+            _resolveUrl = resolveUrl;
+        }
+
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            var raw = value as string;
+            var url = _resolveUrl(raw);
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                ? ImageSource.FromUri(uri)
+                : null;
+        }
+
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+            throw new NotSupportedException();
     }
 }

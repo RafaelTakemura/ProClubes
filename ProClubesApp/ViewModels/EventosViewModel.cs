@@ -14,6 +14,8 @@ public class EventosViewModel : BaseViewModel
         _api = api;
     }
 
+    public string ResolveMediaUrl(string? urlRelativa) => _api.ResolveMediaUrl(urlRelativa);
+
     public async Task CarregarAsync()
     {
         ErrorMessage = null;

@@ -265,6 +265,56 @@ public record MensalidadeDto(
     };
 }
 
+public record FotoItemDto(
+    int Id,
+    string NomeArquivo,
+    string ContentType,
+    string UrlRelativa,
+    int Ordem,
+    DateTimeOffset CriadaEm);
+
+public record SlotAgendaDto(
+    DateTimeOffset Inicio,
+    DateTimeOffset Fim,
+    string Rotulo,
+    bool Disponivel,
+    string? OrigemOcupacao = null,
+    string? DescricaoOcupacao = null)
+{
+    public string StatusTexto => Disponivel ? "Livre" : (string.IsNullOrWhiteSpace(DescricaoOcupacao) ? "Ocupado" : DescricaoOcupacao);
+    public Microsoft.Maui.Graphics.Color CorFundo => Disponivel ? Microsoft.Maui.Graphics.Color.FromArgb("#ECFDF5") : Microsoft.Maui.Graphics.Color.FromArgb("#FEF2F2");
+    public Microsoft.Maui.Graphics.Color CorBorda => Disponivel ? Microsoft.Maui.Graphics.Color.FromArgb("#A7F3D0") : Microsoft.Maui.Graphics.Color.FromArgb("#FECACA");
+    public Microsoft.Maui.Graphics.Color CorTexto => Disponivel ? Microsoft.Maui.Graphics.Color.FromArgb("#047857") : Microsoft.Maui.Graphics.Color.FromArgb("#B91C1C");
+}
+
+public record OcupacaoEspacoDto(
+    int Id,
+    int EspacoId,
+    string EspacoNome,
+    DateTimeOffset Inicio,
+    DateTimeOffset Fim,
+    string Origem,
+    string DescricaoPublica,
+    bool Ativa);
+
+public record AgendaEspacoDto(
+    int EspacoId,
+    string EspacoNome,
+    string TipoLocacao,
+    decimal ValorReserva,
+    TimeOnly HoraAbertura,
+    TimeOnly HoraFechamento,
+    DateOnly DataInicioConsulta,
+    DateOnly DataFimConsulta,
+    IReadOnlyList<SlotAgendaDto> Slots,
+    IReadOnlyList<OcupacaoEspacoDto> Ocupacoes)
+{
+    public bool EhPorDia => string.Equals(TipoLocacao, "PorDia", StringComparison.OrdinalIgnoreCase);
+    public string CabecalhoConsulta => EhPorDia
+        ? $"{EspacoNome} (Por dia) — {DataInicioConsulta:dd/MM/yyyy} a {DataFimConsulta:dd/MM/yyyy}"
+        : $"{EspacoNome} (Por horário) — Dia {DataInicioConsulta:dd/MM/yyyy}";
+}
+
 public record EventoDto(
     int Id,
     int UnidadeOrganizadoraId,
@@ -276,10 +326,36 @@ public record EventoDto(
     DateTimeOffset Fim,
     int? LimiteParticipantes,
     decimal TaxaParticipacao,
-    string Status)
+    string Status,
+    IReadOnlyList<int>? UnidadesParticipantesIds = null,
+    IReadOnlyList<string>? UnidadesParticipantesNomes = null,
+    IReadOnlyList<int>? EspacosOcupadosIds = null,
+    IReadOnlyList<string>? EspacosOcupadosNomes = null,
+    decimal ValorReservaEspaco = 0m,
+    IReadOnlyList<FotoItemDto>? Fotos = null)
 {
-    public string ResumoDataTaxa =>
-        $"{UnidadeOrganizadoraNome} • {Inicio:dd/MM/yyyy HH:mm} • {(TaxaParticipacao > 0 ? $"Taxa: R$ {TaxaParticipacao:N2}" : "Gratuito")} • {(PublicoAlvo == "Publico" ? "Aberto ao público" : "Somente associados")}";
+    public string LocalEspacoTexto =>
+        EspacosOcupadosNomes is { Count: > 0 }
+            ? $"Espaço: {string.Join(", ", EspacosOcupadosNomes)}"
+            : $"Unidade: {UnidadeOrganizadoraNome}";
+
+    public bool TemFotos => Fotos is { Count: > 0 };
+    public bool TemVariasFotos => Fotos is { Count: > 1 };
+    public string TextoBotaoFotos => Fotos is { Count: > 0 } ? $"Ver fotos ({Fotos.Count})" : string.Empty;
+    public string? PrimeiraFotoUrlRelativa => Fotos?.FirstOrDefault()?.UrlRelativa;
+
+    public string ResumoDataTaxa
+    {
+        get
+        {
+            var periodo = Inicio.Date == Fim.Date
+                ? $"{Inicio:dd/MM/yyyy HH:mm} às {Fim:HH:mm}"
+                : $"{Inicio:dd/MM/yyyy HH:mm} até {Fim:dd/MM/yyyy HH:mm}";
+            var taxa = TaxaParticipacao > 0 ? $"Taxa: R$ {TaxaParticipacao:N2}" : "Gratuito";
+            var publico = PublicoAlvo == "Publico" ? "Aberto ao público" : "Somente associados";
+            return $"{UnidadeOrganizadoraNome} • {periodo} • {taxa} • {publico}";
+        }
+    }
 }
 
 public record EspacoDto(
@@ -292,7 +368,19 @@ public record EspacoDto(
     TimeOnly HoraAbertura,
     TimeOnly HoraFechamento,
     int DuracaoMaximaMinutos,
-    int AntecedenciaMaximaDias);
+    int AntecedenciaMaximaDias,
+    string TipoLocacao = "PorHora",
+    decimal ValorReserva = 0m,
+    IReadOnlyList<FotoItemDto>? Fotos = null)
+{
+    public bool EhPorDia => string.Equals(TipoLocacao, "PorDia", StringComparison.OrdinalIgnoreCase);
+    public string TipoLocacaoTexto => EhPorDia ? "Por dia" : "Por horário";
+    public string ValorFormatado => ValorReserva > 0m ? $"R$ {ValorReserva:N2} {(EhPorDia ? "/ dia" : "/ hora")}" : "Gratuito";
+    public string NomeComDetalhes => $"{Nome} • {TipoLocacaoTexto} • {ValorFormatado}";
+    public string HorarioFuncionamentoTexto => $"Funcionamento: {HoraAbertura:HH:mm} às {HoraFechamento:HH:mm}";
+    public bool TemFotos => Fotos is { Count: > 0 };
+    public string? PrimeiraFotoUrlRelativa => Fotos?.FirstOrDefault()?.UrlRelativa;
+}
 
 public record ReservaEspacoDto(
     int Id,
@@ -307,12 +395,19 @@ public record ReservaEspacoDto(
     string Status,
     DateTimeOffset CriadaEm,
     DateTimeOffset? CanceladaEm,
-    string? JustificativaCancelamento)
+    string? JustificativaCancelamento,
+    string TipoLocacao = "PorHora",
+    decimal ValorTotal = 0m)
 {
     public bool PodeCancelar => string.Equals(Status, "Confirmada", StringComparison.OrdinalIgnoreCase);
     public bool EstaCancelada => string.Equals(Status, "Cancelada", StringComparison.OrdinalIgnoreCase);
     public bool TemJustificativa => EstaCancelada && !string.IsNullOrWhiteSpace(JustificativaCancelamento);
-    public string PeriodoFormatado => $"{Inicio:dd/MM/yyyy HH:mm} às {Fim:HH:mm}";
+    public bool EhPorDia => string.Equals(TipoLocacao, "PorDia", StringComparison.OrdinalIgnoreCase);
+    public string TipoLocacaoTexto => EhPorDia ? "Locação por dia" : "Locação por horário";
+    public string ValorTotalFormatado => ValorTotal > 0m ? $"Valor: R$ {ValorTotal:N2}" : "Reserva gratuita";
+    public string PeriodoFormatado => EhPorDia
+        ? (Inicio.Date == Fim.Date ? $"{Inicio:dd/MM/yyyy} (diária)" : $"{Inicio:dd/MM/yyyy} a {Fim:dd/MM/yyyy}")
+        : $"{Inicio:dd/MM/yyyy HH:mm} às {Fim:HH:mm}";
     public string StatusBadgeTexto => EstaCancelada ? "✖ RESERVA CANCELADA" : "✔ RESERVA CONFIRMADA";
     public string MotivoCancelamentoFormatado =>
         CanceladaEm.HasValue
